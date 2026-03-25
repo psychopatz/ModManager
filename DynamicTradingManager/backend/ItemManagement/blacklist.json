@@ -1,0 +1,24 @@
+{
+  "comment": "Blacklist configuration for ItemGenerator - items matching these criteria will be excluded",
+  "itemIds": [
+    "Money",
+    "MoneyBundle",
+    "TestHotDrink",
+    "YardstickDEBUG",
+    "FISH_DEV_ITEM",
+    "Animal",
+    "Moveable",
+    "TestMug",
+    "Wallet_Male",
+    "Wallet_Female",
+    "Wallet",
+    "TestWaterMug",
+    "Bag_FoodCanned"
+  ],
+  "properties": {
+    "names": [
+      "hidden"
+    ],
+    "values": {}
+  }
+}

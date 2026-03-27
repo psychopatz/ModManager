@@ -189,6 +189,13 @@ class ManualSaveRequest(BaseModel):
     title: str
     description: Optional[str] = ""
     start_page_id: Optional[str] = ""
+    audiences: List[str] = ["common"]
+    sort_order: Optional[int] = None
+    release_version: Optional[str] = ""
+    auto_open_on_update: bool = False
+    is_whats_new: bool = False
+    show_in_library: bool = True
+    source_folder: Optional[str] = None
     chapters: List[Dict[str, Any]] = []
     pages: List[Dict[str, Any]] = []
 
@@ -616,18 +623,18 @@ async def update_archetype_allocations(archetype_id: str, request: ArchetypeSave
 
 
 @app.get("/api/manuals/editor")
-async def get_manual_editor_data():
+async def get_manual_editor_data(scope: str = "manuals"):
     try:
-        return load_manual_editor_data()
+        return load_manual_editor_data(scope=scope)
     except Exception as e:
         logger.error(f"Error loading manual editor data: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/manuals")
-async def create_manual(request: ManualSaveRequest):
+async def create_manual(request: ManualSaveRequest, scope: str = "manuals"):
     try:
-        payload = create_manual_definition(request.model_dump())
+        payload = create_manual_definition(request.model_dump(), scope=scope)
         return {
             "success": True,
             "manual": payload,
@@ -640,9 +647,9 @@ async def create_manual(request: ManualSaveRequest):
 
 
 @app.put("/api/manuals/{manual_id}")
-async def update_manual(manual_id: str, request: ManualSaveRequest):
+async def update_manual(manual_id: str, request: ManualSaveRequest, scope: str = "manuals"):
     try:
-        payload = save_manual_definition(manual_id, request.model_dump())
+        payload = save_manual_definition(manual_id, request.model_dump(), scope=scope)
         return {
             "success": True,
             "manual": payload,
@@ -655,9 +662,9 @@ async def update_manual(manual_id: str, request: ManualSaveRequest):
 
 
 @app.delete("/api/manuals/{manual_id}")
-async def remove_manual(manual_id: str):
+async def remove_manual(manual_id: str, scope: str = "manuals"):
     try:
-        delete_manual_definition(manual_id)
+        delete_manual_definition(manual_id, scope=scope)
         return {
             "success": True,
             "manual_id": manual_id,

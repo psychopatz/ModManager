@@ -41,10 +41,10 @@ export const getPricingTags = () => api.get('/pricing/tags');
 export const previewPricingTag = (payload) => api.post('/pricing/tags/preview', payload);
 export const getArchetypeEditorData = () => api.get('/archetypes/editor');
 export const saveArchetypeDefinition = (archetypeId, payload) => api.put(`/archetypes/${archetypeId}/allocations`, payload);
-export const getManualEditorData = () => api.get('/manuals/editor');
-export const createManualDefinition = (payload) => api.post('/manuals', payload);
-export const saveManualDefinition = (manualId, payload) => api.put(`/manuals/${manualId}`, payload);
-export const deleteManualDefinition = (manualId) => api.delete(`/manuals/${manualId}`);
+export const getManualEditorData = (scope = 'manuals') => api.get('/manuals/editor', { params: { scope } });
+export const createManualDefinition = (payload, scope = 'manuals') => api.post('/manuals', payload, { params: { scope } });
+export const saveManualDefinition = (manualId, payload, scope = 'manuals') => api.put(`/manuals/${manualId}`, payload, { params: { scope } });
+export const deleteManualDefinition = (manualId, scope = 'manuals') => api.delete(`/manuals/${manualId}`, { params: { scope } });
 export const uploadManualImage = (formData) => api.post('/manuals/images', formData, {
   headers: { 'Content-Type': 'multipart/form-data' }
 });

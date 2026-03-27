@@ -3,9 +3,11 @@ import {
   Alert,
   Box,
   Button,
+  Checkbox,
   Chip,
   Divider,
   FormControl,
+  FormControlLabel,
   IconButton,
   InputLabel,
   List,
@@ -29,14 +31,29 @@ import { createManualDefinition, deleteManualDefinition, getManualEditorData, sa
 
 const NEW_MANUAL_KEY = '__new_manual__';
 
-const createEmptyManual = (suggestedId = 'manual_new') => ({
-  manual_id: suggestedId,
-  title: '',
-  description: '',
-  start_page_id: '',
-  chapters: [],
-  pages: [],
-});
+const getTodayUpdateId = () => {
+  const today = new Date().toISOString().slice(0, 10).replace(/-/g, '_');
+  return `dt_update_${today}`;
+};
+
+const createEmptyManual = (editorScope = 'manuals', suggestedId) => {
+  const isUpdateEditor = editorScope === 'updates';
+  return {
+    manual_id: suggestedId || (isUpdateEditor ? getTodayUpdateId() : 'manual_new'),
+    title: '',
+    description: '',
+    start_page_id: '',
+    audiences: ['common'],
+    sort_order: isUpdateEditor ? 10 : 300000,
+    release_version: '',
+    auto_open_on_update: isUpdateEditor,
+    is_whats_new: isUpdateEditor,
+    show_in_library: !isUpdateEditor,
+    source_folder: isUpdateEditor ? 'WhatsNew' : 'Universal',
+    chapters: [],
+    pages: [],
+  };
+};
 
 const createEmptyChapter = () => ({
   id: '',
@@ -85,6 +102,15 @@ const blockTypeOptions = [
 ];
 
 const toneOptions = ['info', 'warn', 'success'];
+const audienceOptions = [
+  { value: 'common', label: 'Universal / Shared' },
+  { value: 'v1', label: 'Dynamic Trading V1' },
+  { value: 'v2', label: 'Dynamic Trading V2' },
+  { value: 'colony', label: 'Dynamic Colonies' },
+];
+
+const getPrimaryAudience = (manual) => manual?.audiences?.[0] || 'common';
+const getAudienceLabel = (manual) => audienceOptions.find((option) => option.value === getPrimaryAudience(manual))?.label || 'Universal / Shared';
 
 function ManualPreview({ manual, selectedPage, backendOrigin }) {
   const resolveImageUrl = (path) => {
@@ -207,9 +233,10 @@ function ManualPreview({ manual, selectedPage, backendOrigin }) {
   );
 }
 
-const ManualEditorPage = () => {
+const ManualEditorPage = ({ editorScope = 'manuals' }) => {
+  const isUpdateEditor = editorScope === 'updates';
   const [data, setData] = useState({ manuals: [], assets_base_url: '/static/manuals' });
-  const [draft, setDraft] = useState(createEmptyManual());
+  const [draft, setDraft] = useState(createEmptyManual(editorScope));
   const [selectedManualKey, setSelectedManualKey] = useState('');
   const [selectedPageId, setSelectedPageId] = useState('');
   const [newBlockType, setNewBlockType] = useState('paragraph');
@@ -243,7 +270,7 @@ const ManualEditorPage = () => {
       setSelectedPageId(nextManual.pages?.[0]?.id || '');
     } else {
       setSelectedManualKey('');
-      setDraft(createEmptyManual());
+      setDraft(createEmptyManual(editorScope));
       setSelectedPageId('');
     }
   };
@@ -251,11 +278,11 @@ const ManualEditorPage = () => {
   const loadEditor = async (preferredKey = '') => {
     setLoading(true);
     try {
-      const response = await getManualEditorData();
+      const response = await getManualEditorData(editorScope);
       applyPayload(response.data, preferredKey);
       setStatus({ type: '', message: '' });
     } catch (error) {
-      setStatus({ type: 'error', message: error.response?.data?.detail || 'Failed to load manual editor data.' });
+      setStatus({ type: 'error', message: error.response?.data?.detail || `Failed to load the ${isUpdateEditor ? 'update version' : 'manual'} editor data.` });
     } finally {
       setLoading(false);
     }
@@ -263,7 +290,7 @@ const ManualEditorPage = () => {
 
   useEffect(() => {
     loadEditor();
-  }, []);
+  }, [editorScope]);
 
   const selectManual = (manual) => {
     setSelectedManualKey(manual.manual_id);
@@ -281,12 +308,13 @@ const ManualEditorPage = () => {
   };
 
   const createManual = () => {
-    const suggestedId = `manual_${(data.manuals?.length || 0) + 1}`;
-    const next = createEmptyManual(suggestedId);
+    const suggestedId = isUpdateEditor ? getTodayUpdateId() : `manual_${(data.manuals?.length || 0) + 1}`;
+    const next = createEmptyManual(editorScope, suggestedId);
+    next.sort_order = isUpdateEditor ? Math.max(10, (data.manuals?.length || 0) + 10) : 300000 + (data.manuals?.length || 0);
     setSelectedManualKey(NEW_MANUAL_KEY);
     setDraft(next);
     setSelectedPageId('');
-    setStatus({ type: 'info', message: 'New manual draft created. Fill in the fields and save when ready.' });
+    setStatus({ type: 'info', message: `New ${isUpdateEditor ? 'update version' : 'manual'} draft created. Fill in the fields and save when ready.` });
   };
 
   const saveCurrentManual = async () => {
@@ -301,18 +329,25 @@ const ManualEditorPage = () => {
         ...draft,
         manual_id: slugify(draft.manual_id),
         start_page_id: draft.start_page_id || '',
+        audiences: [getPrimaryAudience(draft)],
+        sort_order: Number(draft.sort_order || 0),
+        release_version: String(draft.release_version || ''),
+        auto_open_on_update: isUpdateEditor ? draft.auto_open_on_update !== false : draft.auto_open_on_update === true,
+        is_whats_new: isUpdateEditor ? true : draft.is_whats_new === true,
+        show_in_library: isUpdateEditor ? false : draft.show_in_library !== false,
+        source_folder: isUpdateEditor ? 'WhatsNew' : draft.source_folder || 'Universal',
       };
 
       if (isNewManual) {
-        await createManualDefinition(payload);
+        await createManualDefinition(payload, editorScope);
       } else {
-        await saveManualDefinition(selectedManualKey, payload);
+        await saveManualDefinition(selectedManualKey, payload, editorScope);
       }
 
       await loadEditor(payload.manual_id);
-      setStatus({ type: 'success', message: `Saved manual "${payload.manual_id}".` });
+      setStatus({ type: 'success', message: `Saved ${isUpdateEditor ? 'update version' : 'manual'} "${payload.manual_id}".` });
     } catch (error) {
-      setStatus({ type: 'error', message: error.response?.data?.detail || 'Failed to save manual.' });
+      setStatus({ type: 'error', message: error.response?.data?.detail || `Failed to save the ${isUpdateEditor ? 'update version' : 'manual'}.` });
     } finally {
       setSaving(false);
     }
@@ -321,18 +356,18 @@ const ManualEditorPage = () => {
   const deleteCurrentManual = async () => {
     if (isNewManual) {
       setSelectedManualKey('');
-      setDraft(createEmptyManual());
+      setDraft(createEmptyManual(editorScope));
       setSelectedPageId('');
-      setStatus({ type: 'info', message: 'Discarded the unsaved manual draft.' });
+      setStatus({ type: 'info', message: `Discarded the unsaved ${isUpdateEditor ? 'update version' : 'manual'} draft.` });
       return;
     }
 
     try {
-      await deleteManualDefinition(selectedManualKey);
+      await deleteManualDefinition(selectedManualKey, editorScope);
       await loadEditor();
-      setStatus({ type: 'success', message: `Deleted manual "${selectedManualKey}".` });
+      setStatus({ type: 'success', message: `Deleted ${isUpdateEditor ? 'update version' : 'manual'} "${selectedManualKey}".` });
     } catch (error) {
-      setStatus({ type: 'error', message: error.response?.data?.detail || 'Failed to delete manual.' });
+      setStatus({ type: 'error', message: error.response?.data?.detail || `Failed to delete the ${isUpdateEditor ? 'update version' : 'manual'}.` });
     }
   };
 
@@ -445,9 +480,11 @@ const ManualEditorPage = () => {
     <Stack spacing={2} sx={{ minHeight: 0 }}>
       <Stack direction="row" justifyContent="space-between" alignItems="center">
         <Box>
-          <Typography variant="h4">Manual Editor</Typography>
+          <Typography variant="h4">{isUpdateEditor ? 'Update Version Editor' : 'Manual Editor'}</Typography>
           <Typography variant="body2" color="text.secondary">
-            Edit DT Commons manuals, chapters, pages, image blocks, and deep-link section ids.
+            {isUpdateEditor
+              ? 'Manage dedicated What\'s New entries, release versions, and per-update auto-open defaults.'
+              : 'Edit DT Commons manuals, chapters, pages, image blocks, and deep-link section ids.'}
           </Typography>
         </Box>
         <Stack direction="row" spacing={1}>
@@ -455,13 +492,13 @@ const ManualEditorPage = () => {
             Refresh
           </Button>
           <Button startIcon={<AddCircleOutlineIcon />} variant="outlined" onClick={createManual} disabled={loading || saving}>
-            New Manual
+            {isUpdateEditor ? 'New Update Version' : 'New Manual'}
           </Button>
           <Button startIcon={<DeleteOutlineIcon />} color="error" variant="outlined" onClick={deleteCurrentManual} disabled={loading || saving || (!selectedManualKey && !isNewManual)}>
-            {isNewManual ? 'Discard Draft' : 'Delete Manual'}
+            {isNewManual ? 'Discard Draft' : isUpdateEditor ? 'Delete Update' : 'Delete Manual'}
           </Button>
           <Button startIcon={<SaveOutlinedIcon />} variant="contained" onClick={saveCurrentManual} disabled={loading || saving}>
-            {saving ? 'Saving...' : 'Save Manual'}
+            {saving ? 'Saving...' : isUpdateEditor ? 'Save Update' : 'Save Manual'}
           </Button>
         </Stack>
       </Stack>
@@ -473,14 +510,16 @@ const ManualEditorPage = () => {
       <Box sx={{ display: 'grid', gridTemplateColumns: '280px minmax(0, 1fr) 360px', gap: 2, minHeight: 0 }}>
         <Paper sx={{ p: 2, overflow: 'auto' }}>
           <Typography variant="h6" gutterBottom>
-            Manuals
+            {isUpdateEditor ? 'Update Versions' : 'Manuals'}
           </Typography>
           <List dense>
             {(data.manuals || []).map((manual) => (
               <ListItemButton key={manual.manual_id} selected={selectedManualKey === manual.manual_id} onClick={() => selectManual(manual)}>
                 <ListItemText
                   primary={manual.title || manual.manual_id}
-                  secondary={`${manual.manual_id}${manual.pages?.length ? ` • ${manual.pages.length} pages` : ''}`}
+                  secondary={isUpdateEditor
+                    ? `${manual.manual_id}${manual.release_version ? ` • ${manual.release_version}` : ''}${manual.pages?.length ? ` • ${manual.pages.length} pages` : ''}${manual.sort_order != null ? ` • #${manual.sort_order}` : ''}`
+                    : `${manual.manual_id} • ${getAudienceLabel(manual)}${manual.pages?.length ? ` • ${manual.pages.length} pages` : ''}${manual.sort_order != null ? ` • #${manual.sort_order}` : ''}`}
                 />
               </ListItemButton>
             ))}
@@ -490,15 +529,17 @@ const ManualEditorPage = () => {
         <Stack spacing={2} sx={{ minWidth: 0 }}>
           <Paper sx={{ p: 2 }}>
             <Typography variant="h6" gutterBottom>
-              Manual Details
+              {isUpdateEditor ? 'Update Details' : 'Manual Details'}
             </Typography>
             <Stack spacing={2}>
               <TextField
-                label="Manual ID"
+                label={isUpdateEditor ? 'Update ID' : 'Manual ID'}
                 value={draft.manual_id}
                 onChange={(event) => updateDraft((next) => { next.manual_id = slugify(event.target.value); })}
                 disabled={!isNewManual}
-                helperText={isNewManual ? 'Used for file name, deep links, and image folders.' : 'Manual ids are locked for existing manuals in this v1 editor.'}
+                helperText={isNewManual
+                  ? 'Used for file name, deep links, and image folders.'
+                  : `${isUpdateEditor ? 'Update' : 'Manual'} ids are locked for existing entries in this editor.`}
               />
               <TextField
                 label="Title"
@@ -512,11 +553,68 @@ const ManualEditorPage = () => {
                 multiline
                 minRows={2}
               />
+              {isUpdateEditor && (
+                <Alert severity="info">
+                  Turning off auto-open here disables that one release version only. A newer release version will auto-open again until the player opts out of that newer version too.
+                </Alert>
+              )}
               <TextField
                 label="Start Page ID"
                 value={draft.start_page_id}
                 onChange={(event) => updateDraft((next) => { next.start_page_id = slugify(event.target.value); })}
               />
+              <Stack direction="row" spacing={2}>
+                {!isUpdateEditor && (
+                  <FormControl size="small" sx={{ minWidth: 220 }}>
+                    <InputLabel id="manual-audience-label">Audience</InputLabel>
+                    <Select
+                      labelId="manual-audience-label"
+                      label="Audience"
+                      value={getPrimaryAudience(draft)}
+                      onChange={(event) => updateDraft((next) => { next.audiences = [event.target.value]; })}
+                    >
+                      {audienceOptions.map((option) => (
+                        <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                )}
+                <TextField
+                  label="Sort Order"
+                  type="number"
+                  value={draft.sort_order ?? 0}
+                  onChange={(event) => updateDraft((next) => { next.sort_order = Number(event.target.value || 0); })}
+                  sx={{ width: 140 }}
+                />
+                <TextField
+                  label={isUpdateEditor ? 'Update Version' : 'Release Version'}
+                  value={draft.release_version || ''}
+                  onChange={(event) => updateDraft((next) => { next.release_version = event.target.value; })}
+                  sx={{ minWidth: 180 }}
+                />
+              </Stack>
+              <Stack direction="row" spacing={2}>
+                <FormControlLabel
+                  control={(
+                    <Checkbox
+                      checked={draft.auto_open_on_update === true}
+                      onChange={(event) => updateDraft((next) => { next.auto_open_on_update = event.target.checked; })}
+                    />
+                  )}
+                  label={isUpdateEditor ? 'Auto-open this update' : 'Auto-open after update'}
+                />
+                {!isUpdateEditor && (
+                  <FormControlLabel
+                    control={(
+                      <Checkbox
+                        checked={draft.is_whats_new === true}
+                        onChange={(event) => updateDraft((next) => { next.is_whats_new = event.target.checked; })}
+                      />
+                    )}
+                    label="Mark as What's New"
+                  />
+                )}
+              </Stack>
             </Stack>
           </Paper>
 

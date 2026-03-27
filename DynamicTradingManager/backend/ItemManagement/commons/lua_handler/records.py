@@ -52,15 +52,15 @@ def parse_lua_tags(tags_str):
     return tags_body, tags_dict
 
 
-def create_item_record(item_data, vanilla_items):
+def create_item_record(item_data, vanilla_items, forced_tags=None, base_price_override=None):
     """Create a structured record for an item row."""
     item_id = item_data['item_id']
     props = item_data['props']
-    tags = item_data['tags']
+    tags = forced_tags or item_data['tags']
 
     tags_dict = tags_list_to_dict(tags)
 
-    price = calculate_price(item_id, props, tags_dict)
+    price = base_price_override if base_price_override is not None else calculate_price(item_id, props, tags_dict)
 
     stock_range = calculate_stock_range(item_id, props, tags_dict)
     final_min = stock_range['min']
@@ -88,7 +88,12 @@ def create_item_record(item_data, vanilla_items):
     }
 
 
-def create_item_entry(item_data, vanilla_items):
+def create_item_entry(item_data, vanilla_items, forced_tags=None, base_price_override=None):
     """Create a Lua entry for an item."""
-    record = create_item_record(item_data, vanilla_items)
+    record = create_item_record(
+        item_data,
+        vanilla_items,
+        forced_tags=forced_tags,
+        base_price_override=base_price_override,
+    )
     return format_item_record(record)

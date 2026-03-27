@@ -24,6 +24,42 @@ def _category_config(config: Dict[str, Any], category: str) -> Dict[str, float]:
     return categories.get(category, categories.get("Misc", {}))
 
 
+
+def _evaluate_fluid(context: Dict[str, Any]) -> Dict[str, Any]:
+    primary = context.get('primary_tag', '')
+    capacity = max(float(context.get('fluid_capacity') or context.get('capacity') or 0.0), 0.1)
+    weight = max(float(context.get('weight') or 0.0), 0.05)
+
+    if 'Fluid.Fuel' in primary:
+        per_liter = 18.0
+    elif 'Fluid.Water.Tainted' in primary:
+        per_liter = 3.0
+    elif 'Fluid.Water' in primary:
+        per_liter = 6.0
+    elif 'Fluid.Medical' in primary:
+        per_liter = 20.0
+    elif 'Fluid.Cleaning' in primary:
+        per_liter = 14.0
+    elif 'Fluid.Appearance' in primary:
+        per_liter = 24.0
+    elif 'Fluid.Drink.Alcohol' in primary:
+        per_liter = 16.0
+    elif 'Fluid.Drink.NonAlcoholic' in primary:
+        per_liter = 10.0
+    else:
+        per_liter = 8.0
+
+    bulk_penalty = weight * 2.0
+    score = max(1.0, (capacity * per_liter) - bulk_penalty)
+    return {
+        'score': score,
+        'components': [
+            make_component('Fluid volume', capacity * per_liter),
+            make_component('Bulk penalty', -bulk_penalty),
+        ],
+    }
+
+
 def _apply_shared_multipliers(
     raw_score: float,
     context: Dict[str, Any],
@@ -168,7 +204,9 @@ def calculate_price_details(item_id: str, props: str, tags_dict: Any, pricing_co
 
     category_cfg = _category_config(config, effective_category)
 
-    if effective_category == "Food":
+    if effective_category == "Fluid":
+        result = _evaluate_fluid(context)
+    elif effective_category == "Food":
         result = evaluate_food(context, category_cfg)
     elif effective_category == "Medical":
         result = evaluate_medical(context, category_cfg)

@@ -9,6 +9,7 @@ from ...commons.lua_handler import (
     get_registered_items,
     collect_unregistered_items,
     add_items_to_file,
+    rebuild_liquid_registries,
 )
 from ...commons.vanilla_loader import load_vanilla_items
 from ...config import MOD_ITEMS_DIR
@@ -36,6 +37,13 @@ def update(vanilla_items, regenerate_tags=False):
     for lua_file in lua_files:
         updates = process_lua_file(lua_file, vanilla_items, dry_run=False, regenerate_tags=regenerate_tags)
         total_updates += updates
+
+    liquid_stats = rebuild_liquid_registries(vanilla_items)
+    print(
+        f"\n🧪 Rebuilt liquid registries: "
+        f"{liquid_stats['fluid_container_count']} containers, "
+        f"{liquid_stats['fluid_entry_count']} fluids"
+    )
     
     print("\n" + "=" * 60)
     print(f"✅ COMPLETE: Updated {total_updates} items across {len(lua_files)} files")
@@ -52,6 +60,12 @@ def add(vanilla_items, batch_size):
     print("=" * 60)
     
     total_added = add_new_items(vanilla_items, batch_size if batch_size != 'all' else None)
+    liquid_stats = rebuild_liquid_registries(vanilla_items)
+    print(
+        f"\n🧪 Rebuilt liquid registries: "
+        f"{liquid_stats['fluid_container_count']} containers, "
+        f"{liquid_stats['fluid_entry_count']} fluids"
+    )
     
     print("\n" + "=" * 60)
     print(f"✅ COMPLETE: Added {total_added} new items")

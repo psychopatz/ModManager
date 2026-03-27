@@ -223,6 +223,125 @@ def determine_theme(item_id, props):
     return deduped
 
 
+FLUID_PRIMARY_TAG_MAP = {
+    'water': 'Fluid.Water',
+    'taintedwater': 'Fluid.Water.Tainted',
+    'petrol': 'Fluid.Fuel.Gasoline',
+    'bleach': 'Fluid.Cleaning.Bleach',
+    'rubbingalcohol': 'Fluid.Medical.Alcohol',
+    'cleaningliquid': 'Fluid.Cleaning.General',
+    'cologne': 'Fluid.Appearance.Cosmetic',
+    'perfume': 'Fluid.Appearance.Cosmetic',
+    'beer': 'Fluid.Drink.Alcohol',
+    'brandy': 'Fluid.Drink.Alcohol',
+    'champagne': 'Fluid.Drink.Alcohol',
+    'cider': 'Fluid.Drink.Alcohol',
+    'coffeeliqueur': 'Fluid.Drink.Alcohol',
+    'curacao': 'Fluid.Drink.Alcohol',
+    'gin': 'Fluid.Drink.Alcohol',
+    'grenadine': 'Fluid.Drink.NonAlcoholic',
+    'port': 'Fluid.Drink.Alcohol',
+    'rum': 'Fluid.Drink.Alcohol',
+    'scotch': 'Fluid.Drink.Alcohol',
+    'sherry': 'Fluid.Drink.Alcohol',
+    'tequila': 'Fluid.Drink.Alcohol',
+    'vermouth': 'Fluid.Drink.Alcohol',
+    'vodka': 'Fluid.Drink.Alcohol',
+    'whiskey': 'Fluid.Drink.Alcohol',
+    'wine': 'Fluid.Drink.Alcohol',
+    'cowmilk': 'Fluid.Drink.NonAlcoholic',
+    'milkchocolate': 'Fluid.Drink.NonAlcoholic',
+    'juiceapple': 'Fluid.Drink.NonAlcoholic',
+    'juicecranberry': 'Fluid.Drink.NonAlcoholic',
+    'juicefruitpunch': 'Fluid.Drink.NonAlcoholic',
+    'juicegrape': 'Fluid.Drink.NonAlcoholic',
+    'juicelemon': 'Fluid.Drink.NonAlcoholic',
+    'juiceorange': 'Fluid.Drink.NonAlcoholic',
+    'juicetomato': 'Fluid.Drink.NonAlcoholic',
+    'cola': 'Fluid.Drink.NonAlcoholic',
+    'coladiet': 'Fluid.Drink.NonAlcoholic',
+    'gingerale': 'Fluid.Drink.NonAlcoholic',
+    'simplesyrup': 'Fluid.Drink.NonAlcoholic',
+}
+
+FLUID_DISPLAY_NAME_MAP = {
+    'petrol': 'Gasoline',
+    'taintedwater': 'Tainted Water',
+    'rubbingalcohol': 'Rubbing Alcohol',
+    'cleaningliquid': 'Cleaning Liquid',
+    'coffeeliqueur': 'Coffee Liqueur',
+    'cowmilk': 'Milk',
+    'milkchocolate': 'Chocolate Milk',
+    'juicefruitpunch': 'Fruit Punch',
+    'coladiet': 'Diet Cola',
+    'gingerale': 'Ginger Ale',
+    'simplesyrup': 'Simple Syrup',
+}
+
+
+def _normalize_fluid_key(fluid_id):
+    value = str(fluid_id or '').strip()
+    if not value:
+        return ''
+    if value.startswith('Base.'):
+        value = value[5:]
+    return value.split(':', 1)[0].strip().lower()
+
+
+def get_fluid_display_name(fluid_id):
+    normalized = _normalize_fluid_key(fluid_id)
+    if not normalized:
+        return 'Unknown Fluid'
+    if normalized in FLUID_DISPLAY_NAME_MAP:
+        return FLUID_DISPLAY_NAME_MAP[normalized]
+
+    spaced = re.sub(r'(?<!^)([A-Z])', r' \1', str(fluid_id).split(':', 1)[0].replace('Base.', ''))
+    spaced = spaced.replace('_', ' ').strip()
+    return spaced[:1].upper() + spaced[1:] if spaced else 'Unknown Fluid'
+
+
+def generate_fluid_tags(fluid_id, source_tags=None):
+    normalized = _normalize_fluid_key(fluid_id)
+    if not normalized:
+        return ['Fluid.General']
+
+    mapped = FLUID_PRIMARY_TAG_MAP.get(normalized)
+    if mapped:
+        return [mapped]
+
+    source_tags = source_tags or []
+    if any(tag.startswith('Food.Drink.Alcohol') for tag in source_tags):
+        return ['Fluid.Drink.Alcohol']
+    if any(tag.startswith('Food.Drink') for tag in source_tags):
+        return ['Fluid.Drink.NonAlcoholic']
+    if any(tag.startswith('Resource.Fuel') for tag in source_tags):
+        return ['Fluid.Fuel.General']
+    if any(tag.startswith('Medical') for tag in source_tags):
+        return ['Fluid.Medical.General']
+
+    return ['Fluid.General']
+
+
+def generate_fluid_container_tags(item_id, props):
+    container_tags = get_container_tags(item_id, props)
+    if not container_tags:
+        return []
+
+    tags = [container_tags[0], f"Rarity.{determine_rarity(item_id, props)}"]
+
+    quality = determine_quality(item_id, props)
+    if quality:
+        tags.append(quality)
+
+    origin = determine_origin(item_id, props)
+    if origin:
+        tags.append(origin)
+
+    tags.extend(determine_theme(item_id, props))
+    tags.extend(container_tags[1:])
+    return tags
+
+
 def _get_medical_tool_tags(item_id, props):
     """Return tool tags only for medical instruments."""
     matches, _confidence, details = matches_tool_signature(item_id, props)

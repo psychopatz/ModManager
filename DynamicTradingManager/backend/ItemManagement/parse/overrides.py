@@ -10,28 +10,64 @@ from typing import Dict, Any, Optional, List, Tuple
 OVERRIDES_FILE = Path(__file__).parent.parent / "overrides.json"
 
 
-def load_overrides() -> List[Dict[str, Any]]:
-    """Load overrides from configuration file"""
+def load_override_config() -> Dict[str, Any]:
+    """Load the full override configuration, preserving all sections."""
     if not OVERRIDES_FILE.exists():
-        # Create default overrides file
         default_config = {
-            "overrides": []
+            "overrides": [],
+            "fluid_overrides": {}
         }
         OVERRIDES_FILE.write_text(json.dumps(default_config, indent=2))
-        return []
-    
+        return default_config
+
     try:
         config = json.loads(OVERRIDES_FILE.read_text())
-        return config.get("overrides", [])
     except json.JSONDecodeError:
         print(f"⚠️  Warning: Invalid JSON in {OVERRIDES_FILE}")
-        return []
+        return {"overrides": [], "fluid_overrides": {}}
+
+    if not isinstance(config, dict):
+        return {"overrides": [], "fluid_overrides": {}}
+
+    config.setdefault("overrides", [])
+    config.setdefault("fluid_overrides", {})
+    return config
+
+
+def save_override_config(config: Dict[str, Any]):
+    """Save the full override configuration."""
+    normalized = {
+        "overrides": config.get("overrides", []),
+        "fluid_overrides": config.get("fluid_overrides", {}),
+    }
+    OVERRIDES_FILE.write_text(json.dumps(normalized, indent=2))
+
+
+def load_overrides() -> List[Dict[str, Any]]:
+    """Load overrides from configuration file"""
+    return load_override_config().get("overrides", [])
+
+
+def load_fluid_overrides() -> Dict[str, Dict[str, Any]]:
+    """Load per-fluid overrides from configuration file."""
+    fluid_overrides = load_override_config().get("fluid_overrides", {})
+    if not isinstance(fluid_overrides, dict):
+        return {}
+    return fluid_overrides
 
 
 def save_overrides(overrides: List[Dict[str, Any]]):
     """Save overrides to configuration file"""
-    config = {"overrides": overrides}
-    OVERRIDES_FILE.write_text(json.dumps(config, indent=2))
+    config = load_override_config()
+    config["overrides"] = overrides
+    save_override_config(config)
+
+
+def save_fluid_overrides(fluid_overrides: Dict[str, Dict[str, Any]]):
+    """Save fluid overrides while preserving normal item overrides."""
+    config = load_override_config()
+    config["fluid_overrides"] = fluid_overrides
+    save_override_config(config)
 
 
 def get_override_for_item(item_id: str, overrides: Optional[List[Dict[str, Any]]] = None) -> Optional[Dict[str, Any]]:
@@ -141,6 +177,27 @@ def apply_override(
     overridden_max = stock_range.get("max", stock_max)
     
     return overridden_price, overridden_tags, overridden_min, overridden_max, True
+
+
+def apply_fluid_override(
+    fluid_id: str,
+    base_price_per_liter: float,
+    tags: List[str],
+    display_name: str,
+    overrides: Optional[Dict[str, Dict[str, Any]]] = None
+) -> Tuple[float, List[str], str, bool]:
+    """Apply a per-fluid override configuration."""
+    if overrides is None:
+        overrides = load_fluid_overrides()
+
+    override = overrides.get(fluid_id) or overrides.get(f"Base.{fluid_id}")
+    if not isinstance(override, dict):
+        return base_price_per_liter, tags, display_name, False
+
+    overridden_price = override.get("basePricePerLiter", base_price_per_liter)
+    overridden_tags = override.get("tags", tags)
+    overridden_display_name = override.get("displayName", display_name)
+    return overridden_price, overridden_tags, overridden_display_name, True
 
 
 def add_override(

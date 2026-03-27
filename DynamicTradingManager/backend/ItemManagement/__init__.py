@@ -15,7 +15,7 @@ from .pricing.pricing import calculate_price, calculate_price_details
 from .pricing.stock import calculate_base_max_stock, apply_category_multiplier, calculate_min_stock
 from .pricing.economy import calculate_worth
 from .parse import write_mod_duplicates, write_hierarchical_files, load_blacklist, is_item_blacklisted, filter_items, get_blacklist_stats, reload_blacklist, add_item_to_blacklist
-from .commons.lua_handler import process_lua_file, add_items_to_file, get_registered_items, collect_unregistered_items, add_new_items
+from .commons.lua_handler import process_lua_file, add_items_to_file, get_registered_items, collect_unregistered_items, add_new_items, rebuild_liquid_registries
 from .analyze.property_analyzer import (
     find_items_with_property,
     dump_items_by_property,

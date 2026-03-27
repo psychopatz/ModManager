@@ -1,4 +1,4 @@
-from fastapi import FastAPI, BackgroundTasks, HTTPException, File, UploadFile
+from fastapi import FastAPI, BackgroundTasks, HTTPException, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -8,6 +8,7 @@ import os
 import threading
 from pathlib import Path
 import logging
+import shutil
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -73,6 +74,9 @@ if PORTRAITS_ROOT.exists():
 MOD_ROOT = Path(os.getenv("DYNAMIC_TRADING_PATH", "/home/psychopatz/Zomboid/Workshop/DynamicTrading/"))
 if MOD_ROOT.exists():
     app.mount("/static/workshop", StaticFiles(directory=str(MOD_ROOT)), name="workshop-static")
+    MANUALS_STATIC_ROOT = MOD_ROOT / "Contents/mods/DynamicTradingCommon/42.13/media/ui/Manuals"
+    MANUALS_STATIC_ROOT.mkdir(parents=True, exist_ok=True)
+    app.mount("/static/manuals", StaticFiles(directory=str(MANUALS_STATIC_ROOT)), name="manuals-static")
 
 # Enable CORS for frontend
 app.add_middleware(
@@ -178,6 +182,15 @@ class ArchetypeSaveRequest(BaseModel):
     expert_tags: List[str] = []
     wants: List[ArchetypeWantEntryRequest] = []
     forbid: List[str] = []
+
+
+class ManualSaveRequest(BaseModel):
+    manual_id: str
+    title: str
+    description: Optional[str] = ""
+    start_page_id: Optional[str] = ""
+    chapters: List[Dict[str, Any]] = []
+    pages: List[Dict[str, Any]] = []
 
 class WorkshopPushRequest(BaseModel):
     username: str
@@ -601,6 +614,83 @@ async def update_archetype_allocations(archetype_id: str, request: ArchetypeSave
         logger.error(f"Error saving allocations for {archetype_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.get("/api/manuals/editor")
+async def get_manual_editor_data():
+    try:
+        return load_manual_editor_data()
+    except Exception as e:
+        logger.error(f"Error loading manual editor data: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/manuals")
+async def create_manual(request: ManualSaveRequest):
+    try:
+        payload = create_manual_definition(request.model_dump())
+        return {
+            "success": True,
+            "manual": payload,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error creating manual: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/manuals/{manual_id}")
+async def update_manual(manual_id: str, request: ManualSaveRequest):
+    try:
+        payload = save_manual_definition(manual_id, request.model_dump())
+        return {
+            "success": True,
+            "manual": payload,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error saving manual {manual_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/manuals/{manual_id}")
+async def remove_manual(manual_id: str):
+    try:
+        delete_manual_definition(manual_id)
+        return {
+            "success": True,
+            "manual_id": manual_id,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error deleting manual {manual_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/manuals/images")
+async def upload_manual_image(
+    manual_id: str = Form(...),
+    file: UploadFile = File(...),
+):
+    assets_root = MOD_ROOT / "Contents/mods/DynamicTradingCommon/42.13/media/ui/Manuals" / manual_id
+    assets_root.mkdir(parents=True, exist_ok=True)
+    filename = Path(file.filename or "manual-image").name
+    file_path = assets_root / filename
+
+    try:
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        return {
+            "success": True,
+            "path": f"media/ui/Manuals/{manual_id}/{filename}",
+            "url": f"/static/manuals/{manual_id}/{filename}",
+        }
+    except Exception as e:
+        logger.error(f"Error uploading manual image for {manual_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # --- Debug / Logs ---
 
 @app.get("/api/debug/logs")
@@ -702,6 +792,12 @@ async def get_project_branches():
 try:
     from Simulation.config import BuildConfig, default_paths
     from Simulation.archetype_editor import load_archetype_editor_data, save_archetype_definition
+    from Simulation.manual_editor import (
+        create_manual_definition,
+        delete_manual_definition,
+        load_manual_editor_data,
+        save_manual_definition,
+    )
     from Simulation.export.database_builder import build_database
 except ImportError as e:
     logger.error(f"Error importing Simulation modules: {e}")

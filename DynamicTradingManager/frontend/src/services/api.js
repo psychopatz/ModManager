@@ -41,6 +41,13 @@ export const getPricingTags = () => api.get('/pricing/tags');
 export const previewPricingTag = (payload) => api.post('/pricing/tags/preview', payload);
 export const getArchetypeEditorData = () => api.get('/archetypes/editor');
 export const saveArchetypeDefinition = (archetypeId, payload) => api.put(`/archetypes/${archetypeId}/allocations`, payload);
+export const getManualEditorData = () => api.get('/manuals/editor');
+export const createManualDefinition = (payload) => api.post('/manuals', payload);
+export const saveManualDefinition = (manualId, payload) => api.put(`/manuals/${manualId}`, payload);
+export const deleteManualDefinition = (manualId) => api.delete(`/manuals/${manualId}`);
+export const uploadManualImage = (formData) => api.post('/manuals/images', formData, {
+  headers: { 'Content-Type': 'multipart/form-data' }
+});
 
 // Workshop
 export const triggerWorkshopPrepare = () => api.post('/workshop/prepare');

@@ -132,7 +132,10 @@
     "Rarity.Common": 11.0,
     "Rarity.Uncommon": 14.0,
     "Clothing.Medical": 12.0,
-    "Literature.Recipe": 348.0
+    "Literature.Recipe": 348.0,
+    "Literature.Book": -325.0,
+    "Literature.Cards": -236.0,
+    "Literature.Media": -258.0
   },
   "categories": {
     "Food": {

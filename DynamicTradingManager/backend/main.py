@@ -1,5 +1,6 @@
 from fastapi import FastAPI, BackgroundTasks, HTTPException, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any, Union
@@ -57,6 +58,7 @@ try:
     from DebugManagement import LogParser
     from WorkshopManagement.workshop import prepare_staging, generate_vdf, run_steamcmd_upload, parse_workshop_txt, fetch_steam_metadata, run_full_workshop_push
     from GitManagement.diff_handler import get_git_changes, get_git_branches
+    from ProjectManagement import list_workshop_projects, resolve_project_target
 except ImportError as e:
     logger.error(f"Error importing ItemManagement or DebugManagement modules: {e}")
     sys.exit(1)
@@ -72,11 +74,16 @@ if PORTRAITS_ROOT.exists():
     app.mount("/static/portraits", StaticFiles(directory=str(PORTRAITS_ROOT)), name="dt-portraits")
 
 MOD_ROOT = Path(os.getenv("DYNAMIC_TRADING_PATH", "/home/psychopatz/Zomboid/Workshop/DynamicTrading/"))
+COLONIES_ROOT = Path(os.getenv("DYNAMIC_COLONIES_PATH", str(MOD_ROOT.parent / "DynamicColonies")))
 if MOD_ROOT.exists():
     app.mount("/static/workshop", StaticFiles(directory=str(MOD_ROOT)), name="workshop-static")
     MANUALS_STATIC_ROOT = MOD_ROOT / "Contents/mods/DynamicTradingCommon/42.13/media/ui/Manuals"
     MANUALS_STATIC_ROOT.mkdir(parents=True, exist_ok=True)
     app.mount("/static/manuals", StaticFiles(directory=str(MANUALS_STATIC_ROOT)), name="manuals-static")
+if COLONIES_ROOT.exists():
+    MANUALS_COLONY_STATIC_ROOT = COLONIES_ROOT / "Contents/mods/DynamicColonies/42.13/media/ui/Manuals"
+    MANUALS_COLONY_STATIC_ROOT.mkdir(parents=True, exist_ok=True)
+    app.mount("/static/manuals-colony", StaticFiles(directory=str(MANUALS_COLONY_STATIC_ROOT)), name="manuals-colony-static")
 
 # Enable CORS for frontend
 app.add_middleware(
@@ -200,6 +207,8 @@ class ManualSaveRequest(BaseModel):
     pages: List[Dict[str, Any]] = []
 
 class WorkshopPushRequest(BaseModel):
+    target: Optional[str] = None
+    workshop_id: Optional[str] = None
     username: str
     password: Optional[str] = None
     changenote: Optional[str] = "Update pushed via SteamCMD"
@@ -213,6 +222,19 @@ class WorkshopPushRequest(BaseModel):
 
 # Global state (cache items)
 cached_vanilla_items = None
+
+
+def _get_workshop_project_or_404(target: Optional[str] = None):
+    try:
+        return resolve_project_target(target)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+def _serialize_workshop_projects():
+    projects = list_workshop_projects()
+    default_target = next((project["key"] for project in projects if project["is_default"]), None)
+    return {"targets": projects, "default_target": default_target}
 
 def get_items():
     global cached_vanilla_items
@@ -622,19 +644,26 @@ async def update_archetype_allocations(archetype_id: str, request: ArchetypeSave
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _normalize_manual_module(module: Optional[str]) -> str:
+    normalized = str(module or "common").strip().lower()
+    if normalized in {"v1", "v2", "colony", "common"}:
+        return normalized
+    return "common"
+
+
 @app.get("/api/manuals/editor")
-async def get_manual_editor_data(scope: str = "manuals"):
+async def get_manual_editor_data(scope: str = "manuals", module: str = "common"):
     try:
-        return load_manual_editor_data(scope=scope)
+        return load_manual_editor_data(scope=scope, module=_normalize_manual_module(module))
     except Exception as e:
         logger.error(f"Error loading manual editor data: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/manuals")
-async def create_manual(request: ManualSaveRequest, scope: str = "manuals"):
+async def create_manual(request: ManualSaveRequest, scope: str = "manuals", module: str = "common"):
     try:
-        payload = create_manual_definition(request.model_dump(), scope=scope)
+        payload = create_manual_definition(request.model_dump(), scope=scope, module=_normalize_manual_module(module))
         return {
             "success": True,
             "manual": payload,
@@ -647,9 +676,9 @@ async def create_manual(request: ManualSaveRequest, scope: str = "manuals"):
 
 
 @app.put("/api/manuals/{manual_id}")
-async def update_manual(manual_id: str, request: ManualSaveRequest, scope: str = "manuals"):
+async def update_manual(manual_id: str, request: ManualSaveRequest, scope: str = "manuals", module: str = "common"):
     try:
-        payload = save_manual_definition(manual_id, request.model_dump(), scope=scope)
+        payload = save_manual_definition(manual_id, request.model_dump(), scope=scope, module=_normalize_manual_module(module))
         return {
             "success": True,
             "manual": payload,
@@ -662,9 +691,9 @@ async def update_manual(manual_id: str, request: ManualSaveRequest, scope: str =
 
 
 @app.delete("/api/manuals/{manual_id}")
-async def remove_manual(manual_id: str, scope: str = "manuals"):
+async def remove_manual(manual_id: str, scope: str = "manuals", module: str = "common"):
     try:
-        delete_manual_definition(manual_id, scope=scope)
+        delete_manual_definition(manual_id, scope=scope, module=_normalize_manual_module(module))
         return {
             "success": True,
             "manual_id": manual_id,
@@ -679,9 +708,14 @@ async def remove_manual(manual_id: str, scope: str = "manuals"):
 @app.post("/api/manuals/images")
 async def upload_manual_image(
     manual_id: str = Form(...),
+    module: str = Form("common"),
     file: UploadFile = File(...),
 ):
-    assets_root = MOD_ROOT / "Contents/mods/DynamicTradingCommon/42.13/media/ui/Manuals" / manual_id
+    normalized_module = _normalize_manual_module(module)
+    base_root = COLONIES_ROOT if normalized_module == "colony" else MOD_ROOT
+    base_url = "/static/manuals-colony" if normalized_module == "colony" else "/static/manuals"
+    mod_folder = "DynamicColonies" if normalized_module == "colony" else "DynamicTradingCommon"
+    assets_root = base_root / f"Contents/mods/{mod_folder}/42.13/media/ui/Manuals" / manual_id
     assets_root.mkdir(parents=True, exist_ok=True)
     filename = Path(file.filename or "manual-image").name
     file_path = assets_root / filename
@@ -692,7 +726,7 @@ async def upload_manual_image(
         return {
             "success": True,
             "path": f"media/ui/Manuals/{manual_id}/{filename}",
-            "url": f"/static/manuals/{manual_id}/{filename}",
+            "url": f"{base_url}/{manual_id}/{filename}",
         }
     except Exception as e:
         logger.error(f"Error uploading manual image for {manual_id}: {e}")
@@ -722,8 +756,9 @@ async def get_debug_logs(
 # --- Workshop Management ---
 
 @app.post("/api/workshop/prepare")
-async def trigger_workshop_prepare():
-    mod_root = Path(os.getenv("DYNAMIC_TRADING_PATH", "/home/psychopatz/Zomboid/Workshop/DynamicTrading/"))
+async def trigger_workshop_prepare(target: Optional[str] = None):
+    project = _get_workshop_project_or_404(target)
+    mod_root = project["path"]
     staging_dir = mod_root / "upload_staging"
     
     # Run synchronously since it's just local file copy
@@ -733,40 +768,62 @@ async def trigger_workshop_prepare():
     
     return {"success": True, "staging_dir": str(staging_dir)}
 
+@app.get("/api/workshop/targets")
+async def get_workshop_targets():
+    return _serialize_workshop_projects()
+
 @app.get("/api/workshop/metadata")
-async def get_workshop_metadata():
-    mod_root = Path(os.getenv("DYNAMIC_TRADING_PATH", "/home/psychopatz/Zomboid/Workshop/DynamicTrading/"))
+async def get_workshop_metadata(target: Optional[str] = None):
+    project = _get_workshop_project_or_404(target)
+    mod_root = project["path"]
     workshop_txt_path = mod_root / "workshop.txt"
-    return parse_workshop_txt(workshop_txt_path)
+    return {
+        **parse_workshop_txt(workshop_txt_path),
+        "target": project["key"],
+        "project_name": project["name"],
+        "project_title": project["title"],
+    }
 
 @app.get("/api/workshop/sync")
-async def sync_workshop_metadata():
-    # Use the hardcoded ID for now or fetch from workshop.txt
-    mod_root = Path(os.getenv("DYNAMIC_TRADING_PATH", "/home/psychopatz/Zomboid/Workshop/DynamicTrading/"))
+async def sync_workshop_metadata(target: Optional[str] = None, item_id: Optional[str] = None):
+    project = _get_workshop_project_or_404(target)
+    mod_root = project["path"]
     local_meta = parse_workshop_txt(mod_root / "workshop.txt")
-    item_id = local_meta.get("id", "3635333613")
+    resolved_item_id = item_id or local_meta.get("id", "")
+    if not resolved_item_id:
+        raise HTTPException(status_code=400, detail="This project has no workshop ID yet.")
     
-    steam_meta = fetch_steam_metadata(item_id)
+    steam_meta = fetch_steam_metadata(resolved_item_id)
     if not steam_meta:
         raise HTTPException(status_code=500, detail="Failed to fetch data from Steam Web API")
-    return steam_meta
+    return {**steam_meta, "target": project["key"], "project_name": project["name"]}
+
+@app.get("/api/workshop/preview")
+async def get_workshop_preview(target: Optional[str] = None):
+    project = _get_workshop_project_or_404(target)
+    preview_path = project["path"] / "preview.png"
+    if not preview_path.exists():
+        raise HTTPException(status_code=404, detail="Preview image not found for this project.")
+    return FileResponse(preview_path)
 
 @app.post("/api/workshop/image")
-async def upload_workshop_image(file: UploadFile = File(...)):
-    mod_root = Path(os.getenv("DYNAMIC_TRADING_PATH", "/home/psychopatz/Zomboid/Workshop/DynamicTrading/"))
+async def upload_workshop_image(file: UploadFile = File(...), target: Optional[str] = None):
+    project = _get_workshop_project_or_404(target)
+    mod_root = project["path"]
     preview_path = mod_root / "preview.png"
     
     try:
         with open(preview_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
-        return {"success": True, "filename": "preview.png"}
+        return {"success": True, "filename": "preview.png", "target": project["key"]}
     except Exception as e:
         logger.error(f"Error uploading image: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/workshop/push")
 async def trigger_workshop_push(request: WorkshopPushRequest):
-    mod_root = Path(os.getenv("DYNAMIC_TRADING_PATH", "/home/psychopatz/Zomboid/Workshop/DynamicTrading/"))
+    project = _get_workshop_project_or_404(request.target)
+    mod_root = project["path"]
     staging_dir = mod_root / "upload_staging"
     vdf_path = mod_root / "workshop_update.vdf"
     steamcmd_path = os.getenv("STEAM_CMD_PATH", os.getenv("STEAMCMD_PATH", "/home/psychopatz/Desktop/Apps/SteamCMD/steamcmd.sh"))
@@ -784,15 +841,17 @@ async def trigger_workshop_push(request: WorkshopPushRequest):
         request.dict()
     )
     
-    return {"task_id": task_id}
+    return {"task_id": task_id, "target": project["key"], "project_name": project["name"]}
 
 @app.get("/api/git/changes")
-async def get_project_changes(branch: Optional[str] = None):
-    return get_git_changes(branch)
+async def get_project_changes(branch: Optional[str] = None, target: Optional[str] = None):
+    project = _get_workshop_project_or_404(target)
+    return get_git_changes(branch, project["path"])
 
 @app.get("/api/git/branches")
-async def get_project_branches():
-    return get_git_branches()
+async def get_project_branches(target: Optional[str] = None):
+    project = _get_workshop_project_or_404(target)
+    return get_git_branches(project["path"])
 
 # --- Simulation ---
 

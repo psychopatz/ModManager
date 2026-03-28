@@ -5,12 +5,37 @@ import urllib.request
 import json
 import urllib.parse
 import shutil
+import re
 
 logger = logging.getLogger(__name__)
 
 # Constants
 APP_ID = "108600"
-WORKSHOP_ID = "3635333613"
+
+
+def resolve_workshop_id(mod_root: Path) -> str:
+    workshop_txt = mod_root / "workshop.txt"
+    if workshop_txt.exists():
+        try:
+            with open(workshop_txt, "r", encoding="utf-8") as handle:
+                for raw_line in handle:
+                    line = raw_line.strip()
+                    if line.startswith("id="):
+                        return line.split("=", 1)[1].strip()
+        except Exception as exc:
+            logger.debug(f"Unable to read workshop.txt at {workshop_txt}: {exc}")
+
+    vdf_path = mod_root / "workshop_update.vdf"
+    if vdf_path.exists():
+        try:
+            content = vdf_path.read_text(encoding="utf-8")
+            match = re.search(r'"publishedfileid"\s+"([^"]+)"', content)
+            if match:
+                return match.group(1).strip()
+        except Exception as exc:
+            logger.debug(f"Unable to read workshop_update.vdf at {vdf_path}: {exc}")
+
+    return ""
 
 def prepare_staging(mod_root: Path, staging_dir: Path):
     """
@@ -63,6 +88,7 @@ def prepare_staging(mod_root: Path, staging_dir: Path):
 def generate_vdf(
     staging_dir: Path, 
     vdf_path: Path, 
+    workshop_id: str,
     changenote: str = "Update pushed via SteamCMD",
     title: str = None,
     description: str = None,
@@ -78,7 +104,7 @@ def generate_vdf(
             '"workshopitem"',
             '{',
             f'\t"appid" "{APP_ID}"',
-            f'\t"publishedfileid" "{WORKSHOP_ID}"',
+            f'\t"publishedfileid" "{workshop_id}"',
             f'\t"contentfolder" "{staging_dir.absolute()}"',
             f'\t"changenote" "{changenote}"'
         ]
@@ -117,7 +143,7 @@ def parse_workshop_txt(workshop_txt_path: Path):
         "description": [],
         "tags": "",
         "visibility": 0,
-        "id": WORKSHOP_ID
+        "id": resolve_workshop_id(workshop_txt_path.parent)
     }
     
     if not workshop_txt_path.exists():
@@ -251,6 +277,10 @@ def run_full_workshop_push(
     Provides full visibility in the TaskConsole.
     """
     print("=== STARTING WORKSHOP PUSH WORKFLOW ===")
+    workshop_id = request_data.get("workshop_id") or resolve_workshop_id(mod_root)
+    if not workshop_id:
+        print("[ERROR] No workshop ID was found for this project.")
+        return False
     
     # 1. Prepare Staging
     if request_data.get("update_files"):
@@ -266,6 +296,7 @@ def run_full_workshop_push(
     success = generate_vdf(
         staging_dir=staging_dir, 
         vdf_path=vdf_path, 
+        workshop_id=workshop_id,
         changenote=request_data.get("changenote", ""),
         title=request_data.get("title") if request_data.get("update_metadata") else None,
         description=request_data.get("description") if request_data.get("update_metadata") else None,

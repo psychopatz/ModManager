@@ -41,25 +41,27 @@ export const getPricingTags = () => api.get('/pricing/tags');
 export const previewPricingTag = (payload) => api.post('/pricing/tags/preview', payload);
 export const getArchetypeEditorData = () => api.get('/archetypes/editor');
 export const saveArchetypeDefinition = (archetypeId, payload) => api.put(`/archetypes/${archetypeId}/allocations`, payload);
-export const getManualEditorData = (scope = 'manuals') => api.get('/manuals/editor', { params: { scope } });
-export const createManualDefinition = (payload, scope = 'manuals') => api.post('/manuals', payload, { params: { scope } });
-export const saveManualDefinition = (manualId, payload, scope = 'manuals') => api.put(`/manuals/${manualId}`, payload, { params: { scope } });
-export const deleteManualDefinition = (manualId, scope = 'manuals') => api.delete(`/manuals/${manualId}`, { params: { scope } });
+export const getManualEditorData = (scope = 'manuals', module = 'common') => api.get('/manuals/editor', { params: { scope, module } });
+export const createManualDefinition = (payload, scope = 'manuals', module = 'common') => api.post('/manuals', payload, { params: { scope, module } });
+export const saveManualDefinition = (manualId, payload, scope = 'manuals', module = 'common') => api.put(`/manuals/${manualId}`, payload, { params: { scope, module } });
+export const deleteManualDefinition = (manualId, scope = 'manuals', module = 'common') => api.delete(`/manuals/${manualId}`, { params: { scope, module } });
 export const uploadManualImage = (formData) => api.post('/manuals/images', formData, {
   headers: { 'Content-Type': 'multipart/form-data' }
 });
 
 // Workshop
-export const triggerWorkshopPrepare = () => api.post('/workshop/prepare');
+export const triggerWorkshopPrepare = (target) => api.post('/workshop/prepare', null, { params: { target } });
 export const triggerWorkshopPush = (payload) => api.post('/workshop/push', payload);
-export const getWorkshopMetadata = () => api.get('/workshop/metadata');
-export const getWorkshopSync = () => api.get('/workshop/sync');
-export const uploadWorkshopImage = (formData) => api.post('/workshop/image', formData, {
+export const getWorkshopTargets = () => api.get('/workshop/targets');
+export const getWorkshopMetadata = (target) => api.get('/workshop/metadata', { params: { target } });
+export const getWorkshopSync = (target, itemId) => api.get('/workshop/sync', { params: { target, item_id: itemId } });
+export const uploadWorkshopImage = (formData, target) => api.post('/workshop/image', formData, {
+  params: { target },
   headers: { 'Content-Type': 'multipart/form-data' }
 });
 
 // Git
-export const getGitChanges = (branch) => api.get(`/git/changes${branch ? `?branch=${branch}` : ''}`);
-export const getGitBranches = () => api.get('/git/branches');
+export const getGitChanges = (branch, target) => api.get('/git/changes', { params: { branch, target } });
+export const getGitBranches = (target) => api.get('/git/branches', { params: { target } });
 
 export default api;

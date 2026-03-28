@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 
@@ -8,26 +9,32 @@ from .config import default_paths
 
 EDITOR_BEGIN = "-- DT_MANUAL_EDITOR_BEGIN"
 EDITOR_END = "-- DT_MANUAL_EDITOR_END"
-VALID_SOURCE_FOLDERS = {"Universal", "V1", "V2", "Definitions", "WhatsNew"}
+VALID_SOURCE_FOLDERS = {"Universal", "V1", "V2", "Support", "Colony", "Definitions", "WhatsNew"}
 DEFAULT_AUDIENCE = "common"
 DEFAULT_SCOPE = "manuals"
+DEFAULT_MODULE = "common"
 
 
-def load_manual_editor_data(scope: str = DEFAULT_SCOPE) -> dict:
+def load_manual_editor_data(scope: str = DEFAULT_SCOPE, module: str = DEFAULT_MODULE) -> dict:
     scope = _normalize_scope(scope)
-    manuals_root = _get_manuals_root()
-    assets_root = _get_manual_assets_root()
+    module = _normalize_module(module)
+    manuals_roots = _get_manuals_roots(module)
+    assets_root = _get_manual_assets_root(module)
     manuals = []
 
-    if manuals_root.exists():
+    for manuals_root in manuals_roots:
+        if not manuals_root.exists():
+            continue
         for file_path in sorted(manuals_root.rglob("*.lua")):
             payload = _read_editor_payload(file_path)
             if payload is None:
                 continue
             if not _payload_matches_scope(payload, scope):
                 continue
+            if not _module_matches_payload(payload, module):
+                continue
             payload["source_file"] = str(file_path)
-            payload["asset_base_url"] = f'/static/manuals/{payload["manual_id"]}'
+            payload["asset_base_url"] = _get_manual_asset_base_url(payload.get("module"), payload["manual_id"])
             manuals.append(payload)
 
     manuals.sort(key=lambda row: (
@@ -39,40 +46,53 @@ def load_manual_editor_data(scope: str = DEFAULT_SCOPE) -> dict:
     return {
         "meta": {
             "scope": scope,
+            "module": module,
             "manual_count": len(manuals),
         },
         "manuals": manuals,
-        "definitions_root": str(manuals_root),
+        "definitions_root": str(manuals_roots[0]) if manuals_roots else "",
         "assets_root": str(assets_root),
-        "assets_base_url": "/static/manuals",
-}
+        "assets_base_url": _get_manual_assets_root_url(module),
+    }
 
 
-def create_manual_definition(payload: dict, scope: str = DEFAULT_SCOPE) -> dict:
+def create_manual_definition(payload: dict, scope: str = DEFAULT_SCOPE, module: str = DEFAULT_MODULE) -> dict:
     scope = _normalize_scope(scope)
-    normalized = _normalize_manual_payload(payload, scope=scope)
+    module = _normalize_module(module)
+    normalized = _normalize_manual_payload(payload, scope=scope, module=module)
     existing_file = _find_existing_manual_file(normalized["manual_id"])
     if existing_file.exists():
         raise ValueError(f'Manual "{normalized["manual_id"]}" already exists.')
-    file_path = _get_manual_file_path(normalized["manual_id"], normalized.get("source_folder"), scope=scope)
+    file_path = _get_manual_file_path(
+        normalized["manual_id"],
+        normalized.get("source_folder"),
+        scope=scope,
+        module=normalized.get("module") or module,
+    )
     _write_manual_file(file_path, normalized)
     return normalized
 
 
-def save_manual_definition(manual_id: str, payload: dict, scope: str = DEFAULT_SCOPE) -> dict:
+def save_manual_definition(manual_id: str, payload: dict, scope: str = DEFAULT_SCOPE, module: str = DEFAULT_MODULE) -> dict:
     scope = _normalize_scope(scope)
-    normalized = _normalize_manual_payload(payload, manual_id=manual_id, scope=scope)
+    module = _normalize_module(module)
+    normalized = _normalize_manual_payload(payload, manual_id=manual_id, scope=scope, module=module)
     existing_file = _find_existing_manual_file(manual_id)
     if existing_file.exists() and not _file_matches_scope(existing_file, scope):
         raise ValueError(f'Manual "{manual_id}" belongs to a different editor scope.')
-    file_path = _get_manual_file_path(manual_id, normalized.get("source_folder"), scope=scope)
+    file_path = _get_manual_file_path(
+        manual_id,
+        normalized.get("source_folder"),
+        scope=scope,
+        module=normalized.get("module") or module,
+    )
     _write_manual_file(file_path, normalized)
     if existing_file and existing_file != file_path and existing_file.exists():
         existing_file.unlink()
     return normalized
 
 
-def delete_manual_definition(manual_id: str, scope: str = DEFAULT_SCOPE) -> None:
+def delete_manual_definition(manual_id: str, scope: str = DEFAULT_SCOPE, module: str = DEFAULT_MODULE) -> None:
     scope = _normalize_scope(scope)
     file_path = _find_existing_manual_file(manual_id)
     if not file_path.exists():
@@ -82,25 +102,65 @@ def delete_manual_definition(manual_id: str, scope: str = DEFAULT_SCOPE) -> None
     file_path.unlink()
 
 
-def _get_manuals_root() -> Path:
+def _get_dynamic_trading_root() -> Path:
     return default_paths().root / "Contents/mods/DynamicTradingCommon/42.13/media/lua/shared/DT/Common/Manuals"
 
 
-def _get_manual_assets_root() -> Path:
+def _get_dynamic_colonies_mod_root() -> Path:
+    dt_root = default_paths().root
+    return Path(os.getenv("DYNAMIC_COLONIES_PATH", str(dt_root.parent / "DynamicColonies")))
+
+
+def _get_dynamic_colonies_root() -> Path:
+    return _get_dynamic_colonies_mod_root() / "Contents/mods/DynamicColonies/42.13/media/lua/shared/DC/Common/Manuals"
+
+
+def _get_manuals_roots(module: str = DEFAULT_MODULE) -> list[Path]:
+    normalized = _normalize_module(module)
+    dt_root = _get_dynamic_trading_root()
+    if normalized == "colony":
+        return [_get_dynamic_colonies_root(), dt_root]
+    return [dt_root]
+
+
+def _get_manual_assets_root(module: str = DEFAULT_MODULE) -> Path:
+    normalized = _normalize_module(module)
+    if normalized == "colony":
+        return _get_dynamic_colonies_mod_root() / "Contents/mods/DynamicColonies/42.13/media/ui/Manuals"
     return default_paths().root / "Contents/mods/DynamicTradingCommon/42.13/media/ui/Manuals"
 
 
-def _get_manual_file_path(manual_id: str, source_folder: str | None = None, scope: str = DEFAULT_SCOPE) -> Path:
-    folder = _normalize_source_folder(source_folder, None, scope=scope)
-    return _get_manuals_root() / folder / f"DT_Manual_{manual_id}.lua"
+def _get_manual_assets_root_url(module: str = DEFAULT_MODULE) -> str:
+    return "/static/manuals-colony" if _normalize_module(module) == "colony" else "/static/manuals"
+
+
+def _get_manual_asset_base_url(module: str | None, manual_id: str) -> str:
+    return f'{_get_manual_assets_root_url(module or DEFAULT_MODULE)}/{manual_id}'
+
+
+def _get_manual_file_path(
+    manual_id: str,
+    source_folder: str | None = None,
+    scope: str = DEFAULT_SCOPE,
+    module: str = DEFAULT_MODULE,
+) -> Path:
+    normalized_module = _normalize_module(module)
+    folder = _normalize_source_folder(source_folder, None, scope=scope, module=normalized_module)
+    if normalized_module == "colony":
+        return _get_dynamic_colonies_root() / f"DC_Manual_{manual_id}.lua"
+    return _get_dynamic_trading_root() / folder / f"DT_Manual_{manual_id}.lua"
 
 
 def _find_existing_manual_file(manual_id: str) -> Path:
-    manuals_root = _get_manuals_root()
-    matches = sorted(manuals_root.rglob(f"DT_Manual_{manual_id}.lua"))
-    if matches:
-        return matches[0]
-    return _get_manual_file_path(manual_id)
+    normalized_id = _slugify(manual_id)
+    for root in _get_manuals_roots("colony"):
+        if not root.exists():
+            continue
+        for file_path in sorted(root.rglob("*.lua")):
+            payload = _read_editor_payload(file_path)
+            if payload and payload.get("manual_id") == normalized_id:
+                return file_path
+    return _get_manual_file_path(normalized_id)
 
 
 def _read_editor_payload(file_path: Path) -> dict | None:
@@ -123,11 +183,18 @@ def _read_editor_payload(file_path: Path) -> dict | None:
         json_lines.append(stripped)
 
     payload = json.loads("\n".join(json_lines))
-    return _normalize_manual_payload(payload, manual_id=payload.get("manual_id"))
+    return _normalize_manual_payload(payload, manual_id=payload.get("manual_id"), file_path=file_path)
 
 
-def _normalize_manual_payload(payload: dict, manual_id: str | None = None, scope: str = DEFAULT_SCOPE) -> dict:
+def _normalize_manual_payload(
+    payload: dict,
+    manual_id: str | None = None,
+    scope: str = DEFAULT_SCOPE,
+    module: str = DEFAULT_MODULE,
+    file_path: Path | None = None,
+) -> dict:
     scope = _normalize_scope(scope)
+    module = _normalize_module(_infer_module(module, payload, file_path))
     manual_id = _slugify(manual_id or payload.get("manual_id"))
     if not manual_id:
         raise ValueError("Manual id is required.")
@@ -147,7 +214,14 @@ def _normalize_manual_payload(payload: dict, manual_id: str | None = None, scope
     show_in_library = _normalize_bool(payload.get("show_in_library")) if "show_in_library" in payload else not is_whats_new
     if scope == "updates":
         show_in_library = False
-    source_folder = _normalize_source_folder(payload.get("source_folder"), audiences, scope=scope, is_whats_new=is_whats_new)
+    source_folder = _normalize_source_folder(
+        payload.get("source_folder"),
+        audiences,
+        scope=scope,
+        is_whats_new=is_whats_new,
+        module=module,
+        file_path=file_path,
+    )
 
     chapters = []
     seen_chapters: set[str] = set()
@@ -201,6 +275,7 @@ def _normalize_manual_payload(payload: dict, manual_id: str | None = None, scope
 
     return {
         "manual_id": manual_id,
+        "module": module,
         "title": str(payload.get("title", manual_id)).strip(),
         "description": str(payload.get("description", "")).strip(),
         "start_page_id": start_page_id,
@@ -377,6 +452,34 @@ def _normalize_audience(value: str | None) -> str | None:
     return text
 
 
+def _normalize_module(value: str | None) -> str:
+    normalized = _normalize_audience(value)
+    if normalized in {"v1", "v2", "colony", "common"}:
+        return normalized
+    return DEFAULT_MODULE
+
+
+def _infer_module(module: str | None, payload: dict | None = None, file_path: Path | None = None) -> str:
+    normalized = _normalize_module(module)
+    if normalized != DEFAULT_MODULE:
+        return normalized
+
+    if file_path is not None:
+        lowered = str(file_path).replace("\\", "/").lower()
+        if "/dynamiccolonies/" in lowered:
+            return "colony"
+
+    if payload:
+        audiences = _normalize_audiences(payload.get("audiences"), _slugify(payload.get("manual_id")))
+        return _normalize_module((audiences or [DEFAULT_AUDIENCE])[0])
+
+    return DEFAULT_MODULE
+
+
+def _module_matches_payload(payload: dict, module: str) -> bool:
+    return _normalize_module(payload.get("module")) == _normalize_module(module)
+
+
 def _normalize_audiences(raw_audiences, manual_id: str) -> list[str]:
     values = raw_audiences if isinstance(raw_audiences, list) else [raw_audiences]
     audiences: list[str] = []
@@ -413,14 +516,33 @@ def _payload_matches_scope(payload: dict, scope: str) -> bool:
 
 
 def _file_matches_scope(file_path: Path, scope: str) -> bool:
-    folder = file_path.parent.name
-    is_update = folder == "WhatsNew"
-    return is_update if _normalize_scope(scope) == "updates" else not is_update
+    payload = _read_editor_payload(file_path)
+    if payload is None:
+        return False
+    return _payload_matches_scope(payload, scope)
 
 
-def _normalize_source_folder(raw_folder: str | None, audiences: list[str] | None, scope: str = DEFAULT_SCOPE, is_whats_new: bool = False) -> str:
+def _normalize_source_folder(
+    raw_folder: str | None,
+    audiences: list[str] | None,
+    scope: str = DEFAULT_SCOPE,
+    is_whats_new: bool = False,
+    module: str = DEFAULT_MODULE,
+    file_path: Path | None = None,
+) -> str:
     if _normalize_scope(scope) == "updates" or is_whats_new:
         return "WhatsNew"
+
+    normalized_module = _normalize_module(module)
+    if normalized_module == "colony":
+        return "Colony"
+
+    if file_path is not None:
+        parent_name = file_path.parent.name
+        if parent_name in VALID_SOURCE_FOLDERS:
+            if parent_name == "WhatsNew":
+                return "Universal"
+            return parent_name
 
     folder = str(raw_folder or "").strip().replace("\\", "/")
     if folder in VALID_SOURCE_FOLDERS:
@@ -440,6 +562,8 @@ def _normalize_source_folder(raw_folder: str | None, audiences: list[str] | None
         return "V1"
     if primary == "v2":
         return "V2"
+    if primary == "colony":
+        return "Colony"
     return "Universal"
 
 

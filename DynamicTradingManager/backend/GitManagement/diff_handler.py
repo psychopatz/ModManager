@@ -5,12 +5,12 @@ import os
 
 logger = logging.getLogger(__name__)
 
-def get_git_changes(branch: str = None):
+def get_git_changes(branch: str = None, repo_path: Path = None):
     """
     Returns a summary of uncommitted changes (git status and short diff) 
     and recent feature history from the specified branch.
     """
-    repo_path = Path(os.getenv("DYNAMIC_TRADING_PATH", "/home/psychopatz/Zomboid/Workshop/DynamicTrading/"))
+    repo_path = repo_path or Path(os.getenv("DYNAMIC_TRADING_PATH", "/home/psychopatz/Zomboid/Workshop/DynamicTrading/"))
     try:
         # Get status
         status = subprocess.check_output(["git", "status", "--short"], cwd=repo_path).decode("utf-8")
@@ -80,11 +80,11 @@ def get_git_changes(branch: str = None):
         logger.error(f"Error getting git changes: {e}")
         return {"error": str(e)}
 
-def get_git_branches():
+def get_git_branches(repo_path: Path = None):
     """
     Returns a list of local and remote branches.
     """
-    repo_path = Path(os.getenv("DYNAMIC_TRADING_PATH", "/home/psychopatz/Zomboid/Workshop/DynamicTrading/"))
+    repo_path = repo_path or Path(os.getenv("DYNAMIC_TRADING_PATH", "/home/psychopatz/Zomboid/Workshop/DynamicTrading/"))
     try:
         raw_branches = subprocess.check_output(["git", "branch", "-a"], cwd=repo_path).decode("utf-8")
         branches = []

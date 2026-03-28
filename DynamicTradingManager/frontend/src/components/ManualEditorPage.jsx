@@ -30,26 +30,52 @@ import UploadFileIcon from '@mui/icons-material/UploadFile';
 import { createManualDefinition, deleteManualDefinition, getManualEditorData, saveManualDefinition, uploadManualImage } from '../services/api';
 
 const NEW_MANUAL_KEY = '__new_manual__';
+const moduleOptions = [
+  { value: 'common', label: 'Common' },
+  { value: 'v1', label: 'V1' },
+  { value: 'v2', label: 'V2' },
+  { value: 'colony', label: 'Colonies' },
+];
+
+const getDefaultSourceFolder = (module, editorScope = 'manuals') => {
+  if (editorScope === 'updates') {
+    return 'WhatsNew';
+  }
+  if (module === 'v1') return 'V1';
+  if (module === 'v2') return 'V2';
+  if (module === 'colony') return 'Colony';
+  return 'Universal';
+};
 
 const getTodayUpdateId = () => {
   const today = new Date().toISOString().slice(0, 10).replace(/-/g, '_');
   return `dt_update_${today}`;
 };
 
-const createEmptyManual = (editorScope = 'manuals', suggestedId) => {
+const createEmptyManual = (editorScope = 'manuals', suggestedId, module = 'common') => {
   const isUpdateEditor = editorScope === 'updates';
+  const resolvedModule = moduleOptions.some((option) => option.value === module) ? module : 'common';
+  const defaultId = isUpdateEditor
+    ? getTodayUpdateId()
+    : resolvedModule === 'colony'
+      ? 'dc_manual_new'
+      : resolvedModule === 'v1'
+        ? 'dt_v1_manual_new'
+        : resolvedModule === 'v2'
+          ? 'dt_v2_manual_new'
+          : 'manual_new';
   return {
-    manual_id: suggestedId || (isUpdateEditor ? getTodayUpdateId() : 'manual_new'),
+    manual_id: suggestedId || defaultId,
     title: '',
     description: '',
     start_page_id: '',
-    audiences: ['common'],
+    audiences: [resolvedModule],
     sort_order: isUpdateEditor ? 10 : 300000,
     release_version: '',
     auto_open_on_update: isUpdateEditor,
     is_whats_new: isUpdateEditor,
     show_in_library: !isUpdateEditor,
-    source_folder: isUpdateEditor ? 'WhatsNew' : 'Universal',
+    source_folder: getDefaultSourceFolder(resolvedModule, editorScope),
     chapters: [],
     pages: [],
   };
@@ -103,21 +129,22 @@ const blockTypeOptions = [
 
 const toneOptions = ['info', 'warn', 'success'];
 const audienceOptions = [
-  { value: 'common', label: 'Universal / Shared' },
+  { value: 'common', label: 'Common' },
   { value: 'v1', label: 'Dynamic Trading V1' },
   { value: 'v2', label: 'Dynamic Trading V2' },
   { value: 'colony', label: 'Dynamic Colonies' },
 ];
 
 const getPrimaryAudience = (manual) => manual?.audiences?.[0] || 'common';
-const getAudienceLabel = (manual) => audienceOptions.find((option) => option.value === getPrimaryAudience(manual))?.label || 'Universal / Shared';
+const getAudienceLabel = (manual) => audienceOptions.find((option) => option.value === getPrimaryAudience(manual))?.label || 'Common';
 
 function ManualPreview({ manual, selectedPage, backendOrigin }) {
   const resolveImageUrl = (path) => {
     if (!path) return '';
     const normalized = String(path);
     if (normalized.startsWith('media/ui/Manuals/')) {
-      return `${backendOrigin}/static/manuals/${normalized.replace('media/ui/Manuals/', '')}`;
+      const manualAssetBaseUrl = manual?.asset_base_url || '/static/manuals';
+      return `${backendOrigin}${manualAssetBaseUrl}/${normalized.replace('media/ui/Manuals/', '').split('/').slice(1).join('/')}`;
     }
     return `${backendOrigin}/static/workshop/Contents/mods/DynamicTradingCommon/42.13/${normalized}`;
   };
@@ -236,7 +263,8 @@ function ManualPreview({ manual, selectedPage, backendOrigin }) {
 const ManualEditorPage = ({ editorScope = 'manuals' }) => {
   const isUpdateEditor = editorScope === 'updates';
   const [data, setData] = useState({ manuals: [], assets_base_url: '/static/manuals' });
-  const [draft, setDraft] = useState(createEmptyManual(editorScope));
+  const [selectedModule, setSelectedModule] = useState('common');
+  const [draft, setDraft] = useState(createEmptyManual(editorScope, undefined, 'common'));
   const [selectedManualKey, setSelectedManualKey] = useState('');
   const [selectedPageId, setSelectedPageId] = useState('');
   const [newBlockType, setNewBlockType] = useState('paragraph');
@@ -270,15 +298,15 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
       setSelectedPageId(nextManual.pages?.[0]?.id || '');
     } else {
       setSelectedManualKey('');
-      setDraft(createEmptyManual(editorScope));
+      setDraft(createEmptyManual(editorScope, undefined, selectedModule));
       setSelectedPageId('');
     }
   };
 
-  const loadEditor = async (preferredKey = '') => {
+  const loadEditor = async (preferredKey = '', module = selectedModule) => {
     setLoading(true);
     try {
-      const response = await getManualEditorData(editorScope);
+      const response = await getManualEditorData(editorScope, module);
       applyPayload(response.data, preferredKey);
       setStatus({ type: '', message: '' });
     } catch (error) {
@@ -289,8 +317,8 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
   };
 
   useEffect(() => {
-    loadEditor();
-  }, [editorScope]);
+    loadEditor('', selectedModule);
+  }, [editorScope, selectedModule]);
 
   const selectManual = (manual) => {
     setSelectedManualKey(manual.manual_id);
@@ -308,8 +336,12 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
   };
 
   const createManual = () => {
-    const suggestedId = isUpdateEditor ? getTodayUpdateId() : `manual_${(data.manuals?.length || 0) + 1}`;
-    const next = createEmptyManual(editorScope, suggestedId);
+    const suggestedId = isUpdateEditor
+      ? getTodayUpdateId()
+      : selectedModule === 'colony'
+        ? `dc_manual_${(data.manuals?.length || 0) + 1}`
+        : `manual_${(data.manuals?.length || 0) + 1}`;
+    const next = createEmptyManual(editorScope, suggestedId, selectedModule);
     next.sort_order = isUpdateEditor ? Math.max(10, (data.manuals?.length || 0) + 10) : 300000 + (data.manuals?.length || 0);
     setSelectedManualKey(NEW_MANUAL_KEY);
     setDraft(next);
@@ -335,16 +367,21 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
         auto_open_on_update: isUpdateEditor ? draft.auto_open_on_update !== false : draft.auto_open_on_update === true,
         is_whats_new: isUpdateEditor ? true : draft.is_whats_new === true,
         show_in_library: isUpdateEditor ? false : draft.show_in_library !== false,
-        source_folder: isUpdateEditor ? 'WhatsNew' : draft.source_folder || 'Universal',
+        source_folder: isUpdateEditor ? 'WhatsNew' : draft.source_folder || getDefaultSourceFolder(getPrimaryAudience(draft), editorScope),
       };
+      const payloadModule = getPrimaryAudience(payload);
 
       if (isNewManual) {
-        await createManualDefinition(payload, editorScope);
+        await createManualDefinition(payload, editorScope, payloadModule);
       } else {
-        await saveManualDefinition(selectedManualKey, payload, editorScope);
+        await saveManualDefinition(selectedManualKey, payload, editorScope, payloadModule);
       }
 
-      await loadEditor(payload.manual_id);
+      const savedModule = payloadModule;
+      if (savedModule !== selectedModule) {
+        setSelectedModule(savedModule);
+      }
+      await loadEditor(payload.manual_id, savedModule);
       setStatus({ type: 'success', message: `Saved ${isUpdateEditor ? 'update version' : 'manual'} "${payload.manual_id}".` });
     } catch (error) {
       setStatus({ type: 'error', message: error.response?.data?.detail || `Failed to save the ${isUpdateEditor ? 'update version' : 'manual'}.` });
@@ -356,15 +393,15 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
   const deleteCurrentManual = async () => {
     if (isNewManual) {
       setSelectedManualKey('');
-      setDraft(createEmptyManual(editorScope));
+      setDraft(createEmptyManual(editorScope, undefined, selectedModule));
       setSelectedPageId('');
       setStatus({ type: 'info', message: `Discarded the unsaved ${isUpdateEditor ? 'update version' : 'manual'} draft.` });
       return;
     }
 
     try {
-      await deleteManualDefinition(selectedManualKey, editorScope);
-      await loadEditor();
+      await deleteManualDefinition(selectedManualKey, editorScope, selectedModule);
+      await loadEditor('', selectedModule);
       setStatus({ type: 'success', message: `Deleted ${isUpdateEditor ? 'update version' : 'manual'} "${selectedManualKey}".` });
     } catch (error) {
       setStatus({ type: 'error', message: error.response?.data?.detail || `Failed to delete the ${isUpdateEditor ? 'update version' : 'manual'}.` });
@@ -459,6 +496,7 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
 
     const formData = new FormData();
     formData.append('manual_id', manualId);
+    formData.append('module', getPrimaryAudience(draft));
     formData.append('file', file);
 
     try {
@@ -483,11 +521,24 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
           <Typography variant="h4">{isUpdateEditor ? 'Update Version Editor' : 'Manual Editor'}</Typography>
           <Typography variant="body2" color="text.secondary">
             {isUpdateEditor
-              ? 'Manage dedicated What\'s New entries, release versions, and per-update auto-open defaults.'
-              : 'Edit DT Commons manuals, chapters, pages, image blocks, and deep-link section ids.'}
+              ? 'Manage release notes across Common, V1, V2, and Dynamic Colonies.'
+              : 'Edit manuals across Common, V1, V2, and Dynamic Colonies, including chapters, pages, images, and deep links.'}
           </Typography>
         </Box>
-        <Stack direction="row" spacing={1}>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <FormControl size="small" sx={{ minWidth: 160 }}>
+            <InputLabel id="manual-module-view-label">Module View</InputLabel>
+            <Select
+              labelId="manual-module-view-label"
+              label="Module View"
+              value={selectedModule}
+              onChange={(event) => setSelectedModule(event.target.value)}
+            >
+              {moduleOptions.map((option) => (
+                <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
           <Button startIcon={<RefreshIcon />} variant="outlined" onClick={() => loadEditor(selectedManualKey)} disabled={loading || saving}>
             Refresh
           </Button>
@@ -518,7 +569,7 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
                 <ListItemText
                   primary={manual.title || manual.manual_id}
                   secondary={isUpdateEditor
-                    ? `${manual.manual_id}${manual.release_version ? ` • ${manual.release_version}` : ''}${manual.pages?.length ? ` • ${manual.pages.length} pages` : ''}${manual.sort_order != null ? ` • #${manual.sort_order}` : ''}`
+                    ? `${manual.manual_id} • ${getAudienceLabel(manual)}${manual.release_version ? ` • ${manual.release_version}` : ''}${manual.pages?.length ? ` • ${manual.pages.length} pages` : ''}${manual.sort_order != null ? ` • #${manual.sort_order}` : ''}`
                     : `${manual.manual_id} • ${getAudienceLabel(manual)}${manual.pages?.length ? ` • ${manual.pages.length} pages` : ''}${manual.sort_order != null ? ` • #${manual.sort_order}` : ''}`}
                 />
               </ListItemButton>
@@ -564,21 +615,22 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
                 onChange={(event) => updateDraft((next) => { next.start_page_id = slugify(event.target.value); })}
               />
               <Stack direction="row" spacing={2}>
-                {!isUpdateEditor && (
-                  <FormControl size="small" sx={{ minWidth: 220 }}>
-                    <InputLabel id="manual-audience-label">Audience</InputLabel>
-                    <Select
-                      labelId="manual-audience-label"
-                      label="Audience"
-                      value={getPrimaryAudience(draft)}
-                      onChange={(event) => updateDraft((next) => { next.audiences = [event.target.value]; })}
-                    >
-                      {audienceOptions.map((option) => (
-                        <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                )}
+                <FormControl size="small" sx={{ minWidth: 220 }}>
+                  <InputLabel id="manual-audience-label">Module</InputLabel>
+                  <Select
+                    labelId="manual-audience-label"
+                    label="Module"
+                    value={getPrimaryAudience(draft)}
+                    onChange={(event) => updateDraft((next) => {
+                      next.audiences = [event.target.value];
+                      next.source_folder = getDefaultSourceFolder(event.target.value, editorScope);
+                    })}
+                  >
+                    {audienceOptions.map((option) => (
+                      <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
                 <TextField
                   label="Sort Order"
                   type="number"

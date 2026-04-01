@@ -114,7 +114,7 @@ const ItemTable = () => {
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
             <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
                 <Grid container spacing={2} alignItems="center">
-                    <Grid item xs={12} sm={6} md={3} lg={2} xl={2}>
+                    <Grid size={{ xs: 12, sm: 6, md: 3, lg: 2, xl: 2 }}>
                         <TextField
                             fullWidth
                             size="small"
@@ -131,7 +131,7 @@ const ItemTable = () => {
                             }}
                         />
                     </Grid>
-                    <Grid item xs={6} sm={6} md={2} lg={2} xl={2}>
+                    <Grid size={{ xs: 6, sm: 6, md: 2, lg: 2, xl: 2 }}>
                         <FormControl fullWidth size="small">
                             <InputLabel>Status</InputLabel>
                             <Select
@@ -146,7 +146,7 @@ const ItemTable = () => {
                             </Select>
                         </FormControl>
                     </Grid>
-                    <Grid item xs={6} sm={12} md={3} lg={3} xl={4}>
+                    <Grid size={{ xs: 6, sm: 12, md: 3, lg: 3, xl: 4 }}>
                         <Autocomplete
                             fullWidth
                             freeSolo
@@ -160,7 +160,7 @@ const ItemTable = () => {
                             )}
                         />
                     </Grid>
-                    <Grid item xs={6} sm={3} md={1} lg={1} xl={1}>
+                    <Grid size={{ xs: 6, sm: 3, md: 1, lg: 1, xl: 1 }}>
                         <TextField
                             fullWidth
                             size="small"
@@ -170,7 +170,7 @@ const ItemTable = () => {
                             onChange={(e) => { setMinWeight(e.target.value); setPage(0); }}
                         />
                     </Grid>
-                    <Grid item xs={6} sm={3} md={1} lg={1} xl={1}>
+                    <Grid size={{ xs: 6, sm: 3, md: 1, lg: 1, xl: 1 }}>
                         <TextField
                             fullWidth
                             size="small"
@@ -180,7 +180,7 @@ const ItemTable = () => {
                             onChange={(e) => { setMaxWeight(e.target.value); setPage(0); }}
                         />
                     </Grid>
-                    <Grid item xs={6} sm={3} md={1} lg={1} xl={1}>
+                    <Grid size={{ xs: 6, sm: 3, md: 1, lg: 1, xl: 1 }}>
                         <TextField
                             fullWidth
                             size="small"
@@ -190,7 +190,7 @@ const ItemTable = () => {
                             onChange={(e) => { setMinPrice(e.target.value); setPage(0); }}
                         />
                     </Grid>
-                    <Grid item xs={6} sm={3} md={1} lg={1} xl={1}>
+                    <Grid size={{ xs: 6, sm: 3, md: 1, lg: 1, xl: 1 }}>
                         <TextField
                             fullWidth
                             size="small"

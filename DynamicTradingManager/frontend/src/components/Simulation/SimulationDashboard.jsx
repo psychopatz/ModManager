@@ -247,7 +247,7 @@ export default function SimulationDashboard() {
       </Box>
 
       <Grid container spacing={2} sx={{ mb: 3 }}>
-        <Grid item xs={12} md={3}>
+                <Grid size={{ xs: 12, md: 3 }}>
             <Card elevation={4} sx={{ background: 'linear-gradient(45deg, #1a237e 30%, #283593 90%)', color: 'white' }}>
                 <CardContent>
                     <Typography variant="overline">Current Timeline</Typography>
@@ -256,7 +256,7 @@ export default function SimulationDashboard() {
                 </CardContent>
             </Card>
         </Grid>
-        <Grid item xs={12} md={9}>
+        <Grid size={{ xs: 12, md: 9 }}>
             <Card elevation={2}>
                 <CardContent>
                     <Typography variant="overline">Active Scenarios</Typography>
@@ -287,7 +287,7 @@ export default function SimulationDashboard() {
         {/* --- Tab 0: Interactive Simulator --- */}
         <TabPanel value={tabValue} index={0}>
             <Grid container spacing={3}>
-                <Grid item xs={12} md={8}>
+                <Grid size={{ xs: 12, md: 8 }}>
                     <Box sx={{ mb: 2, display: 'flex', gap: 2, alignItems: 'center' }}>
                         <FormControl sx={{ minWidth: 200 }}>
                             <InputLabel>Selecting Trader</InputLabel>
@@ -342,7 +342,7 @@ export default function SimulationDashboard() {
                     </TableContainer>
                 </Grid>
 
-                <Grid item xs={12} md={4}>
+                <Grid size={{ xs: 12, md: 4 }}>
                     <Paper variant="outlined" sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.02)' }}>
                         <Box sx={{ textAlign: 'center', mb: 2 }}>
                             <Typography variant="overline">Your Wallet</Typography>

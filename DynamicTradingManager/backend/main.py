@@ -75,6 +75,7 @@ if PORTRAITS_ROOT.exists():
 
 MOD_ROOT = Path(os.getenv("DYNAMIC_TRADING_PATH", "/home/psychopatz/Zomboid/Workshop/DynamicTrading/"))
 COLONIES_ROOT = Path(os.getenv("DYNAMIC_COLONIES_PATH", str(MOD_ROOT.parent / "DynamicColonies")))
+CURRENCY_ROOT = Path(os.getenv("DYNAMIC_CURRENCY_PATH", str(MOD_ROOT.parent / "CurrencyExpanded")))
 if MOD_ROOT.exists():
     app.mount("/static/workshop", StaticFiles(directory=str(MOD_ROOT)), name="workshop-static")
     MANUALS_STATIC_ROOT = MOD_ROOT / "Contents/mods/DynamicTradingCommon/42.13/media/ui/Manuals"
@@ -84,6 +85,10 @@ if COLONIES_ROOT.exists():
     MANUALS_COLONY_STATIC_ROOT = COLONIES_ROOT / "Contents/mods/DynamicColonies/42.13/media/ui/Manuals"
     MANUALS_COLONY_STATIC_ROOT.mkdir(parents=True, exist_ok=True)
     app.mount("/static/manuals-colony", StaticFiles(directory=str(MANUALS_COLONY_STATIC_ROOT)), name="manuals-colony-static")
+if CURRENCY_ROOT.exists():
+    MANUALS_CURRENCY_STATIC_ROOT = CURRENCY_ROOT / "Contents/mods/CurrencyExpanded/42.13/media/ui/Manuals"
+    MANUALS_CURRENCY_STATIC_ROOT.mkdir(parents=True, exist_ok=True)
+    app.mount("/static/manuals-currency", StaticFiles(directory=str(MANUALS_CURRENCY_STATIC_ROOT)), name="manuals-currency-static")
 
 # Enable CORS for frontend
 app.add_middleware(
@@ -199,9 +204,15 @@ class ManualSaveRequest(BaseModel):
     audiences: List[str] = ["common"]
     sort_order: Optional[int] = None
     release_version: Optional[str] = ""
+    popup_version: Optional[str] = ""
     auto_open_on_update: bool = False
     is_whats_new: bool = False
+    manual_type: Optional[str] = ""
     show_in_library: bool = True
+    support_url: Optional[str] = ""
+    banner_title: Optional[str] = ""
+    banner_text: Optional[str] = ""
+    banner_action_label: Optional[str] = ""
     source_folder: Optional[str] = None
     chapters: List[Dict[str, Any]] = []
     pages: List[Dict[str, Any]] = []
@@ -646,7 +657,7 @@ async def update_archetype_allocations(archetype_id: str, request: ArchetypeSave
 
 def _normalize_manual_module(module: Optional[str]) -> str:
     normalized = str(module or "common").strip().lower()
-    if normalized in {"v1", "v2", "colony", "common"}:
+    if normalized in {"v1", "v2", "colony", "currency", "common"}:
         return normalized
     return "common"
 
@@ -712,9 +723,18 @@ async def upload_manual_image(
     file: UploadFile = File(...),
 ):
     normalized_module = _normalize_manual_module(module)
-    base_root = COLONIES_ROOT if normalized_module == "colony" else MOD_ROOT
-    base_url = "/static/manuals-colony" if normalized_module == "colony" else "/static/manuals"
-    mod_folder = "DynamicColonies" if normalized_module == "colony" else "DynamicTradingCommon"
+    if normalized_module == "colony":
+        base_root = COLONIES_ROOT
+        base_url = "/static/manuals-colony"
+        mod_folder = "DynamicColonies"
+    elif normalized_module == "currency":
+        base_root = CURRENCY_ROOT
+        base_url = "/static/manuals-currency"
+        mod_folder = "CurrencyExpanded"
+    else:
+        base_root = MOD_ROOT
+        base_url = "/static/manuals"
+        mod_folder = "DynamicTradingCommon"
     assets_root = base_root / f"Contents/mods/{mod_folder}/42.13/media/ui/Manuals" / manual_id
     assets_root.mkdir(parents=True, exist_ok=True)
     filename = Path(file.filename or "manual-image").name

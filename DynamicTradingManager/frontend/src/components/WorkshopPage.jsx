@@ -529,9 +529,9 @@ Only return the change note content.`;
             <Box sx={{ p: 4 }}>
                <Stack spacing={4}>
                   <Grid container spacing={3}>
-                    <Grid item xs={12} md={6}><TextField label="Mod Title" fullWidth value={metadata.title} onChange={(e) => setMetadata({...metadata, title: e.target.value})} disabled={!updateMetadata} variant="filled" /></Grid>
-                    <Grid item xs={12} md={3}><TextField label="Workshop ID" fullWidth value={metadata.id} onChange={(e) => setMetadata({...metadata, id: e.target.value})} variant="filled" /></Grid>
-                    <Grid item xs={12} md={3}>
+                    <Grid size={{ xs: 12, md: 6 }}><TextField label="Mod Title" fullWidth value={metadata.title} onChange={(e) => setMetadata({...metadata, title: e.target.value})} disabled={!updateMetadata} variant="filled" /></Grid>
+                    <Grid size={{ xs: 12, md: 3 }}><TextField label="Workshop ID" fullWidth value={metadata.id} onChange={(e) => setMetadata({...metadata, id: e.target.value})} variant="filled" /></Grid>
+                    <Grid size={{ xs: 12, md: 3 }}>
                       <FormControl fullWidth variant="filled" disabled={!updateMetadata}>
                         <InputLabel>Visibility</InputLabel>
                         <Select value={metadata.visibility} onChange={(e) => setMetadata({...metadata, visibility: e.target.value})}>
@@ -557,7 +557,7 @@ Only return the change note content.`;
           </Box>
           <Collapse in={sections.deploy}>
              <Grid container spacing={4}>
-                <Grid item xs={12} md={6}>
+               <Grid size={{ xs: 12, md: 6 }}>
                   <Stack spacing={3}>
                     <Paper variant="outlined" sx={{ p: 2, borderRadius: 3 }}>
                       <FormControlLabel control={<Switch checked={updateFiles} onChange={(e) => setUpdateFiles(e.target.checked)} />} label={<Typography fontWeight={800}>Update Scripts & Binaries</Typography>} />
@@ -576,7 +576,7 @@ Only return the change note content.`;
                     </Paper>
                   </Stack>
                 </Grid>
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <form onSubmit={onPushSubmit}>
                     <Stack spacing={3}>
                       <TextField 

@@ -52,7 +52,7 @@ const Actions = ({ onTaskStarted }) => {
         <Box sx={{ p: 2 }}>
             <Grid container spacing={3}>
                 {/* Core Registry Management */}
-                <Grid item xs={12}>
+                <Grid size={12}>
                     <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         Registry Management
                     </Typography>
@@ -106,7 +106,7 @@ const Actions = ({ onTaskStarted }) => {
                 </Grid>
 
                 {/* Analysis Tools */}
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                     <Typography variant="h6" gutterBottom>Property Analysis</Typography>
                     <Paper variant="outlined" sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
                         <Box sx={{ display: 'flex', gap: 1 }}>
@@ -159,7 +159,7 @@ const Actions = ({ onTaskStarted }) => {
                 </Grid>
 
                 {/* Growth & Economy */}
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                     <Typography variant="h6" gutterBottom>Economy & Spawns</Typography>
                     <Paper variant="outlined" sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
                         <Button 

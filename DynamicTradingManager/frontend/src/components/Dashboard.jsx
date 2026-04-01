@@ -64,25 +64,25 @@ const Dashboard = () => {
 
           <Grid container spacing={3}>
             {/* Stats Cards */}
-            <Grid item xs={12} sm={6} md={3}>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
               <Paper sx={{ p: 3, textAlign: 'center', borderTop: '4px solid #007acc' }}>
                 <Typography color="textSecondary" variant="overline">Total Vanilla</Typography>
                 <Typography variant="h3">{stats.total_vanilla.toLocaleString()}</Typography>
               </Paper>
             </Grid>
-            <Grid item xs={12} sm={6} md={3}>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
               <Paper sx={{ p: 3, textAlign: 'center', borderTop: '4px solid #4caf50' }}>
                 <Typography color="textSecondary" variant="overline">Registered</Typography>
                 <Typography variant="h3" sx={{ color: '#4caf50' }}>{stats.registered.toLocaleString()}</Typography>
               </Paper>
             </Grid>
-            <Grid item xs={12} sm={6} md={3}>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
               <Paper sx={{ p: 3, textAlign: 'center', borderTop: '4px solid #ff9800' }}>
                 <Typography color="textSecondary" variant="overline">Unregistered</Typography>
                 <Typography variant="h3" sx={{ color: '#ff9800' }}>{stats.unregistered.toLocaleString()}</Typography>
               </Paper>
             </Grid>
-            <Grid item xs={12} sm={6} md={3}>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
               <Paper sx={{ p: 3, textAlign: 'center', borderTop: '4px solid #9c27b0' }}>
                 <Typography color="textSecondary" variant="overline">Coverage</Typography>
                 <Typography variant="h3" sx={{ color: '#9c27b0' }}>{stats.coverage}%</Typography>
@@ -90,7 +90,7 @@ const Dashboard = () => {
             </Grid>
 
             {/* Actions & Tools */}
-            <Grid item xs={12}>
+            <Grid size={12}>
               <Paper sx={{ p: 0, overflow: 'hidden' }}>
                 <Actions onTaskStarted={setActiveTaskId} />
               </Paper>

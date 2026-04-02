@@ -6,6 +6,7 @@ from pathlib import Path
 from .constants import DEFAULT_AUDIENCE, DEFAULT_MODULE, DEFAULT_SCOPE, VALID_SOURCE_FOLDERS
 
 
+TITLE_MAX_LENGTH = 22
 DESCRIPTION_MAX_LENGTH = 69
 
 
@@ -182,6 +183,15 @@ def _normalize_description(value: str | None, field_label: str, enforce_max_leng
         raise ValueError(f"{field_label} must be {DESCRIPTION_MAX_LENGTH} characters or fewer.")
     if len(text) > DESCRIPTION_MAX_LENGTH:
         return text[:DESCRIPTION_MAX_LENGTH]
+    return text
+
+
+def _normalize_title(value: str | None, field_label: str, enforce_max_length: bool = True) -> str:
+    text = str(value or "").strip()
+    if len(text) > TITLE_MAX_LENGTH and enforce_max_length:
+        raise ValueError(f"{field_label} must be {TITLE_MAX_LENGTH} characters or fewer.")
+    if len(text) > TITLE_MAX_LENGTH:
+        return text[:TITLE_MAX_LENGTH]
     return text
 
 
@@ -365,7 +375,11 @@ def _normalize_manual_payload(
     return {
         "manual_id": manual_id,
         "module": module,
-        "title": str(payload.get("title", manual_id)).strip(),
+        "title": _normalize_title(
+            payload.get("title", manual_id),
+            "Manual title",
+            enforce_max_length=enforce_description_limit,
+        ),
         "description": _normalize_description(
             payload.get("description", ""),
             "Manual description",

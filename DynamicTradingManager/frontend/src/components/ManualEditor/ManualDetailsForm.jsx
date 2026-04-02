@@ -62,6 +62,7 @@ const getSourceFolderOptions = (module, editorScope = 'manuals') => {
 };
 
 const getPrimaryAudience = (manual) => manual?.audiences?.[0] || 'common';
+const TITLE_MAX_LENGTH = 22;
 const DESCRIPTION_MAX_LENGTH = 69;
 
 const incrementVersion = (value) => {
@@ -83,6 +84,8 @@ export const ManualDetailsForm = ({
   editorScope,
   onUpdateDraft,
 }) => {
+  const titleLength = String(draft.title || '').length;
+  const isTitleAtLimit = titleLength >= TITLE_MAX_LENGTH;
   const descriptionLength = String(draft.description || '').length;
   const isDescriptionAtLimit = descriptionLength >= DESCRIPTION_MAX_LENGTH;
 
@@ -92,6 +95,8 @@ export const ManualDetailsForm = ({
         next.manual_id = slugify(value);
       } else if (field === 'start_page_id') {
         next.start_page_id = slugify(value);
+      } else if (field === 'title') {
+        next.title = String(value || '').slice(0, TITLE_MAX_LENGTH);
       } else if (field === 'description') {
         next.description = String(value || '').slice(0, DESCRIPTION_MAX_LENGTH);
       } else {
@@ -162,6 +167,11 @@ export const ManualDetailsForm = ({
           label="Title"
           value={draft.title || ''}
           onChange={(e) => handleFieldChange('title', e.target.value)}
+          inputProps={{ maxLength: TITLE_MAX_LENGTH }}
+          helperText={isTitleAtLimit
+            ? `${titleLength}/${TITLE_MAX_LENGTH} (max reached)`
+            : `${titleLength}/${TITLE_MAX_LENGTH}`}
+          error={isTitleAtLimit}
         />
         <TextField
           label="Description"

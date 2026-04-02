@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   FormControl,
+  FormControlLabel,
   IconButton,
   InputLabel,
   MenuItem,
@@ -10,6 +11,7 @@ import {
   Paper,
   Button,
   Box,
+  Checkbox,
 } from '@mui/material';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
@@ -44,6 +46,7 @@ export const BlockEditor = ({
   onMoveBlock,
   onDeleteBlock,
   onImageUpload,
+  onImagePaste,
 }) => {
   const handleFieldChange = (field, value) => {
     if (field === 'items') {
@@ -59,6 +62,55 @@ export const BlockEditor = ({
     } else {
       onUpdateBlock(blockIndex, field, value);
     }
+  };
+
+  const handleImagePaste = (event) => {
+    if (block.type !== 'image') return;
+    const items = Array.from(event.clipboardData?.items || []);
+    const imageItem = items.find((item) => item.type?.startsWith('image/'));
+    if (!imageItem || !onImagePaste) return;
+
+    const file = imageItem.getAsFile();
+    if (!file) return;
+
+    event.preventDefault();
+    onImagePaste(blockIndex, file);
+  };
+
+  const handleImageScaleChange = (field, rawValue) => {
+    const nextValue = Number(rawValue || 0);
+    const isLocked = block.keep_aspect_ratio === true;
+
+    if (!isLocked) {
+      onUpdateBlock(blockIndex, field, nextValue);
+      return;
+    }
+
+    const width = Number(block.width || 220);
+    const height = Number(block.height || 140);
+    const ratio = Number(block.aspect_ratio) > 0
+      ? Number(block.aspect_ratio)
+      : (width > 0 && height > 0 ? width / height : 1);
+
+    onUpdateBlock(blockIndex, field, nextValue);
+
+    if (nextValue <= 0 || ratio <= 0) return;
+
+    if (field === 'width') {
+      onUpdateBlock(blockIndex, 'height', Math.max(1, Math.round(nextValue / ratio)));
+    } else {
+      onUpdateBlock(blockIndex, 'width', Math.max(1, Math.round(nextValue * ratio)));
+    }
+  };
+
+  const handleAspectRatioToggle = (checked) => {
+    onUpdateBlock(blockIndex, 'keep_aspect_ratio', checked);
+    if (!checked) return;
+
+    const width = Number(block.width || 220);
+    const height = Number(block.height || 140);
+    const ratio = width > 0 && height > 0 ? width / height : 1;
+    onUpdateBlock(blockIndex, 'aspect_ratio', ratio);
   };
 
   return (
@@ -148,7 +200,7 @@ export const BlockEditor = ({
 
       {/* Image block */}
       {block.type === 'image' && (
-        <Stack spacing={1}>
+        <Stack spacing={1} onPaste={handleImagePaste}>
           <Stack direction="row" spacing={1}>
             <TextField
               label="Path"
@@ -165,6 +217,9 @@ export const BlockEditor = ({
               Upload
             </Button>
           </Stack>
+          <Box sx={{ fontSize: 12, color: 'text.secondary' }}>
+            Paste a screenshot with Ctrl+V while this image block is focused.
+          </Box>
           <TextField
             label="Caption"
             size="small"
@@ -178,7 +233,7 @@ export const BlockEditor = ({
               size="small"
               type="number"
               value={block.width || 220}
-              onChange={(e) => handleFieldChange('width', e.target.value)}
+              onChange={(e) => handleImageScaleChange('width', e.target.value)}
               sx={{ width: 120 }}
             />
             <TextField
@@ -186,10 +241,20 @@ export const BlockEditor = ({
               size="small"
               type="number"
               value={block.height || 140}
-              onChange={(e) => handleFieldChange('height', e.target.value)}
+              onChange={(e) => handleImageScaleChange('height', e.target.value)}
               sx={{ width: 120 }}
             />
           </Stack>
+          <FormControlLabel
+            control={(
+              <Checkbox
+                size="small"
+                checked={block.keep_aspect_ratio === true}
+                onChange={(e) => handleAspectRatioToggle(e.target.checked)}
+              />
+            )}
+            label="Keep aspect ratio while scaling"
+          />
         </Stack>
       )}
 

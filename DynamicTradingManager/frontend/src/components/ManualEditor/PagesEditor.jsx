@@ -80,6 +80,7 @@ export const PagesEditor = ({
   onMoveBlock,
   onDeleteBlock,
   onImageUpload,
+  onImagePaste,
   onAddBlock,
 }) => {
   const selectedPageIndex = pages.findIndex((page) => page.id === selectedPageId);
@@ -246,6 +247,7 @@ export const PagesEditor = ({
                   onMoveBlock={onMoveBlock}
                   onDeleteBlock={onDeleteBlock}
                   onImageUpload={onImageUpload}
+                  onImagePaste={onImagePaste}
                 />
               ))}
             </Stack>

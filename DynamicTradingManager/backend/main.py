@@ -10,6 +10,8 @@ import threading
 from pathlib import Path
 import logging
 import shutil
+import re
+from uuid import uuid4
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -722,6 +724,32 @@ async def upload_manual_image(
     module: str = Form("common"),
     file: UploadFile = File(...),
 ):
+    def _resolve_extension(upload: UploadFile, original_name: str) -> str:
+        suffix = Path(original_name).suffix.lower()
+        if suffix:
+            return suffix
+
+        content_type = (upload.content_type or "").lower()
+        if content_type in {"image/jpeg", "image/jpg"}:
+            return ".jpg"
+        if content_type == "image/png":
+            return ".png"
+        if content_type == "image/webp":
+            return ".webp"
+        if content_type == "image/gif":
+            return ".gif"
+        return ".png"
+
+    def _build_unique_name(assets_dir: Path, upload: UploadFile) -> str:
+        original_name = Path(upload.filename or "manual-image").name
+        stem = re.sub(r"[^a-zA-Z0-9_-]+", "-", Path(original_name).stem).strip("-").lower() or "manual-image"
+        extension = _resolve_extension(upload, original_name)
+
+        while True:
+            candidate = f"{stem}_{uuid4().hex[:10]}{extension}"
+            if not (assets_dir / candidate).exists():
+                return candidate
+
     normalized_module = _normalize_manual_module(module)
     if normalized_module == "colony":
         base_root = COLONIES_ROOT
@@ -737,7 +765,7 @@ async def upload_manual_image(
         mod_folder = "DynamicTradingCommon"
     assets_root = base_root / f"Contents/mods/{mod_folder}/42.13/media/ui/Manuals" / manual_id
     assets_root.mkdir(parents=True, exist_ok=True)
-    filename = Path(file.filename or "manual-image").name
+    filename = _build_unique_name(assets_root, file)
     file_path = assets_root / filename
 
     try:

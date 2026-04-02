@@ -471,9 +471,8 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
     fileInputRef.current?.click();
   };
 
-  const onImagePicked = async (event) => {
-    const file = event.target.files?.[0];
-    if (!file || uploadTargetRef.current == null) return;
+  const uploadImageForBlock = async (file, blockIndex) => {
+    if (!file || blockIndex == null || selectedPageIndex < 0) return;
 
     const manualId = slugify(draft.manual_id);
     if (!manualId) {
@@ -488,17 +487,29 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
 
     try {
       const response = await uploadManualImage(formData);
-      const blockIndex = uploadTargetRef.current;
       updateDraft((next) => {
-        next.pages[selectedPageIndex].blocks[blockIndex].path = response.data.path;
+        const page = next.pages[selectedPageIndex];
+        if (!page?.blocks?.[blockIndex]) return;
+        page.blocks[blockIndex].path = response.data.path;
       });
       setStatus({ type: 'success', message: 'Image uploaded and linked to the selected block.' });
     } catch (error) {
       setStatus({ type: 'error', message: error.response?.data?.detail || 'Image upload failed.' });
-    } finally {
-      uploadTargetRef.current = null;
-      event.target.value = '';
     }
+  };
+
+  const onImagePicked = async (event) => {
+    const file = event.target.files?.[0];
+    const blockIndex = uploadTargetRef.current;
+    if (!file || blockIndex == null) return;
+
+    await uploadImageForBlock(file, blockIndex);
+    uploadTargetRef.current = null;
+    event.target.value = '';
+  };
+
+  const handleImagePaste = async (blockIndex, file) => {
+    await uploadImageForBlock(file, blockIndex);
   };
 
   // ========== Render ==========
@@ -667,6 +678,7 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
             onMoveBlock={handleMoveBlock}
             onDeleteBlock={handleDeleteBlock}
             onImageUpload={promptImageUpload}
+            onImagePaste={handleImagePaste}
             onAddBlock={handleAddBlock}
           />
         </Stack>

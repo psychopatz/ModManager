@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { 
-  Box, 
-  Typography, 
-  Paper, 
-  Button, 
-  TextField, 
-  Stack, 
-  Divider, 
+import {
+  Box,
+  Typography,
+  Paper,
+  Button,
+  TextField,
+  Stack,
+  Divider,
   Alert,
   Grid,
   Snackbar,
@@ -25,10 +25,10 @@ import {
   Checkbox,
   FormGroup
 } from '@mui/material';
-import { 
-  CloudUpload as UploadIcon, 
-  Build as BuildIcon, 
-  Person as PersonIcon, 
+import {
+  CloudUpload as UploadIcon,
+  Build as BuildIcon,
+  Person as PersonIcon,
   Lock as LockIcon,
   Visibility as VisibilityIcon,
   VisibilityOff,
@@ -50,7 +50,7 @@ import TaskConsole from './TaskConsole';
 import GitReleaseAssistant from './GitReleaseAssistant';
 
 const workshopDefaultPrompt = `Task:
-1. Produce a PROFESSIONAL Steam Workshop change note (short, maximum 3-5 bullet points).
+1. Produce a PROFESSIONAL Steam Workshop change note.
 2. Format it with [b] and [list][*] tags for Steam BBCode.
 
 Only return the change note content.`;
@@ -65,7 +65,7 @@ const WorkshopPage = () => {
   useEffect(() => {
     localStorage.setItem('dt_steam_username', username);
   }, [username]);
-  
+
   // Metadata
   const [metadata, setMetadata] = useState({
     title: '',
@@ -77,8 +77,8 @@ const WorkshopPage = () => {
   const [targets, setTargets] = useState([]);
   const [selectedTarget, setSelectedTarget] = useState(() => localStorage.getItem(workshopTargetStorageKey) || '');
   const [changenote, setChangenote] = useState('Mod update pushed via Dynamic Trading Manager');
-  
-  
+
+
   // Section Visibility
   const [sections, setSections] = useState({
     metadata: true,
@@ -92,13 +92,13 @@ const WorkshopPage = () => {
   const [updateMetadata, setUpdateMetadata] = useState(false);
   const [updatePreview, setUpdatePreview] = useState(false);
   const [modVersions, setModVersions] = useState([]);
-  
+
 
   // UI State
   const [loading, setLoading] = useState(true);
   const [activeTaskId, setActiveTaskId] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
-  
+
   // Base API URL detection (assumes backend is on port 8000)
   const apiBaseUrl = window.location.origin.replace(':5173', ':8000');
   const buildPreviewUrl = (target) => `${apiBaseUrl}/api/workshop/preview?target=${encodeURIComponent(target)}&t=${Date.now()}`;
@@ -241,7 +241,7 @@ const WorkshopPage = () => {
         setActiveTaskId(res.data.task_id);
       }
     } catch (err) {
-        setSnackbar({ open: true, message: err.response?.data?.detail || 'Push failed', severity: 'error' });
+      setSnackbar({ open: true, message: err.response?.data?.detail || 'Push failed', severity: 'error' });
     }
   };
 
@@ -261,30 +261,30 @@ const WorkshopPage = () => {
             WORKSHOP STUDIO
           </Typography>
           <Typography variant="subtitle1" color="text.secondary" sx={{ fontWeight: 600 }}>
-             Project: <span style={{ color: '#fff', background: '#333', padding: '2px 8px', borderRadius: '4px' }}>{selectedTargetInfo?.name || metadata.title || 'Unknown'}</span>
+            Project: <span style={{ color: '#fff', background: '#333', padding: '2px 8px', borderRadius: '4px' }}>{selectedTargetInfo?.name || metadata.title || 'Unknown'}</span>
           </Typography>
         </Box>
         <Stack direction="row" spacing={2} alignItems="center">
-           <FormControl size="small" sx={{ minWidth: 220 }}>
-             <InputLabel>Project</InputLabel>
-             <Select value={selectedTarget} label="Project" onChange={(e) => setSelectedTarget(e.target.value)}>
-               {targets.map((target) => (
-                 <MenuItem key={target.key} value={target.key}>
-                   {target.name}
-                 </MenuItem>
-               ))}
-             </Select>
-           </FormControl>
-           <Button variant="outlined" startIcon={<SyncIcon />} onClick={handleSync} sx={{ borderRadius: 3, fontWeight: 700 }}>Refresh</Button>
-           <Button
-             variant="contained"
-             startIcon={<VisibilityIcon />}
-             disabled={!metadata.id}
-             onClick={() => window.open(`https://steamcommunity.com/sharedfiles/filedetails/?id=${metadata.id}`, '_blank')}
-             sx={{ borderRadius: 3, fontWeight: 700, px: 3 }}
-           >
-             Workshop Link
-           </Button>
+          <FormControl size="small" sx={{ minWidth: 220 }}>
+            <InputLabel>Project</InputLabel>
+            <Select value={selectedTarget} label="Project" onChange={(e) => setSelectedTarget(e.target.value)}>
+              {targets.map((target) => (
+                <MenuItem key={target.key} value={target.key}>
+                  {target.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <Button variant="outlined" startIcon={<SyncIcon />} onClick={handleSync} sx={{ borderRadius: 3, fontWeight: 700 }}>Refresh</Button>
+          <Button
+            variant="contained"
+            startIcon={<VisibilityIcon />}
+            disabled={!metadata.id}
+            onClick={() => window.open(`https://steamcommunity.com/sharedfiles/filedetails/?id=${metadata.id}`, '_blank')}
+            sx={{ borderRadius: 3, fontWeight: 700, px: 3 }}
+          >
+            Workshop Link
+          </Button>
         </Stack>
       </Box>
 
@@ -342,24 +342,24 @@ const WorkshopPage = () => {
           </Box>
           <Collapse in={sections.metadata}>
             <Box sx={{ p: 4 }}>
-               <Stack spacing={4}>
-                  <Grid container spacing={3}>
-                    <Grid size={{ xs: 12, md: 6 }}><TextField label="Mod Title" fullWidth value={metadata.title} onChange={(e) => setMetadata({...metadata, title: e.target.value})} disabled={!updateMetadata} variant="filled" /></Grid>
-                    <Grid size={{ xs: 12, md: 3 }}><TextField label="Workshop ID" fullWidth value={metadata.id} onChange={(e) => setMetadata({...metadata, id: e.target.value})} variant="filled" /></Grid>
-                    <Grid size={{ xs: 12, md: 3 }}>
-                      <FormControl fullWidth variant="filled" disabled={!updateMetadata}>
-                        <InputLabel>Visibility</InputLabel>
-                        <Select value={metadata.visibility} onChange={(e) => setMetadata({...metadata, visibility: e.target.value})}>
-                          <MenuItem value={0}>Public</MenuItem>
-                          <MenuItem value={1}>Friends Only</MenuItem>
-                          <MenuItem value={2}>Private</MenuItem>
-                        </Select>
-                      </FormControl>
-                    </Grid>
+              <Stack spacing={4}>
+                <Grid container spacing={3}>
+                  <Grid size={{ xs: 12, md: 6 }}><TextField label="Mod Title" fullWidth value={metadata.title} onChange={(e) => setMetadata({ ...metadata, title: e.target.value })} disabled={!updateMetadata} variant="filled" /></Grid>
+                  <Grid size={{ xs: 12, md: 3 }}><TextField label="Workshop ID" fullWidth value={metadata.id} onChange={(e) => setMetadata({ ...metadata, id: e.target.value })} variant="filled" /></Grid>
+                  <Grid size={{ xs: 12, md: 3 }}>
+                    <FormControl fullWidth variant="filled" disabled={!updateMetadata}>
+                      <InputLabel>Visibility</InputLabel>
+                      <Select value={metadata.visibility} onChange={(e) => setMetadata({ ...metadata, visibility: e.target.value })}>
+                        <MenuItem value={0}>Public</MenuItem>
+                        <MenuItem value={1}>Friends Only</MenuItem>
+                        <MenuItem value={2}>Private</MenuItem>
+                      </Select>
+                    </FormControl>
                   </Grid>
-                  <TextField label="Description (Steam BBCode)" fullWidth multiline rows={20} value={metadata.description} onChange={(e) => setMetadata({...metadata, description: e.target.value})} disabled={!updateMetadata} sx={{ '& .MuiInputBase-input': { fontFamily: 'monospace' } }} />
-                  <TextField label="Tags (Semicolon separated)" fullWidth value={metadata.tags} onChange={(e) => setMetadata({...metadata, tags: e.target.value})} disabled={!updateMetadata} />
-               </Stack>
+                </Grid>
+                <TextField label="Description (Steam BBCode)" fullWidth multiline rows={20} value={metadata.description} onChange={(e) => setMetadata({ ...metadata, description: e.target.value })} disabled={!updateMetadata} sx={{ '& .MuiInputBase-input': { fontFamily: 'monospace' } }} />
+                <TextField label="Tags (Semicolon separated)" fullWidth value={metadata.tags} onChange={(e) => setMetadata({ ...metadata, tags: e.target.value })} disabled={!updateMetadata} />
+              </Stack>
             </Box>
           </Collapse>
         </Paper>
@@ -367,69 +367,69 @@ const WorkshopPage = () => {
         {/* 4. Deployment Center */}
         <Paper elevation={10} sx={{ p: 4, borderRadius: 5, border: '2px solid', borderColor: 'divider' }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, cursor: 'pointer' }} onClick={() => toggleSection('deploy')}>
-             <Typography variant="h5" sx={{ fontWeight: 900, letterSpacing: '-1px' }}>READY TO DEPLOY</Typography>
-             {sections.deploy ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+            <Typography variant="h5" sx={{ fontWeight: 900, letterSpacing: '-1px' }}>READY TO DEPLOY</Typography>
+            {sections.deploy ? <ExpandLessIcon /> : <ExpandMoreIcon />}
           </Box>
           <Collapse in={sections.deploy}>
-             <Grid container spacing={4}>
-               <Grid size={{ xs: 12, md: 6 }}>
+            <Grid container spacing={4}>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Stack spacing={3}>
+                  <Paper variant="outlined" sx={{ p: 2, borderRadius: 3 }}>
+                    <FormControlLabel control={<Switch checked={updateFiles} onChange={(e) => setUpdateFiles(e.target.checked)} />} label={<Typography fontWeight={800}>Update Scripts & Binaries</Typography>} />
+                  </Paper>
+                  <Paper variant="outlined" sx={{ p: 2, borderRadius: 3 }}>
+                    <FormControlLabel control={<Switch checked={updateMetadata} onChange={(e) => setUpdateMetadata(e.target.checked)} />} label={<Typography fontWeight={800}>Update Metadata</Typography>} />
+                  </Paper>
+                  <Paper variant="outlined" sx={{ p: 2, borderRadius: 3 }}>
+                    <FormControlLabel control={<Switch checked={updatePreview} onChange={(e) => setUpdatePreview(e.target.checked)} />} label={<Typography fontWeight={800}>Update Poster Image</Typography>} />
+                    <Collapse in={updatePreview}>
+                      <Box sx={{ mt: 2, borderRadius: 3, overflow: 'hidden', border: '1px solid #eee' }}>
+                        <img src={previewUrl} style={{ width: '100%', display: 'block' }} alt="Poster Preview" />
+                      </Box>
+                      <Button fullWidth variant="text" size="small" onClick={() => fileInputRef.current.click()} sx={{ mt: 1 }}>Change Image</Button>
+                    </Collapse>
+                  </Paper>
+                </Stack>
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <form onSubmit={onPushSubmit}>
                   <Stack spacing={3}>
-                    <Paper variant="outlined" sx={{ p: 2, borderRadius: 3 }}>
-                      <FormControlLabel control={<Switch checked={updateFiles} onChange={(e) => setUpdateFiles(e.target.checked)} />} label={<Typography fontWeight={800}>Update Scripts & Binaries</Typography>} />
-                    </Paper>
-                    <Paper variant="outlined" sx={{ p: 2, borderRadius: 3 }}>
-                      <FormControlLabel control={<Switch checked={updateMetadata} onChange={(e) => setUpdateMetadata(e.target.checked)} />} label={<Typography fontWeight={800}>Update Metadata</Typography>} />
-                    </Paper>
-                    <Paper variant="outlined" sx={{ p: 2, borderRadius: 3 }}>
-                      <FormControlLabel control={<Switch checked={updatePreview} onChange={(e) => setUpdatePreview(e.target.checked)} />} label={<Typography fontWeight={800}>Update Poster Image</Typography>} />
-                      <Collapse in={updatePreview}>
-                         <Box sx={{ mt: 2, borderRadius: 3, overflow: 'hidden', border: '1px solid #eee' }}>
-                           <img src={previewUrl} style={{ width: '100%', display: 'block' }} alt="Poster Preview" />
-                         </Box>
-                         <Button fullWidth variant="text" size="small" onClick={() => fileInputRef.current.click()} sx={{ mt: 1 }}>Change Image</Button>
-                      </Collapse>
-                    </Paper>
+                    <TextField
+                      label="Steam User"
+                      fullWidth
+                      name="username"
+                      id="steam-username"
+                      autoComplete="username"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      variant="outlined"
+                    />
+                    <TextField
+                      label="Steam Password"
+                      type={showPassword ? 'text' : 'password'}
+                      fullWidth
+                      name="password"
+                      id="steam-password"
+                      autoComplete="current-password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      InputProps={{ endAdornment: <IconButton onClick={() => setShowPassword(!showPassword)}>{showPassword ? <VisibilityOff /> : <VisibilityIcon />}</IconButton> }}
+                    />
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      fullWidth
+                      size="large"
+                      type="submit"
+                      disabled={!selectedTarget || !metadata.id || !username || (!updateFiles && !updateMetadata && !updatePreview)}
+                      sx={{ py: 2.5, borderRadius: 4, fontWeight: 900 }}
+                    >
+                      PUSH UPDATE TO STEAM
+                    </Button>
                   </Stack>
-                </Grid>
-                <Grid size={{ xs: 12, md: 6 }}>
-                  <form onSubmit={onPushSubmit}>
-                    <Stack spacing={3}>
-                      <TextField 
-                        label="Steam User" 
-                        fullWidth 
-                        name="username"
-                        id="steam-username"
-                        autoComplete="username" 
-                        value={username} 
-                        onChange={(e) => setUsername(e.target.value)} 
-                        variant="outlined" 
-                      />
-                      <TextField 
-                        label="Steam Password" 
-                        type={showPassword ? 'text' : 'password'} 
-                        fullWidth 
-                        name="password"
-                        id="steam-password"
-                        autoComplete="current-password"
-                        value={password} 
-                        onChange={(e) => setPassword(e.target.value)} 
-                        InputProps={{ endAdornment: <IconButton onClick={()=>setShowPassword(!showPassword)}>{showPassword ? <VisibilityOff /> : <VisibilityIcon />}</IconButton> }}
-                      />
-                      <Button 
-                        variant="contained" 
-                        color="primary" 
-                        fullWidth 
-                        size="large" 
-                        type="submit"
-                        disabled={!selectedTarget || !metadata.id || !username || (!updateFiles && !updateMetadata && !updatePreview)} 
-                        sx={{ py: 2.5, borderRadius: 4, fontWeight: 900 }}
-                      >
-                         PUSH UPDATE TO STEAM
-                      </Button>
-                    </Stack>
-                  </form>
-                </Grid>
-             </Grid>
+                </form>
+              </Grid>
+            </Grid>
           </Collapse>
         </Paper>
       </Stack>

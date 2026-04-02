@@ -199,7 +199,7 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
 
   // ========== Load Data from Backend ==========
 
-  const loadEditor = async (preferredKey = '', module = selectedModule) => {
+  const loadEditor = async (preferredKey = '', module = selectedModule, preferredPageId = '') => {
     setLoading(true);
     try {
       const response = await getManualEditorData(editorScope, module);
@@ -211,7 +211,10 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
       if (nextManual) {
         setSelectedManualKey(nextManual.manual_id);
         setBaseManual(cloneManual(nextManual));
-        setSelectedPageId(nextManual.pages?.[0]?.id || '');
+        const restoredPageId = preferredPageId && nextManual.pages?.some((page) => page.id === preferredPageId)
+          ? preferredPageId
+          : (nextManual.pages?.[0]?.id || '');
+        setSelectedPageId(restoredPageId);
       } else {
         setSelectedManualKey('');
         const emptyManual = createEmptyManual(editorScope, undefined, module);
@@ -308,7 +311,7 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
         setSelectedModule(payloadModule);
       }
 
-      await loadEditor(payload.manual_id, payloadModule);
+      await loadEditor(payload.manual_id, payloadModule, selectedPageId);
       setStatus({
         type: 'success',
         message: `Saved ${isUpdateEditor ? 'update version' : 'manual'} "${payload.manual_id}".`,

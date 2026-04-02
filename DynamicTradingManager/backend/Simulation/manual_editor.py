@@ -500,7 +500,14 @@ def _render_block(block: dict) -> str:
 
 
 def _escape(value: str) -> str:
-    return str(value or "").replace("\\", "\\\\").replace('"', '\\"')
+    return (
+        str(value or "")
+        .replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("\r\n", "\n")
+        .replace("\r", "\n")
+        .replace("\n", "\\n")
+    )
 
 
 def _normalize_bool(value) -> bool:

@@ -1,19 +1,21 @@
 {
-  "comment": "Blacklist configuration for ItemGenerator - items matching these criteria will be excluded",
   "itemIds": [
+    "Animal",
+    "Bag_FoodCanned",
+    "FISH_DEV_ITEM",
     "Money",
     "MoneyBundle",
-    "TestHotDrink",
-    "YardstickDEBUG",
-    "FISH_DEV_ITEM",
-    "Animal",
     "Moveable",
+    "ScratchTicket",
+    "ScratchTicket_Loser",
+    "ScratchTicket_Winner",
+    "TestHotDrink",
     "TestMug",
-    "Wallet_Male",
-    "Wallet_Female",
-    "Wallet",
     "TestWaterMug",
-    "Bag_FoodCanned"
+    "Wallet",
+    "Wallet_Female",
+    "Wallet_Male",
+    "YardstickDEBUG"
   ],
   "properties": {
     "names": [

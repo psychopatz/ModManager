@@ -19,10 +19,17 @@ import {
     FormControl,
     InputLabel,
     Grid,
-    Autocomplete
+    Autocomplete,
+    Button,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
+    Stack,
+    Alert
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
-import { getItems, getTags } from '../services/api';
+import { getItems, getTags, getOverrides, saveItemOverride, deleteItemOverride, addBlacklistItem } from '../services/api';
 
 const ItemTable = () => {
     const [items, setItems] = useState([]);
@@ -37,6 +44,12 @@ const ItemTable = () => {
     const [maxWeight, setMaxWeight] = useState('');
     const [minPrice, setMinPrice] = useState('');
     const [maxPrice, setMaxPrice] = useState('');
+    const [overridesByItem, setOverridesByItem] = useState({});
+    const [editingItem, setEditingItem] = useState(null);
+    const [overrideDraft, setOverrideDraft] = useState({ basePrice: '', stockMin: '', stockMax: '', tags: [] });
+    const [savingOverride, setSavingOverride] = useState(false);
+    const [blacklistingItemId, setBlacklistingItemId] = useState('');
+    const [actionStatus, setActionStatus] = useState({ type: '', message: '' });
 
     const fetchItems = async () => {
         try {
@@ -76,8 +89,19 @@ const ItemTable = () => {
         }
     };
 
+    const fetchOverrides = async () => {
+        try {
+            const response = await getOverrides();
+            setOverridesByItem(response.data?.by_item || {});
+        } catch (err) {
+            console.error('Failed to fetch overrides:', err);
+            setOverridesByItem({});
+        }
+    };
+
     useEffect(() => {
         fetchTags();
+        fetchOverrides();
     }, []);
 
     useEffect(() => {
@@ -101,6 +125,128 @@ const ItemTable = () => {
         setPage(0);
     };
 
+    const openOverrideEditor = (item) => {
+        const existing = overridesByItem[item.id] || {};
+        setEditingItem(item);
+        setOverrideDraft({
+            basePrice: existing.basePrice ?? '',
+            stockMin: existing.stockRange?.min ?? '',
+            stockMax: existing.stockRange?.max ?? '',
+            tags: Array.isArray(existing.tags) ? existing.tags : [],
+        });
+        setActionStatus({ type: '', message: '' });
+    };
+
+    const closeOverrideEditor = () => {
+        setEditingItem(null);
+        setOverrideDraft({ basePrice: '', stockMin: '', stockMax: '', tags: [] });
+    };
+
+    const refreshData = async () => {
+        await Promise.all([fetchItems(), fetchOverrides()]);
+    };
+
+    const handleSaveOverride = async () => {
+        if (!editingItem) {
+            return;
+        }
+
+        const payload = {
+            item_id: editingItem.id,
+        };
+
+        if (overrideDraft.basePrice !== '') {
+            const value = Number(overrideDraft.basePrice);
+            if (!Number.isFinite(value) || value < 0) {
+                setActionStatus({ type: 'error', message: 'Override price must be a non-negative number.' });
+                return;
+            }
+            payload.base_price = value;
+        }
+
+        if (overrideDraft.stockMin !== '') {
+            const value = Number(overrideDraft.stockMin);
+            if (!Number.isInteger(value) || value < 0) {
+                setActionStatus({ type: 'error', message: 'Stock min must be a non-negative integer.' });
+                return;
+            }
+            payload.stock_min = value;
+        }
+
+        if (overrideDraft.stockMax !== '') {
+            const value = Number(overrideDraft.stockMax);
+            if (!Number.isInteger(value) || value < 0) {
+                setActionStatus({ type: 'error', message: 'Stock max must be a non-negative integer.' });
+                return;
+            }
+            payload.stock_max = value;
+        }
+
+        if (
+            payload.stock_min !== undefined
+            && payload.stock_max !== undefined
+            && payload.stock_min > payload.stock_max
+        ) {
+            setActionStatus({ type: 'error', message: 'Stock min cannot be greater than stock max.' });
+            return;
+        }
+
+        if ((overrideDraft.tags || []).length > 0) {
+            payload.tags = overrideDraft.tags;
+        }
+
+        if (
+            payload.base_price === undefined
+            && payload.stock_min === undefined
+            && payload.stock_max === undefined
+            && payload.tags === undefined
+        ) {
+            setActionStatus({ type: 'error', message: 'Set at least one override field before saving.' });
+            return;
+        }
+
+        setSavingOverride(true);
+        try {
+            await saveItemOverride(payload);
+            await refreshData();
+            setActionStatus({ type: 'success', message: `Saved override for ${editingItem.id}.` });
+            closeOverrideEditor();
+        } catch (err) {
+            setActionStatus({ type: 'error', message: err?.response?.data?.detail || 'Failed to save override.' });
+        } finally {
+            setSavingOverride(false);
+        }
+    };
+
+    const handleDeleteOverride = async (itemId) => {
+        setSavingOverride(true);
+        try {
+            await deleteItemOverride(itemId);
+            await refreshData();
+            setActionStatus({ type: 'success', message: `Deleted override for ${itemId}.` });
+            if (editingItem?.id === itemId) {
+                closeOverrideEditor();
+            }
+        } catch (err) {
+            setActionStatus({ type: 'error', message: err?.response?.data?.detail || 'Failed to delete override.' });
+        } finally {
+            setSavingOverride(false);
+        }
+    };
+
+    const handleBlacklist = async (itemId) => {
+        setBlacklistingItemId(itemId);
+        try {
+            await addBlacklistItem(itemId);
+            await refreshData();
+            setActionStatus({ type: 'success', message: `${itemId} added to blacklist.` });
+        } catch (err) {
+            setActionStatus({ type: 'error', message: err?.response?.data?.detail || 'Failed to add item to blacklist.' });
+        } finally {
+            setBlacklistingItemId('');
+        }
+    };
+
     const getTagColor = (tag) => {
         if (tag.startsWith('Rarity.Common')) return 'default';
         if (tag.startsWith('Rarity.Uncommon')) return 'primary';
@@ -112,6 +258,15 @@ const ItemTable = () => {
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+            {actionStatus.message ? (
+                <Alert
+                    severity={actionStatus.type || 'info'}
+                    onClose={() => setActionStatus({ type: '', message: '' })}
+                    sx={{ mb: 1 }}
+                >
+                    {actionStatus.message}
+                </Alert>
+            ) : null}
             <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
                 <Grid container spacing={2} alignItems="center">
                     <Grid size={{ xs: 12, sm: 6, md: 3, lg: 2, xl: 2 }}>
@@ -212,18 +367,20 @@ const ItemTable = () => {
                             <TableCell sx={{ fontWeight: 'bold' }}>Weight</TableCell>
                             <TableCell sx={{ fontWeight: 'bold' }}>Tags</TableCell>
                             <TableCell sx={{ fontWeight: 'bold' }}>Status</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold' }}>Actions</TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>
                         {items.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={6} align="center" sx={{ py: 3 }}>
+                                <TableCell colSpan={7} align="center" sx={{ py: 3 }}>
                                     <Typography color="textSecondary">No items found</Typography>
                                 </TableCell>
                             </TableRow>
                         ) : (
                             items.map((item) => (
                                 <TableRow key={item.id} hover>
+                                    {/** keep per-item actions visible for quick override management */}
                                     <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{item.id}</TableCell>
                                     <TableCell>{item.name}</TableCell>
                                     <TableCell>${item.price}</TableCell>
@@ -251,6 +408,36 @@ const ItemTable = () => {
                                             <Chip label="Unregistered" size="small" color="warning" variant="soft" />
                                         )}
                                     </TableCell>
+                                    <TableCell>
+                                        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                                            <Button
+                                                variant="outlined"
+                                                size="small"
+                                                color="error"
+                                                onClick={() => handleBlacklist(item.id)}
+                                                disabled={item.is_blacklisted || blacklistingItemId === item.id}
+                                            >
+                                                {blacklistingItemId === item.id ? 'Blacklisting...' : item.is_blacklisted ? 'Blacklisted' : 'Blacklist'}
+                                            </Button>
+                                            <Button
+                                                variant="outlined"
+                                                size="small"
+                                                onClick={() => openOverrideEditor(item)}
+                                            >
+                                                Edit Override
+                                            </Button>
+                                            {overridesByItem[item.id] ? (
+                                                <Button
+                                                    variant="outlined"
+                                                    size="small"
+                                                    onClick={() => handleDeleteOverride(item.id)}
+                                                    disabled={savingOverride}
+                                                >
+                                                    Delete Override
+                                                </Button>
+                                            ) : null}
+                                        </Stack>
+                                    </TableCell>
                                 </TableRow>
                             ))
                         )}
@@ -266,6 +453,65 @@ const ItemTable = () => {
                 onPageChange={handleChangePage}
                 onRowsPerPageChange={handleChangeRowsPerPage}
             />
+
+            <Dialog open={Boolean(editingItem)} onClose={closeOverrideEditor} fullWidth maxWidth="md">
+                <DialogTitle>
+                    Edit Item Override {editingItem ? `- ${editingItem.id}` : ''}
+                </DialogTitle>
+                <DialogContent>
+                    <Stack spacing={2} sx={{ mt: 0.5 }}>
+                        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+                            <TextField
+                                label="Override Price"
+                                type="number"
+                                value={overrideDraft.basePrice}
+                                onChange={(event) => setOverrideDraft((current) => ({ ...current, basePrice: event.target.value }))}
+                                fullWidth
+                            />
+                            <TextField
+                                label="Stock Min"
+                                type="number"
+                                value={overrideDraft.stockMin}
+                                onChange={(event) => setOverrideDraft((current) => ({ ...current, stockMin: event.target.value }))}
+                                fullWidth
+                            />
+                            <TextField
+                                label="Stock Max"
+                                type="number"
+                                value={overrideDraft.stockMax}
+                                onChange={(event) => setOverrideDraft((current) => ({ ...current, stockMax: event.target.value }))}
+                                fullWidth
+                            />
+                        </Stack>
+
+                        <Autocomplete
+                            multiple
+                            options={availableTags}
+                            value={overrideDraft.tags}
+                            onChange={(_, newValue) => setOverrideDraft((current) => ({ ...current, tags: newValue }))}
+                            renderInput={(params) => (
+                                <TextField
+                                    {...params}
+                                    label="Override Tags"
+                                    placeholder="Pick tags"
+                                />
+                            )}
+                        />
+                    </Stack>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={closeOverrideEditor} disabled={savingOverride}>Cancel</Button>
+                    <Button
+                        onClick={() => setOverrideDraft((current) => ({ ...current, tags: [] }))}
+                        disabled={savingOverride}
+                    >
+                        Clear Tag Override
+                    </Button>
+                    <Button onClick={handleSaveOverride} variant="contained" disabled={savingOverride}>
+                        {savingOverride ? 'Saving...' : 'Save Override'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 };

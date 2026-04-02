@@ -6,10 +6,10 @@ const ItemsPage = () => {
     return (
         <Paper elevation={3} sx={{ p: 3, flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
             <Typography variant="h4" gutterBottom>
-                Vanilla Items Database
+                Item Database
             </Typography>
             <Typography variant="body1" color="textSecondary" sx={{ mb: 2 }}>
-                Browse, search, and filter all items available in the base game.
+                Browse, search, and filter all items, then quickly apply per-item override settings.
             </Typography>
             <Box sx={{ flexGrow: 1, overflow: 'hidden' }}>
                 <ItemTable />

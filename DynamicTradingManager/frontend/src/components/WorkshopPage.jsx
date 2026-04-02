@@ -55,6 +55,9 @@ const workshopDefaultPrompt = `Task:
 
 Only return the change note content.`;
 
+const DESCRIPTION_MAX_LENGTH = 8000;
+const TITLE_MAX_LENGTH = 128;
+
 const WorkshopPage = () => {
   const workshopTargetStorageKey = 'dt_workshop_target';
   // Credentials
@@ -104,6 +107,12 @@ const WorkshopPage = () => {
   const buildPreviewUrl = (target) => `${apiBaseUrl}/api/workshop/preview?target=${encodeURIComponent(target)}&t=${Date.now()}`;
   const [previewUrl, setPreviewUrl] = useState('');
   const fileInputRef = useRef(null);
+
+  const descLength = metadata.description?.length || 0;
+  const isDescAtLimit = descLength >= DESCRIPTION_MAX_LENGTH;
+  const titleLength = metadata.title?.length || 0;
+  const isTitleAtLimit = titleLength >= TITLE_MAX_LENGTH;
+
   const selectedTargetInfo = useMemo(
     () => targets.find((target) => target.key === selectedTarget) || null,
     [targets, selectedTarget]
@@ -344,7 +353,21 @@ const WorkshopPage = () => {
             <Box sx={{ p: 4 }}>
               <Stack spacing={4}>
                 <Grid container spacing={3}>
-                  <Grid size={{ xs: 12, md: 6 }}><TextField label="Mod Title" fullWidth value={metadata.title} onChange={(e) => setMetadata({ ...metadata, title: e.target.value })} disabled={!updateMetadata} variant="filled" /></Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <TextField
+                      label="Mod Title"
+                      fullWidth
+                      value={metadata.title}
+                      onChange={(e) => setMetadata({ ...metadata, title: e.target.value })}
+                      disabled={!updateMetadata}
+                      variant="filled"
+                      inputProps={{ maxLength: TITLE_MAX_LENGTH }}
+                      helperText={isTitleAtLimit
+                        ? `${titleLength}/${TITLE_MAX_LENGTH} (max reached)`
+                        : `${titleLength}/${TITLE_MAX_LENGTH}`}
+                      error={isTitleAtLimit}
+                    />
+                  </Grid>
                   <Grid size={{ xs: 12, md: 3 }}><TextField label="Workshop ID" fullWidth value={metadata.id} onChange={(e) => setMetadata({ ...metadata, id: e.target.value })} variant="filled" /></Grid>
                   <Grid size={{ xs: 12, md: 3 }}>
                     <FormControl fullWidth variant="filled" disabled={!updateMetadata}>
@@ -357,7 +380,21 @@ const WorkshopPage = () => {
                     </FormControl>
                   </Grid>
                 </Grid>
-                <TextField label="Description (Steam BBCode)" fullWidth multiline rows={20} value={metadata.description} onChange={(e) => setMetadata({ ...metadata, description: e.target.value })} disabled={!updateMetadata} sx={{ '& .MuiInputBase-input': { fontFamily: 'monospace' } }} />
+                <TextField
+                  label="Description (Steam BBCode)"
+                  fullWidth
+                  multiline
+                  rows={20}
+                  value={metadata.description}
+                  onChange={(e) => setMetadata({ ...metadata, description: e.target.value })}
+                  disabled={!updateMetadata}
+                  sx={{ '& .MuiInputBase-input': { fontFamily: 'monospace' } }}
+                  inputProps={{ maxLength: DESCRIPTION_MAX_LENGTH }}
+                  helperText={isDescAtLimit
+                    ? `${descLength}/${DESCRIPTION_MAX_LENGTH} (max reached)`
+                    : `${descLength}/${DESCRIPTION_MAX_LENGTH}`}
+                  error={isDescAtLimit}
+                />
                 <TextField label="Tags (Semicolon separated)" fullWidth value={metadata.tags} onChange={(e) => setMetadata({ ...metadata, tags: e.target.value })} disabled={!updateMetadata} />
               </Stack>
             </Box>

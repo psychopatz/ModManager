@@ -4,14 +4,16 @@ from typing import Optional
 
 from fastapi import HTTPException
 
+from config.server_settings import get_server_settings
 from DebugManagement import LogParser
 from ItemManagement import load_vanilla_items
 from ProjectManagement import list_workshop_projects, resolve_project_target
 
-CONSOLE_PATH = os.getenv("CONSOLE_PATH", "/home/psychopatz/Zomboid/console.txt")
-MOD_ROOT = Path(os.getenv("DYNAMIC_TRADING_PATH", "/home/psychopatz/Zomboid/Workshop/DynamicTrading/"))
-COLONIES_ROOT = Path(os.getenv("DYNAMIC_COLONIES_PATH", str(MOD_ROOT.parent / "DynamicColonies")))
-CURRENCY_ROOT = Path(os.getenv("DYNAMIC_CURRENCY_PATH", str(MOD_ROOT.parent / "CurrencyExpanded")))
+_settings = get_server_settings()
+CONSOLE_PATH = str(_settings.console_path)
+MOD_ROOT = _settings.dynamic_trading_path
+COLONIES_ROOT = _settings.dynamic_colonies_path
+CURRENCY_ROOT = _settings.dynamic_currency_path
 
 debug_parser = LogParser(CONSOLE_PATH)
 cached_vanilla_items = None

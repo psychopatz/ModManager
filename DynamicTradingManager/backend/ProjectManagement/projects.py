@@ -3,13 +3,14 @@ import logging
 import os
 from pathlib import Path
 
+from config.server_settings import get_server_settings
 from WorkshopManagement.workshop import resolve_workshop_id
 
 logger = logging.getLogger(__name__)
 
 
 def _default_mod_root() -> Path:
-    return Path(os.getenv("DYNAMIC_TRADING_PATH", "/home/psychopatz/Zomboid/Workshop/DynamicTrading/")).resolve()
+    return get_server_settings().dynamic_trading_path
 
 
 def _normalize_key(value: str) -> str:
@@ -67,7 +68,7 @@ def _iter_candidate_paths():
 
     yield from add(default_root)
 
-    colonies_root = Path(os.getenv("DYNAMIC_COLONIES_PATH", str(default_root.parent / "DynamicColonies")))
+    colonies_root = get_server_settings().dynamic_colonies_path
     yield from add(colonies_root)
 
     for path in _iter_workspace_paths(default_root) or []:

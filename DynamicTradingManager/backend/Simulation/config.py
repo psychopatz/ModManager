@@ -4,12 +4,13 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 from dotenv import load_dotenv
+from config.server_settings import get_server_settings
 
 env_path = Path(__file__).parent.parent / ".env"
 load_dotenv(dotenv_path=env_path)
 
 DT_PATH_ENV = os.getenv("DYNAMIC_TRADING_PATH")
-SCRIPT_DIR = Path(DT_PATH_ENV) if DT_PATH_ENV else Path(__file__).parent.parent.parent.parent
+SCRIPT_DIR = Path(DT_PATH_ENV) if DT_PATH_ENV else get_server_settings().dynamic_trading_path
 
 
 @dataclass(frozen=True)

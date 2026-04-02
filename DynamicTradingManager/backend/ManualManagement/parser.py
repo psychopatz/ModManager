@@ -28,4 +28,9 @@ def _read_editor_payload(file_path: Path) -> dict | None:
         json_lines.append(stripped)
 
     payload = json.loads("\n".join(json_lines))
-    return _normalize_manual_payload(payload, manual_id=payload.get("manual_id"), file_path=file_path)
+    return _normalize_manual_payload(
+        payload,
+        manual_id=payload.get("manual_id"),
+        file_path=file_path,
+        enforce_description_limit=False,
+    )

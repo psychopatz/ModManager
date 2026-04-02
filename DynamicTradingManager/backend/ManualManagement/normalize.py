@@ -6,6 +6,9 @@ from pathlib import Path
 from .constants import DEFAULT_AUDIENCE, DEFAULT_MODULE, DEFAULT_SCOPE, VALID_SOURCE_FOLDERS
 
 
+DESCRIPTION_MAX_LENGTH = 69
+
+
 def _normalize_bool(value) -> bool:
     if isinstance(value, bool):
         return value
@@ -169,6 +172,15 @@ def _slugify(value: str | None) -> str:
     return text.strip("_")
 
 
+def _normalize_description(value: str | None, field_label: str, enforce_max_length: bool = True) -> str:
+    text = str(value or "").strip()
+    if len(text) > DESCRIPTION_MAX_LENGTH and enforce_max_length:
+        raise ValueError(f"{field_label} must be {DESCRIPTION_MAX_LENGTH} characters or fewer.")
+    if len(text) > DESCRIPTION_MAX_LENGTH:
+        return text[:DESCRIPTION_MAX_LENGTH]
+    return text
+
+
 def _normalize_block(block: dict, page_id: str, position: int, used_section_ids: set[str]) -> dict:
     block_type = str(block.get("type", "")).strip()
     if not block_type:
@@ -237,6 +249,7 @@ def _normalize_manual_payload(
     scope: str = DEFAULT_SCOPE,
     module: str = DEFAULT_MODULE,
     file_path: Path | None = None,
+    enforce_description_limit: bool = True,
 ) -> dict:
     scope = _normalize_scope(scope)
     module = _normalize_module(_infer_module(module, payload, file_path))
@@ -303,7 +316,11 @@ def _normalize_manual_payload(
         chapters.append({
             "id": chapter_id,
             "title": str(chapter.get("title", chapter_id)).strip(),
-            "description": str(chapter.get("description", "")).strip(),
+            "description": _normalize_description(
+                chapter.get("description", ""),
+                f'Chapter "{chapter_id}" description',
+                enforce_max_length=enforce_description_limit,
+            ),
         })
 
     pages = []
@@ -345,7 +362,11 @@ def _normalize_manual_payload(
         "manual_id": manual_id,
         "module": module,
         "title": str(payload.get("title", manual_id)).strip(),
-        "description": str(payload.get("description", "")).strip(),
+        "description": _normalize_description(
+            payload.get("description", ""),
+            "Manual description",
+            enforce_max_length=enforce_description_limit,
+        ),
         "start_page_id": start_page_id,
         "audiences": audiences,
         "sort_order": sort_order,

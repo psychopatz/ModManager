@@ -1,6 +1,6 @@
 from typing import Any, Dict, List, Optional, Union
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class StatsResponse(BaseModel):
@@ -78,7 +78,7 @@ class ArchetypeSaveRequest(BaseModel):
 class ManualSaveRequest(BaseModel):
     manual_id: str
     title: str
-    description: Optional[str] = ""
+    description: Optional[str] = Field(default="", max_length=69)
     start_page_id: Optional[str] = ""
     audiences: List[str] = ["common"]
     sort_order: Optional[int] = None

@@ -2,6 +2,7 @@ import subprocess
 import logging
 from pathlib import Path
 import os
+from config.server_settings import get_server_settings
 
 logger = logging.getLogger(__name__)
 
@@ -10,7 +11,7 @@ def get_git_changes(branch: str = None, repo_path: Path = None):
     Returns a summary of uncommitted changes (git status and short diff) 
     and recent feature history from the specified branch.
     """
-    repo_path = repo_path or Path(os.getenv("DYNAMIC_TRADING_PATH", "/home/psychopatz/Zomboid/Workshop/DynamicTrading/"))
+    repo_path = repo_path or get_server_settings().dynamic_trading_path
     try:
         # Get status
         status = subprocess.check_output(["git", "status", "--short"], cwd=repo_path).decode("utf-8")
@@ -84,7 +85,7 @@ def get_git_branches(repo_path: Path = None):
     """
     Returns a list of local and remote branches.
     """
-    repo_path = repo_path or Path(os.getenv("DYNAMIC_TRADING_PATH", "/home/psychopatz/Zomboid/Workshop/DynamicTrading/"))
+    repo_path = repo_path or get_server_settings().dynamic_trading_path
     try:
         raw_branches = subprocess.check_output(["git", "branch", "-a"], cwd=repo_path).decode("utf-8")
         branches = []

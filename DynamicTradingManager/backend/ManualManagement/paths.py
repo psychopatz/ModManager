@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
+from config.server_settings import get_server_settings
 from Simulation.config import default_paths
 
 from .constants import ALL_MODULES, DEFAULT_MODULE, DEFAULT_SCOPE
@@ -22,8 +22,7 @@ def _get_dynamic_trading_root() -> Path:
 
 
 def _get_dynamic_colonies_mod_root() -> Path:
-    dt_root = default_paths().root
-    return Path(os.getenv("DYNAMIC_COLONIES_PATH", str(dt_root.parent / "DynamicColonies")))
+    return get_server_settings().dynamic_colonies_path
 
 
 def _get_dynamic_colonies_root() -> Path:
@@ -31,8 +30,7 @@ def _get_dynamic_colonies_root() -> Path:
 
 
 def _get_currency_expanded_mod_root() -> Path:
-    dt_root = default_paths().root
-    return Path(os.getenv("DYNAMIC_CURRENCY_PATH", str(dt_root.parent / "CurrencyExpanded")))
+    return get_server_settings().dynamic_currency_path
 
 
 def _get_currency_expanded_root() -> Path:

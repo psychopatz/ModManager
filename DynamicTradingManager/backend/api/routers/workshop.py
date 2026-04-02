@@ -1,5 +1,4 @@
 import logging
-import os
 import shutil
 from typing import Optional
 
@@ -8,6 +7,7 @@ from fastapi.responses import FileResponse
 
 from api.routers.common import get_workshop_project_or_404, serialize_workshop_projects
 from api.schemas import WorkshopPushRequest
+from config.server_settings import get_server_settings
 from ItemManagement.task_manager import manager
 from WorkshopManagement.workshop import (
     fetch_steam_metadata,
@@ -96,7 +96,9 @@ async def trigger_workshop_push(request: WorkshopPushRequest):
     mod_root = project["path"]
     staging_dir = mod_root / "upload_staging"
     vdf_path = mod_root / "workshop_update.vdf"
-    steamcmd_path = os.getenv("STEAM_CMD_PATH", os.getenv("STEAMCMD_PATH", "/home/psychopatz/Desktop/Apps/SteamCMD/steamcmd.sh"))
+    steamcmd_path = get_server_settings().steamcmd_path
+    if not steamcmd_path:
+        raise HTTPException(status_code=500, detail="SteamCMD path is not configured. Set STEAM_CMD_PATH or steamcmd_path in server settings.")
 
     task_id = manager.create_task(
         "Internal Workshop Sync & Push",

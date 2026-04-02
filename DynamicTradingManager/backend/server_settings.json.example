@@ -1,0 +1,7 @@
+{
+  "dynamic_trading_path": "/path/to/Workshop/DynamicTrading",
+  "dynamic_colonies_path": "/path/to/Workshop/DynamicColonies",
+  "dynamic_currency_path": "/path/to/Workshop/CurrencyExpanded",
+  "console_path": "/path/to/Zomboid/console.txt",
+  "steamcmd_path": "/path/to/steamcmd.sh"
+}

@@ -460,6 +460,16 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
     });
   };
 
+  const handleReorderBlock = (fromIndex, toIndex) => {
+    updateDraft((next) => {
+      const blocks = next.pages[selectedPageIndex].blocks;
+      if (fromIndex === toIndex) return;
+      if (fromIndex < 0 || toIndex < 0 || fromIndex >= blocks.length || toIndex >= blocks.length) return;
+      const [moved] = blocks.splice(fromIndex, 1);
+      blocks.splice(toIndex, 0, moved);
+    });
+  };
+
   const handleDeleteBlock = (blockIndex) => {
     updateDraft((next) => {
       next.pages[selectedPageIndex].blocks.splice(blockIndex, 1);
@@ -684,6 +694,7 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
             onUpdateBlock={handleUpdateBlock}
             onChangeBlockType={handleChangeBlockType}
             onMoveBlock={handleMoveBlock}
+            onReorderBlock={handleReorderBlock}
             onDeleteBlock={handleDeleteBlock}
             onImageUpload={promptImageUpload}
             onImagePaste={handleImagePaste}

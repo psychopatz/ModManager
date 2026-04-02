@@ -61,6 +61,7 @@ const getSourceFolderOptions = (module, editorScope = 'manuals') => {
 };
 
 const getPrimaryAudience = (manual) => manual?.audiences?.[0] || 'common';
+const DESCRIPTION_MAX_LENGTH = 69;
 
 /**
  * ManualDetailsForm - Editable form for manual metadata
@@ -72,12 +73,17 @@ export const ManualDetailsForm = ({
   editorScope,
   onUpdateDraft,
 }) => {
+  const descriptionLength = String(draft.description || '').length;
+  const isDescriptionAtLimit = descriptionLength >= DESCRIPTION_MAX_LENGTH;
+
   const handleFieldChange = (field, value) => {
     onUpdateDraft((next) => {
       if (field === 'manual_id') {
         next.manual_id = slugify(value);
       } else if (field === 'start_page_id') {
         next.start_page_id = slugify(value);
+      } else if (field === 'description') {
+        next.description = String(value || '').slice(0, DESCRIPTION_MAX_LENGTH);
       } else {
         next[field] = value;
       }
@@ -140,6 +146,11 @@ export const ManualDetailsForm = ({
           label="Description"
           value={draft.description || ''}
           onChange={(e) => handleFieldChange('description', e.target.value)}
+          inputProps={{ maxLength: DESCRIPTION_MAX_LENGTH }}
+          helperText={isDescriptionAtLimit
+            ? `${descriptionLength}/${DESCRIPTION_MAX_LENGTH} (max reached)`
+            : `${descriptionLength}/${DESCRIPTION_MAX_LENGTH}`}
+          error={isDescriptionAtLimit}
           multiline
           minRows={2}
         />

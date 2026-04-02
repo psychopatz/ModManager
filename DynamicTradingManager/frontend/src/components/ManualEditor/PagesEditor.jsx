@@ -86,6 +86,7 @@ export const PagesEditor = ({
   onUpdateBlock,
   onChangeBlockType,
   onMoveBlock,
+  onReorderBlock,
   onDeleteBlock,
   onImageUpload,
   onImagePaste,
@@ -96,6 +97,8 @@ export const PagesEditor = ({
   const chapterIds = chapters.map((chapter) => chapter.id).filter(Boolean);
 
   const [newBlockType, setNewBlockType] = React.useState('paragraph');
+  const [draggedBlockIndex, setDraggedBlockIndex] = React.useState(null);
+  const [dragOverBlockIndex, setDragOverBlockIndex] = React.useState(null);
 
   const handlePageFieldChange = (field, value) => {
     if (field === 'keywords') {
@@ -109,6 +112,43 @@ export const PagesEditor = ({
     } else {
       onUpdatePage(selectedPageIndex, field, value);
     }
+  };
+
+  const handleBlockDragStart = (blockIndex) => (event) => {
+    setDraggedBlockIndex(blockIndex);
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', String(blockIndex));
+  };
+
+  const handleBlockDragOver = (blockIndex) => (event) => {
+    event.preventDefault();
+    if (dragOverBlockIndex !== blockIndex) {
+      setDragOverBlockIndex(blockIndex);
+    }
+    event.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleBlockDrop = (blockIndex) => (event) => {
+    event.preventDefault();
+    const sourceIndex = draggedBlockIndex ?? Number(event.dataTransfer.getData('text/plain'));
+    if (Number.isInteger(sourceIndex) && sourceIndex >= 0 && sourceIndex !== blockIndex) {
+      if (onReorderBlock) {
+        onReorderBlock(sourceIndex, blockIndex);
+      } else {
+        const direction = sourceIndex < blockIndex ? 1 : -1;
+        const steps = Math.abs(blockIndex - sourceIndex);
+        for (let i = 0; i < steps; i += 1) {
+          onMoveBlock(sourceIndex + (direction === 1 ? i : -i), direction);
+        }
+      }
+    }
+    setDraggedBlockIndex(null);
+    setDragOverBlockIndex(null);
+  };
+
+  const handleBlockDragEnd = () => {
+    setDraggedBlockIndex(null);
+    setDragOverBlockIndex(null);
   };
 
   return (
@@ -246,17 +286,29 @@ export const PagesEditor = ({
             {/* Blocks list */}
             <Stack spacing={1.5}>
               {selectedPage.blocks.map((block, blockIndex) => (
-                <BlockEditor
+                <Box
                   key={`block-${blockIndex}`}
-                  block={block}
-                  blockIndex={blockIndex}
-                  onUpdateBlock={onUpdateBlock}
-                  onChangeBlockType={onChangeBlockType}
-                  onMoveBlock={onMoveBlock}
-                  onDeleteBlock={onDeleteBlock}
-                  onImageUpload={onImageUpload}
-                  onImagePaste={onImagePaste}
-                />
+                  draggable
+                  onDragStart={handleBlockDragStart(blockIndex)}
+                  onDragOver={handleBlockDragOver(blockIndex)}
+                  onDrop={handleBlockDrop(blockIndex)}
+                  onDragEnd={handleBlockDragEnd}
+                  sx={{
+                    borderRadius: 1,
+                    border: dragOverBlockIndex === blockIndex ? '1px dashed rgba(255,255,255,0.55)' : '1px dashed transparent',
+                  }}
+                >
+                  <BlockEditor
+                    block={block}
+                    blockIndex={blockIndex}
+                    onUpdateBlock={onUpdateBlock}
+                    onChangeBlockType={onChangeBlockType}
+                    onMoveBlock={onMoveBlock}
+                    onDeleteBlock={onDeleteBlock}
+                    onImageUpload={onImageUpload}
+                    onImagePaste={onImagePaste}
+                  />
+                </Box>
               ))}
             </Stack>
           </Stack>

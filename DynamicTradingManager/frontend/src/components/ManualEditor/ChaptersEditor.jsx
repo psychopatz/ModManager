@@ -25,6 +25,8 @@ const createEmptyChapter = () => ({
   description: '',
 });
 
+const DESCRIPTION_MAX_LENGTH = 69;
+
 /**
  * ChaptersEditor - Component for editing chapters in a manual
  */
@@ -36,6 +38,10 @@ export const ChaptersEditor = ({
   onDeleteChapter,
 }) => {
   const handleFieldChange = (index, field, value) => {
+    if (field === 'description') {
+      onUpdateChapter(index, field, String(value || '').slice(0, DESCRIPTION_MAX_LENGTH));
+      return;
+    }
     onUpdateChapter(index, field, field === 'id' ? slugify(value) : value);
   };
 
@@ -48,8 +54,12 @@ export const ChaptersEditor = ({
         </Button>
       </Stack>
       <Stack spacing={1.5}>
-        {chapters.map((chapter, index) => (
-          <Paper key={`chapter-${index}`} variant="outlined" sx={{ p: 1.5 }}>
+        {chapters.map((chapter, index) => {
+          const descriptionLength = String(chapter.description || '').length;
+          const isDescriptionAtLimit = descriptionLength >= DESCRIPTION_MAX_LENGTH;
+
+          return (
+            <Paper key={`chapter-${index}`} variant="outlined" sx={{ p: 1.5 }}>
             <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
               <TextField
                 label="ID"
@@ -80,10 +90,16 @@ export const ChaptersEditor = ({
               size="small"
               value={chapter.description || ''}
               onChange={(e) => handleFieldChange(index, 'description', e.target.value)}
+              inputProps={{ maxLength: DESCRIPTION_MAX_LENGTH }}
+              helperText={isDescriptionAtLimit
+                ? `${descriptionLength}/${DESCRIPTION_MAX_LENGTH} (max reached)`
+                : `${descriptionLength}/${DESCRIPTION_MAX_LENGTH}`}
+              error={isDescriptionAtLimit}
               fullWidth
             />
-          </Paper>
-        ))}
+            </Paper>
+          );
+        })}
       </Stack>
     </Paper>
   );

@@ -18,10 +18,13 @@ SCRIPT_DIR = Path(DT_PATH_ENV) if DT_PATH_ENV else Path(__file__).parent.parent.
 if GAME_PATH_ENV:
     VANILLA_DIR = os.path.join(GAME_PATH_ENV, "scripts")
 else:
-    # Fallback to hardcoded paths if env not set
-    VANILLA_DIR = "/home/psychopatz/.steam/steamapps/common/ProjectZomboid/projectzomboid/media/scripts/"
-    if not os.path.exists(VANILLA_DIR):
-        VANILLA_DIR = "/home/psychopatz/.steam/steam/steamapps/common/ProjectZomboid/projectzomboid/media/scripts/"
+    # Fallback to common Steam locations under the current user's home.
+    home = os.path.expanduser("~")
+    vanilla_candidates = [
+        os.path.join(home, ".steam", "steam", "steamapps", "common", "ProjectZomboid", "projectzomboid", "media", "scripts"),
+        os.path.join(home, ".steam", "steamapps", "common", "ProjectZomboid", "projectzomboid", "media", "scripts"),
+    ]
+    VANILLA_DIR = next((candidate for candidate in vanilla_candidates if os.path.exists(candidate)), vanilla_candidates[0])
 
 VANILLA_SCRIPTS_DIR = os.path.join(VANILLA_DIR, "generated/items/")
 

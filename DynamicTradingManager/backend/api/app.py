@@ -17,20 +17,22 @@ from api.routers.pricing import router as pricing_router
 from api.routers.simulation import router as simulation_router
 from api.routers.tasks_actions import router as tasks_actions_router
 from api.routers.workshop import router as workshop_router
+from config.server_settings import get_server_settings
 
 
 def create_app() -> FastAPI:
     load_dotenv()
+    settings = get_server_settings()
 
     app = FastAPI(title="Dynamic Trading Manager API")
 
-    portraits_root = Path(__file__).resolve().parents[3] / "Contents/mods/DynamicTradingCommon/42.13/media/ui/Portraits"
+    portraits_root = settings.dynamic_trading_path / "Contents/mods/DynamicTradingCommon/42.13/media/ui/Portraits"
     if portraits_root.exists():
         app.mount("/static/portraits", StaticFiles(directory=str(portraits_root)), name="dt-portraits")
 
-    mod_root = Path(os.getenv("DYNAMIC_TRADING_PATH", "/home/psychopatz/Zomboid/Workshop/DynamicTrading/"))
-    colonies_root = Path(os.getenv("DYNAMIC_COLONIES_PATH", str(mod_root.parent / "DynamicColonies")))
-    currency_root = Path(os.getenv("DYNAMIC_CURRENCY_PATH", str(mod_root.parent / "CurrencyExpanded")))
+    mod_root = settings.dynamic_trading_path
+    colonies_root = settings.dynamic_colonies_path
+    currency_root = settings.dynamic_currency_path
 
     if mod_root.exists():
         app.mount("/static/workshop", StaticFiles(directory=str(mod_root)), name="workshop-static")
@@ -71,7 +73,7 @@ def create_app() -> FastAPI:
     )
 
     configure_environment(
-        console_path=os.getenv("CONSOLE_PATH", "/home/psychopatz/Zomboid/console.txt"),
+        console_path=str(settings.console_path),
         mod_root=mod_root,
         colonies_root=colonies_root,
         currency_root=currency_root,

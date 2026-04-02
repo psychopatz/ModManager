@@ -79,7 +79,7 @@ export const BlockEditor = ({
 
   const handleImageScaleChange = (field, rawValue) => {
     const nextValue = Number(rawValue || 0);
-    const isLocked = block.keep_aspect_ratio === true;
+    const isLocked = block.keep_aspect_ratio !== false;
 
     if (!isLocked) {
       onUpdateBlock(blockIndex, field, nextValue);
@@ -249,7 +249,7 @@ export const BlockEditor = ({
             control={(
               <Checkbox
                 size="small"
-                checked={block.keep_aspect_ratio === true}
+                checked={block.keep_aspect_ratio !== false}
                 onChange={(e) => handleAspectRatioToggle(e.target.checked)}
               />
             )}

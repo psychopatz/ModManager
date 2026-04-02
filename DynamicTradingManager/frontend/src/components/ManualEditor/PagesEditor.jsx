@@ -53,7 +53,15 @@ const createBlock = (type) => {
     case 'bullet_list':
       return { type: 'bullet_list', items: [] };
     case 'image':
-      return { type: 'image', path: '', caption: '', width: 220, height: 140 };
+      return {
+        type: 'image',
+        path: '',
+        caption: '',
+        width: 220,
+        height: 140,
+        keep_aspect_ratio: true,
+        aspect_ratio: 220 / 140,
+      };
     case 'callout':
       return { type: 'callout', tone: 'info', title: '', text: '' };
     default:

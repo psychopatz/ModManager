@@ -98,7 +98,10 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
     ],
+    allow_origin_regex=r"^(https?://(localhost|127\.0\.0\.1)(:\d+)?|vscode-webview://.*|https://.*\.puter\.com)$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -901,17 +904,23 @@ async def get_project_branches(target: Optional[str] = None):
     project = _get_workshop_project_or_404(target)
     return get_git_branches(project["path"])
 
-# --- Simulation ---
+# --- Manual Management ---
 
 try:
-    from Simulation.config import BuildConfig, default_paths
-    from Simulation.archetype_editor import load_archetype_editor_data, save_archetype_definition
-    from Simulation.manual_editor import (
+    from ManualManagement import (
         create_manual_definition,
         delete_manual_definition,
         load_manual_editor_data,
         save_manual_definition,
     )
+except ImportError as e:
+    logger.error(f"Error importing ManualManagement modules: {e}")
+
+# --- Simulation ---
+
+try:
+    from Simulation.config import BuildConfig, default_paths
+    from Simulation.archetype_editor import load_archetype_editor_data, save_archetype_definition
     from Simulation.export.database_builder import build_database
 except ImportError as e:
     logger.error(f"Error importing Simulation modules: {e}")

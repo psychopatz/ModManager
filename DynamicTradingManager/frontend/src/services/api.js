@@ -1,7 +1,25 @@
 import axios from 'axios';
 
+const resolveApiBaseUrl = () => {
+  const configured = import.meta.env.VITE_API_BASE_URL;
+  if (configured) {
+    return configured;
+  }
+
+  if (typeof window === 'undefined') {
+    return 'http://127.0.0.1:8000/api';
+  }
+
+  const host = window.location.hostname;
+  if (host === 'localhost' || host === '127.0.0.1') {
+    return 'http://127.0.0.1:8000/api';
+  }
+
+  return `${window.location.origin}/api`;
+};
+
 const api = axios.create({
-  baseURL: 'http://localhost:8000/api',
+  baseURL: resolveApiBaseUrl(),
 });
 
 // Stats & Items

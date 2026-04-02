@@ -110,3 +110,9 @@ class WorkshopPushRequest(BaseModel):
     update_files: bool = True
     update_metadata: bool = False
     update_preview: bool = False
+
+
+class WorkshopVersionIncrementRequest(BaseModel):
+    target: Optional[str] = None
+    mod_id: str
+    bump: Optional[str] = "patch"

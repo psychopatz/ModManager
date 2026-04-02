@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 # Constants
 APP_ID = "108600"
+SEMVER_PATTERN = re.compile(r"^(\d+)(?:\.(\d+))?(?:\.(\d+))?$")
 
 
 def resolve_workshop_id(mod_root: Path) -> str:
@@ -175,6 +176,125 @@ def parse_workshop_txt(workshop_txt_path: Path):
     except Exception as e:
         logger.error(f"Error parsing workshop.txt: {e}")
         return metadata
+
+
+def _read_mod_info_fields(mod_info_path: Path) -> dict:
+    fields = {
+        "name": "",
+        "id": "",
+        "version": "",
+    }
+    try:
+        with open(mod_info_path, "r", encoding="utf-8") as handle:
+            for raw_line in handle:
+                line = raw_line.strip()
+                if not line or "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                key = key.strip().lower()
+                value = value.strip()
+                if key in fields:
+                    fields[key] = value
+    except Exception as exc:
+        logger.error("Failed reading mod.info %s: %s", mod_info_path, exc)
+    return fields
+
+
+def list_mod_versions(mod_root: Path) -> list[dict]:
+    mod_info_files = sorted((mod_root / "Contents/mods").glob("*/42.13/mod.info"))
+    versions: list[dict] = []
+
+    for mod_info_path in mod_info_files:
+        fields = _read_mod_info_fields(mod_info_path)
+        mod_folder = mod_info_path.parents[1].name
+        versions.append(
+            {
+                "mod_folder": mod_folder,
+                "mod_id": fields["id"] or mod_folder,
+                "name": fields["name"] or mod_folder,
+                "version": fields["version"] or "",
+                "has_version": bool(fields["version"]),
+                "path": str(mod_info_path),
+            }
+        )
+
+    return versions
+
+
+def _increment_version_string(current_version: str, bump: str = "patch") -> str:
+    value = str(current_version or "").strip()
+    match = SEMVER_PATTERN.match(value)
+    if not match:
+        base = [0, 0, 0]
+    else:
+        base = [
+            int(match.group(1) or 0),
+            int(match.group(2) or 0),
+            int(match.group(3) or 0),
+        ]
+
+    bump = str(bump or "patch").strip().lower()
+    if bump == "major":
+        base[0] += 1
+        base[1] = 0
+        base[2] = 0
+    elif bump == "minor":
+        base[1] += 1
+        base[2] = 0
+    else:
+        base[2] += 1
+
+    return f"{base[0]}.{base[1]}.{base[2]}"
+
+
+def increment_mod_version(mod_root: Path, mod_id: str, bump: str = "patch") -> dict:
+    target_mod = str(mod_id or "").strip().lower()
+    if not target_mod:
+        raise ValueError("mod_id is required.")
+
+    candidates = list_mod_versions(mod_root)
+    selected = None
+    for row in candidates:
+        if row["mod_id"].lower() == target_mod or row["mod_folder"].lower() == target_mod:
+            selected = row
+            break
+
+    if not selected:
+        raise FileNotFoundError(f'Unable to find mod.info for module "{mod_id}".')
+
+    mod_info_path = Path(selected["path"])
+    lines = mod_info_path.read_text(encoding="utf-8").splitlines()
+
+    old_version = selected.get("version") or ""
+    new_version = _increment_version_string(old_version, bump)
+    next_lines = []
+    found_version = False
+
+    for line in lines:
+        if line.strip().lower().startswith("version="):
+            next_lines.append(f"version={new_version}")
+            found_version = True
+        else:
+            next_lines.append(line)
+
+    if not found_version:
+        insert_at = len(next_lines)
+        for index, line in enumerate(next_lines):
+            if line.strip().lower().startswith("versionmin="):
+                insert_at = index
+                break
+        next_lines.insert(insert_at, f"version={new_version}")
+
+    mod_info_path.write_text("\n".join(next_lines) + "\n", encoding="utf-8")
+
+    return {
+        "mod_id": selected["mod_id"],
+        "mod_folder": selected["mod_folder"],
+        "name": selected["name"],
+        "old_version": old_version,
+        "new_version": new_version,
+        "path": str(mod_info_path),
+    }
 
 def fetch_steam_metadata(item_id: str):
     """

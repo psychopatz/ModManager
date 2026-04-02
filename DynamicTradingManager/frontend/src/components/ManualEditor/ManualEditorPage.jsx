@@ -4,6 +4,7 @@ import {
   Box,
   Button,
   Chip,
+  Fab,
   FormControl,
   InputLabel,
   List,
@@ -18,6 +19,7 @@ import {
 import RefreshIconMUI from '@mui/icons-material/Refresh';
 import DeleteOutlineIconMUI from '@mui/icons-material/DeleteOutline';
 import AddCircleOutlineIconMUI from '@mui/icons-material/AddCircleOutline';
+import SaveOutlinedIconMUI from '@mui/icons-material/SaveOutlined';
 
 import { createManualDefinition, deleteManualDefinition, getManualEditorData, saveManualDefinition, uploadManualImage } from '../../services/api';
 import { useDraftManagement } from '../../hooks/useDraftManagement';
@@ -25,7 +27,6 @@ import { ManualPreview } from './ManualPreview';
 import { ManualDetailsForm } from './ManualDetailsForm';
 import { ChaptersEditor } from './ChaptersEditor';
 import { PagesEditor } from './PagesEditor';
-import { SaveStatusIndicator } from './SaveStatusIndicator';
 
 const NEW_MANUAL_KEY = '__new_manual__';
 const moduleOptions = [
@@ -159,7 +160,6 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState({ type: '', message: '' });
-  const [lastSaveStatus, setLastSaveStatus] = useState(null); // 'success' | 'error' | null
   const fileInputRef = useRef(null);
   const uploadTargetRef = useRef(null);
 
@@ -240,7 +240,6 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
     setBaseManual(cloneManual(manual));
     setSelectedPageId(manual.pages?.[0]?.id || '');
     setStatus({ type: '', message: '' });
-    setLastSaveStatus(null);
   };
 
   const createManual = () => {
@@ -264,19 +263,16 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
       type: 'info',
       message: `New ${isUpdateEditor ? 'update version' : 'manual'} draft created. Fill in the fields and save when ready.`,
     });
-    setLastSaveStatus(null);
   };
 
   const saveCurrentManual = async () => {
     if (!draft.manual_id.trim()) {
       setStatus({ type: 'error', message: 'Manual id is required.' });
-      setLastSaveStatus('error');
       return;
     }
 
     setSaving(true);
     setStatus({ type: '', message: '' });
-    setLastSaveStatus(null);
 
     try {
       const payload = {
@@ -313,15 +309,11 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
       }
 
       await loadEditor(payload.manual_id, payloadModule);
-      setLastSaveStatus('success');
       setStatus({
         type: 'success',
         message: `Saved ${isUpdateEditor ? 'update version' : 'manual'} "${payload.manual_id}".`,
       });
       clearDraft();
-
-      // Clear success status after 4 seconds
-      setTimeout(() => setLastSaveStatus(null), 4000);
     } catch (error) {
       console.error('Manual save failed:', error);
       let message = error?.response?.data?.detail || error?.message || `Failed to save the ${isUpdateEditor ? 'update version' : 'manual'}.`;
@@ -331,7 +323,6 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
         } catch {}
       }
       setStatus({ type: 'error', message });
-      setLastSaveStatus('error');
     } finally {
       setSaving(false);
     }
@@ -593,15 +584,6 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
             {isNewManual ? 'Discard Draft' : isUpdateEditor ? 'Delete Update' : 'Delete Manual'}
           </Button>
 
-          {/* Enhanced Save Button with Status Indicator */}
-          <SaveStatusIndicator
-            saving={saving}
-            isDrafty={isDrafty}
-            lastSaveStatus={lastSaveStatus}
-            onSave={saveCurrentManual}
-            disabled={loading}
-            isUpdateEditor={isUpdateEditor}
-          />
         </Stack>
       </Stack>
 
@@ -705,6 +687,22 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
         {/* Preview */}
         <ManualPreview manual={draft} selectedPage={selectedPage} backendOrigin={backendOrigin} />
       </Box>
+
+      <Fab
+        color={isDrafty ? 'warning' : 'primary'}
+        variant="extended"
+        onClick={saveCurrentManual}
+        disabled={loading || saving || (!isDrafty && !isNewManual)}
+        sx={{
+          position: 'fixed',
+          right: { xs: 16, md: 28 },
+          bottom: { xs: 16, md: 28 },
+          zIndex: 1400,
+        }}
+      >
+        <SaveOutlinedIconMUI sx={{ mr: 1 }} />
+        {saving ? 'Saving...' : isUpdateEditor ? 'Save Update' : 'Save Manual'}
+      </Fab>
     </Stack>
   );
 };

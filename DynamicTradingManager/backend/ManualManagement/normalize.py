@@ -50,6 +50,10 @@ def _infer_module(module: str | None, payload: dict | None = None, file_path: Pa
             return "colony"
         if "/currencyexpanded/" in lowered:
             return "currency"
+        if "/dt/v1/manuals/" in lowered:
+            return "v1"
+        if "/dt/v2/manuals/" in lowered:
+            return "v2"
         if "/manuals/v1/" in lowered:
             return "v1"
         if "/manuals/v2/" in lowered:

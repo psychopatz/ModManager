@@ -73,6 +73,8 @@ export const triggerWorkshopPush = (payload) => api.post('/workshop/push', paylo
 export const getWorkshopTargets = () => api.get('/workshop/targets');
 export const getWorkshopMetadata = (target) => api.get('/workshop/metadata', { params: { target } });
 export const getWorkshopSync = (target, itemId) => api.get('/workshop/sync', { params: { target, item_id: itemId } });
+export const getWorkshopVersions = (target) => api.get('/workshop/versions', { params: { target } });
+export const incrementWorkshopVersion = (payload) => api.post('/workshop/versions/increment', payload);
 export const uploadWorkshopImage = (formData, target) => api.post('/workshop/image', formData, {
   params: { target },
   headers: { 'Content-Type': 'multipart/form-data' }

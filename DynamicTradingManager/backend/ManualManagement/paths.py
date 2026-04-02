@@ -21,6 +21,14 @@ def _get_dynamic_trading_root() -> Path:
     return default_paths().root / "Contents/mods/DynamicTradingCommon/42.13/media/lua/shared/DT/Common/Manuals"
 
 
+def _get_dynamic_trading_v1_root() -> Path:
+    return default_paths().root / "Contents/mods/DynamicTradingV1/42.13/media/lua/shared/DT/V1/Manuals"
+
+
+def _get_dynamic_trading_v2_root() -> Path:
+    return default_paths().root / "Contents/mods/DynamicTradingV2/42.13/media/lua/shared/DT/V2/Manuals"
+
+
 def _get_dynamic_colonies_mod_root() -> Path:
     return get_server_settings().dynamic_colonies_path
 
@@ -39,12 +47,15 @@ def _get_currency_expanded_root() -> Path:
 
 def _get_manuals_roots(module: str = DEFAULT_MODULE) -> list[Path]:
     normalized = _normalize_module(module)
-    dt_root = _get_dynamic_trading_root()
+    if normalized == "v1":
+        return [_get_dynamic_trading_v1_root()]
+    if normalized == "v2":
+        return [_get_dynamic_trading_v2_root()]
     if normalized == "colony":
-        return [_get_dynamic_colonies_root(), dt_root]
+        return [_get_dynamic_colonies_root()]
     if normalized == "currency":
         return [_get_currency_expanded_root()]
-    return [dt_root]
+    return [_get_dynamic_trading_root()]
 
 
 def _get_manual_assets_root(module: str = DEFAULT_MODULE) -> Path:
@@ -77,6 +88,10 @@ def _get_manual_file_path(
 ) -> Path:
     normalized_module = _normalize_module(module)
     folder = _normalize_source_folder(source_folder, None, scope=scope, module=normalized_module)
+    if normalized_module == "v1":
+        return _get_dynamic_trading_v1_root() / folder / f"DT_Manual_{manual_id}.lua"
+    if normalized_module == "v2":
+        return _get_dynamic_trading_v2_root() / folder / f"DT_Manual_{manual_id}.lua"
     if normalized_module == "colony":
         return _get_dynamic_colonies_root() / f"DC_Manual_{manual_id}.lua"
     if normalized_module == "currency":

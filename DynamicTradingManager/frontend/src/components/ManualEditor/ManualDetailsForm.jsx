@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   Alert,
+  Button,
   Checkbox,
   FormControl,
   FormControlLabel,
@@ -63,6 +64,15 @@ const getSourceFolderOptions = (module, editorScope = 'manuals') => {
 const getPrimaryAudience = (manual) => manual?.audiences?.[0] || 'common';
 const DESCRIPTION_MAX_LENGTH = 69;
 
+const incrementVersion = (value) => {
+  const match = String(value || '').trim().match(/^(\d+)(?:\.(\d+))?(?:\.(\d+))?$/);
+  if (!match) return '0.0.1';
+  const major = Number(match[1] || 0);
+  const minor = Number(match[2] || 0);
+  const patch = Number(match[3] || 0) + 1;
+  return `${major}.${minor}.${patch}`;
+};
+
 /**
  * ManualDetailsForm - Editable form for manual metadata
  */
@@ -121,6 +131,17 @@ export const ManualDetailsForm = ({
 
   const isSupportManual = draft.source_folder === 'Support' || draft.manual_type === 'support';
   const sourceFolderOptions = getSourceFolderOptions(getPrimaryAudience(draft), editorScope);
+
+  const handleIncrementVersion = () => {
+    onUpdateDraft((next) => {
+      const current = next.release_version || next.popup_version || '';
+      const bumped = incrementVersion(current);
+      next.release_version = bumped;
+      if (isUpdateEditor || !next.popup_version) {
+        next.popup_version = bumped;
+      }
+    });
+  };
 
   return (
     <Paper sx={{ p: 2 }}>
@@ -191,6 +212,9 @@ export const ManualDetailsForm = ({
             onChange={(e) => handleFieldChange('release_version', e.target.value)}
             sx={{ minWidth: 180 }}
           />
+          <Button variant="outlined" onClick={handleIncrementVersion}>
+            Increment Version
+          </Button>
         </Stack>
         <Stack direction="row" spacing={2}>
           <FormControl size="small" sx={{ minWidth: 220 }}>

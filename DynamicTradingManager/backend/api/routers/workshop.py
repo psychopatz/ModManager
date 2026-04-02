@@ -6,11 +6,13 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 from api.routers.common import get_workshop_project_or_404, serialize_workshop_projects
-from api.schemas import WorkshopPushRequest
+from api.schemas import WorkshopPushRequest, WorkshopVersionIncrementRequest
 from config.server_settings import get_server_settings
 from ItemManagement.task_manager import manager
 from WorkshopManagement.workshop import (
     fetch_steam_metadata,
+    increment_mod_version,
+    list_mod_versions,
     parse_workshop_txt,
     prepare_staging,
     run_full_workshop_push,
@@ -113,3 +115,35 @@ async def trigger_workshop_push(request: WorkshopPushRequest):
     )
 
     return {"task_id": task_id, "target": project["key"], "project_name": project["name"]}
+
+
+@router.get("/api/workshop/versions")
+async def get_workshop_versions(target: Optional[str] = None):
+    project = get_workshop_project_or_404(target)
+    return {
+        "target": project["key"],
+        "project_name": project["name"],
+        "versions": list_mod_versions(project["path"]),
+    }
+
+
+@router.post("/api/workshop/versions/increment")
+async def increment_workshop_version(request: WorkshopVersionIncrementRequest):
+    project = get_workshop_project_or_404(request.target)
+    try:
+        updated = increment_mod_version(project["path"], request.mod_id, request.bump or "patch")
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logger.error("Failed to increment mod version for %s: %s", project["name"], exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    return {
+        "success": True,
+        "target": project["key"],
+        "project_name": project["name"],
+        "updated": updated,
+        "versions": list_mod_versions(project["path"]),
+    }

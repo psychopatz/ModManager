@@ -97,6 +97,24 @@ class ManualSaveRequest(BaseModel):
     pages: List[Dict[str, Any]] = []
 
 
+class DonatorEntryRequest(BaseModel):
+    id: str
+    name: str
+    total_donation: float = 0.0
+    image_path: Optional[str] = ""
+    active: bool = True
+
+
+class DonatorsSaveRequest(BaseModel):
+    supporters: List[DonatorEntryRequest] = []
+    title: Optional[str] = "Hall of Fame Donators"
+    page_title: Optional[str] = "Hall of Fame"
+    block_title: Optional[str] = "Hall of Fame Donators"
+    autoplay_ms: Optional[int] = 4000
+    currency_symbol: Optional[str] = "$"
+    thank_you_text: Optional[str] = "Thank you to everyone helping keep Dynamic Trading moving."
+
+
 class WorkshopPushRequest(BaseModel):
     target: Optional[str] = None
     workshop_id: Optional[str] = None

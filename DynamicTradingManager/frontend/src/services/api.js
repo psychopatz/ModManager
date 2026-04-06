@@ -59,6 +59,11 @@ export const getPricingTags = () => api.get('/pricing/tags');
 export const previewPricingTag = (payload) => api.post('/pricing/tags/preview', payload);
 export const getArchetypeEditorData = () => api.get('/archetypes/editor');
 export const saveArchetypeDefinition = (archetypeId, payload) => api.put(`/archetypes/${archetypeId}/allocations`, payload);
+export const getDonatorsDefinition = () => api.get('/donators');
+export const saveDonatorsDefinition = (payload) => api.put('/donators', payload);
+export const uploadDonatorImage = (formData) => api.post('/donators/images', formData, {
+  headers: { 'Content-Type': 'multipart/form-data' }
+});
 export const getManualEditorData = (scope = 'manuals', module = 'common') => api.get('/manuals/editor', { params: { scope, module } });
 export const createManualDefinition = (payload, scope = 'manuals', module = 'common') => api.post('/manuals', payload, { params: { scope, module } });
 export const saveManualDefinition = (manualId, payload, scope = 'manuals', module = 'common') => api.put(`/manuals/${manualId}`, payload, { params: { scope, module } });

@@ -11,6 +11,7 @@ from api.routers.blacklist_overrides import router as blacklist_overrides_router
 from api.routers.catalog import router as catalog_router
 from api.routers.common import configure_environment
 from api.routers.debug_logs import router as debug_logs_router
+from api.routers.donators import router as donators_router
 from api.routers.git import router as git_router
 from api.routers.manuals import router as manuals_router
 from api.routers.pricing import router as pricing_router
@@ -85,6 +86,7 @@ def create_app() -> FastAPI:
     app.include_router(blacklist_overrides_router)
     app.include_router(archetypes_router)
     app.include_router(manuals_router)
+    app.include_router(donators_router)
     app.include_router(debug_logs_router)
     app.include_router(workshop_router)
     app.include_router(git_router)

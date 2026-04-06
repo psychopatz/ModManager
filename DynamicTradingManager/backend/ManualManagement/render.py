@@ -31,6 +31,29 @@ def _render_block(block: dict) -> str:
             f'{{ type = "image", path = "{_escape(block["path"])}", caption = "{_escape(block["caption"])}", '
             f'width = {int(block["width"])}, height = {int(block["height"])} }}'
         )
+    if block["type"] == "supporter_carousel":
+        supporters = []
+        for supporter in block.get("supporters", []):
+            supporters.append(
+                '{ id = "%s", name = "%s", totalDonation = %s, imagePath = "%s", active = %s }'
+                % (
+                    _escape(supporter["id"]),
+                    _escape(supporter["name"]),
+                    repr(float(supporter.get("total_donation", 0) or 0)),
+                    _escape(supporter.get("image_path", "")),
+                    "true" if supporter.get("active", True) else "false",
+                )
+            )
+        return (
+            '{ type = "supporter_carousel", title = "%s", autoplayMs = %d, currencySymbol = "%s", thankYouText = "%s", supporters = { %s } }'
+            % (
+                _escape(block.get("title", "")),
+                int(block.get("autoplay_ms", 4000) or 4000),
+                _escape(block.get("currency_symbol", "$")),
+                _escape(block.get("thank_you_text", "")),
+                ", ".join(supporters),
+            )
+        )
     return (
         f'{{ type = "callout", tone = "{_escape(block["tone"])}", title = "{_escape(block["title"])}", '
         f'text = "{_escape(block["text"])}" }}'

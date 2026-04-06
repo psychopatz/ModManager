@@ -35,6 +35,8 @@ def load_manual_editor_data(scope: str = DEFAULT_SCOPE, module: str = DEFAULT_MO
             payload = _read_editor_payload(file_path)
             if payload is None:
                 continue
+            if str(payload.get("manual_type") or "").strip().lower() == "donators":
+                continue
             if not _payload_matches_scope(payload, scope):
                 continue
             if not _module_matches_payload(payload, module):

@@ -195,6 +195,27 @@ def _normalize_title(value: str | None, field_label: str, enforce_max_length: bo
     return text
 
 
+def _normalize_supporter_entry(entry: dict, page_id: str, position: int, used_ids: set[str]) -> dict:
+    supporter_id = _slugify(entry.get("id") or entry.get("name"))
+    if not supporter_id:
+        raise ValueError(f'Page "{page_id}" supporter #{position} is missing an id.')
+    if supporter_id in used_ids:
+        raise ValueError(f'Page "{page_id}" has a duplicate supporter id "{supporter_id}".')
+    used_ids.add(supporter_id)
+
+    name = str(entry.get("name", "")).strip()
+    if not name:
+        raise ValueError(f'Page "{page_id}" supporter "{supporter_id}" is missing a name.')
+
+    return {
+        "id": supporter_id,
+        "name": name,
+        "total_donation": float(entry.get("total_donation", 0) or 0),
+        "image_path": str(entry.get("image_path", "")).strip(),
+        "active": _normalize_bool(entry.get("active", True)),
+    }
+
+
 def _normalize_block(block: dict, page_id: str, position: int, used_section_ids: set[str]) -> dict:
     block_type = str(block.get("type", "")).strip()
     if not block_type:
@@ -252,6 +273,21 @@ def _normalize_block(block: dict, page_id: str, position: int, used_section_ids:
             "tone": str(block.get("tone", "info")).strip() or "info",
             "title": str(block.get("title", "")).strip(),
             "text": str(block.get("text", "")).strip(),
+        }
+
+    if block_type == "supporter_carousel":
+        supporter_ids: set[str] = set()
+        supporters = [
+            _normalize_supporter_entry(entry, page_id, index + 1, supporter_ids)
+            for index, entry in enumerate(block.get("supporters") or [])
+        ]
+        return {
+            "type": "supporter_carousel",
+            "title": str(block.get("title", "")).strip(),
+            "autoplay_ms": max(1000, int(block.get("autoplay_ms", 4000) or 4000)),
+            "currency_symbol": str(block.get("currency_symbol", "$") or "$"),
+            "thank_you_text": str(block.get("thank_you_text") or block.get("thankYouText") or "").strip(),
+            "supporters": supporters,
         }
 
     raise ValueError(f'Unsupported block type "{block_type}" on page "{page_id}".')

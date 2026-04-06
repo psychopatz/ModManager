@@ -1,0 +1,13 @@
+MANUAL_ID = "dt_support_hall_of_fame"
+MANUAL_TYPE = "donators"
+MODULE = "common"
+SOURCE_FOLDER = "Support"
+CHAPTER_ID = "hall_of_fame"
+PAGE_ID = "hall_of_fame_showcase"
+MANUAL_TITLE = "Hall of Fame Donators"
+MANUAL_DESCRIPTION = "Recognizes the supporters helping fund continued development."
+PAGE_TITLE = "Hall of Fame"
+BLOCK_TITLE = "Hall of Fame Donators"
+AUTOPLAY_MS = 4000
+CURRENCY_SYMBOL = "$"
+THANK_YOU_TEXT = "Thank you to everyone helping keep Dynamic Trading moving."

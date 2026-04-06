@@ -38,6 +38,12 @@ def _normalize_supporter(entry: dict) -> dict:
         "name": str(entry.get("name", "")).strip(),
         "total_donation": total,
         "image_path": str(entry.get("image_path", "")).strip(),
+        "support_message": str(
+            entry.get("support_message")
+            or entry.get("supportMessage")
+            or entry.get("message")
+            or ""
+        ).strip(),
         "active": bool(entry.get("active", True)),
     }
 

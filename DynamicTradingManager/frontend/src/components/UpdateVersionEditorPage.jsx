@@ -4,6 +4,10 @@ import ManualEditorPage from './ManualEditorPage';
 import GitReleaseAssistant from './GitReleaseAssistant';
 import { createManualDefinition, getManualEditorData, saveManualDefinition } from '../services/api';
 
+const getTodayDateString = () => {
+	return new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+};
+
 const defaultPrompt = `Task:
 Generate ONLY valid JSON (no markdown fences, no extra text) for a Project Zomboid What's New manual.
 
@@ -11,7 +15,7 @@ Return this exact shape:
 {
   "manual_id": "dt_update_YYYY_MM_DD",
   "module": "common|v1|v2|colony|currency",
-  "title": "short title",
+  "title": "${getTodayDateString()} Update",
   "description": "max 69 chars",
   "release_version": "x.y.z",
   "popup_version": "x.y.z",
@@ -41,6 +45,9 @@ Return this exact shape:
 
 Rules:
 - Keep output strict JSON.
+- The "title" field MUST follow the format "${getTodayDateString()} Update".
+- The "title" field MUST NOT exceed 22 characters. If the full month name makes the title exceed 22 characters, abbreviate the month (e.g., "Sept" instead of "September").
+- The "description" field MUST NOT exceed 69 characters.
 - Use only manual editor block types: heading, paragraph, bullet_list, callout, image.
 - Prefer concise gameplay-impact bullets.`;
 

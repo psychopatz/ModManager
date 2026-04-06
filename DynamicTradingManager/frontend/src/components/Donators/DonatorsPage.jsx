@@ -22,6 +22,7 @@ function normalizeSupporter(entry, fallbackIndex) {
     name: String(entry?.name || ''),
     total_donation: Number(entry?.total_donation || 0),
     image_path: String(entry?.image_path || ''),
+    support_message: String(entry?.support_message || entry?.supportMessage || entry?.message || ''),
     active: entry?.active !== false,
   };
 }

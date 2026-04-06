@@ -212,6 +212,12 @@ def _normalize_supporter_entry(entry: dict, page_id: str, position: int, used_id
         "name": name,
         "total_donation": float(entry.get("total_donation", 0) or 0),
         "image_path": str(entry.get("image_path", "")).strip(),
+        "support_message": str(
+            entry.get("support_message")
+            or entry.get("supportMessage")
+            or entry.get("message")
+            or ""
+        ).strip(),
         "active": _normalize_bool(entry.get("active", True)),
     }
 

@@ -120,6 +120,17 @@ export default function DonatorRow({
           />
         </Stack>
 
+        <TextField
+          fullWidth
+          multiline
+          minRows={2}
+          maxRows={5}
+          label="Support Message"
+          value={supporter.support_message || ''}
+          onChange={(event) => onChange('support_message', event.target.value)}
+          helperText="Shown in the Hall of Fame card as the supporter message."
+        />
+
         <Typography variant="caption" color="text.secondary">
           Click this donor card and press Ctrl+V to paste an image from the clipboard, or use the Paste Image button.
         </Typography>

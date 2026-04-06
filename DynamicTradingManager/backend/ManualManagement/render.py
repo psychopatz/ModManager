@@ -35,12 +35,13 @@ def _render_block(block: dict) -> str:
         supporters = []
         for supporter in block.get("supporters", []):
             supporters.append(
-                '{ id = "%s", name = "%s", totalDonation = %s, imagePath = "%s", active = %s }'
+                '{ id = "%s", name = "%s", totalDonation = %s, imagePath = "%s", supportMessage = "%s", active = %s }'
                 % (
                     _escape(supporter["id"]),
                     _escape(supporter["name"]),
                     repr(float(supporter.get("total_donation", 0) or 0)),
                     _escape(supporter.get("image_path", "")),
+                    _escape(supporter.get("support_message", "")),
                     "true" if supporter.get("active", True) else "false",
                 )
             )

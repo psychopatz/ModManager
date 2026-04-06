@@ -18,6 +18,7 @@ export const createEmptySupporter = (index = 1) => ({
   name: '',
   total_donation: 0,
   image_path: '',
+  support_message: '',
   active: true,
 });
 

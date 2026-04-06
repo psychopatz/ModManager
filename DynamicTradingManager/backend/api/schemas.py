@@ -102,6 +102,7 @@ class DonatorEntryRequest(BaseModel):
     name: str
     total_donation: float = 0.0
     image_path: Optional[str] = ""
+    support_message: Optional[str] = ""
     active: bool = True
 
 

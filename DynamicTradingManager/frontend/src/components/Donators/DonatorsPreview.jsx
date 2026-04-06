@@ -30,6 +30,7 @@ function useCarouselIndex(length, autoplayMs) {
 function PreviewCard({ supporter, rank, backendOrigin, assetBaseUrl, currencySymbol, compact = false }) {
   const imageUrl = resolveDonatorImageUrl(backendOrigin, assetBaseUrl, supporter?.image_path);
   const imageHeight = compact ? 112 : 220;
+  const supportMessage = String(supporter?.support_message || supporter?.supportMessage || supporter?.message || '').trim();
 
   return (
     <Stack direction={compact ? 'row' : 'column'} spacing={compact ? 1.5 : 2}>
@@ -68,6 +69,20 @@ function PreviewCard({ supporter, rank, backendOrigin, assetBaseUrl, currencySym
         <Typography variant={compact ? 'body1' : 'h6'} color="secondary.main">
           {formatDonation(supporter?.total_donation, currencySymbol)}
         </Typography>
+        {supportMessage ? (
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={compact ? {
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+            } : undefined}
+          >
+            "{supportMessage}"
+          </Typography>
+        ) : null}
       </Stack>
     </Stack>
   );

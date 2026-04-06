@@ -102,6 +102,7 @@ class WorkshopPushRequest(BaseModel):
     workshop_id: Optional[str] = None
     username: str
     password: Optional[str] = None
+    steam_guard_code: Optional[str] = None
     changenote: Optional[str] = "Update pushed via SteamCMD"
     title: Optional[str] = None
     description: Optional[str] = None

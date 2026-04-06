@@ -63,6 +63,7 @@ const WorkshopPage = () => {
   // Credentials
   const [username, setUsername] = useState(() => localStorage.getItem('dt_steam_username') || '');
   const [password, setPassword] = useState('');
+  const [steamGuardCode, setSteamGuardCode] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
@@ -234,6 +235,7 @@ const WorkshopPage = () => {
         workshop_id: metadata.id || undefined,
         username,
         password: password || undefined,
+        steam_guard_code: steamGuardCode.trim() || undefined,
         changenote,
         update_files: updateFiles,
         update_metadata: updateMetadata,
@@ -451,6 +453,16 @@ const WorkshopPage = () => {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       InputProps={{ endAdornment: <IconButton onClick={() => setShowPassword(!showPassword)}>{showPassword ? <VisibilityOff /> : <VisibilityIcon />}</IconButton> }}
+                    />
+                    <TextField
+                      label="Steam Guard Code"
+                      fullWidth
+                      name="one-time-code"
+                      id="steam-guard-code"
+                      autoComplete="one-time-code"
+                      value={steamGuardCode}
+                      onChange={(e) => setSteamGuardCode(e.target.value)}
+                      helperText="Optional. Fill this in only when SteamCMD asks for an email or authenticator code."
                     />
                     <Button
                       variant="contained"

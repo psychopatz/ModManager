@@ -329,12 +329,22 @@ def fetch_steam_metadata(item_id: str):
         logger.error(f"Error fetching Steam metadata: {e}")
         return None
 
-def run_steamcmd_upload(steamcmd_path: str, vdf_path: Path, username: str, password: str = None):
+def run_steamcmd_upload(
+    steamcmd_path: str,
+    vdf_path: Path,
+    username: str,
+    password: str = None,
+    steam_guard_code: str = None,
+):
     """
     Executes SteamCMD to upload the workshop item.
     Note: This is intended to be run within the TaskManager to capture output.
     """
     try:
+        username = str(username or "").strip()
+        password = str(password or "").strip() or None
+        steam_guard_code = str(steam_guard_code or "").strip() or None
+
         # Pre-step: Kill any running Steam client to avoid conflicts
         try:
             print("Checking for running Steam processes...")
@@ -347,12 +357,26 @@ def run_steamcmd_upload(steamcmd_path: str, vdf_path: Path, username: str, passw
         if password:
             # Note: Passing password via CLI is generally insecure but requested here for basic GUI integration.
             cmd.extend(["+login", username, password])
+            if steam_guard_code:
+                print("Using provided Steam Guard code for SteamCMD login...")
+                cmd.append(steam_guard_code)
         else:
             cmd.extend(["+login", username])
+            if steam_guard_code:
+                print("[WARNING] Steam Guard code was provided without a password, so SteamCMD will ignore it.")
             
         cmd.extend(["+workshop_build_item", str(vdf_path.absolute()), "+quit"])
         
-        logger.info(f"Executing SteamCMD: {' '.join([arg if arg != password else '********' for arg in cmd])}")
+        redacted_cmd = []
+        for arg in cmd:
+            if password and arg == password:
+                redacted_cmd.append("********")
+            elif steam_guard_code and arg == steam_guard_code:
+                redacted_cmd.append("******")
+            else:
+                redacted_cmd.append(arg)
+
+        logger.info(f"Executing SteamCMD: {' '.join(redacted_cmd)}")
         
         # Use subprocess.Popen to stream output to stdout (captured by TaskManager)
         process = subprocess.Popen(
@@ -430,4 +454,10 @@ def run_full_workshop_push(
 
     # 3. Upload
     print("\n[STEP 3/3] Running SteamCMD upload...")
-    return run_steamcmd_upload(steamcmd_path, vdf_path, username, password)
+    return run_steamcmd_upload(
+        steamcmd_path,
+        vdf_path,
+        username,
+        password,
+        request_data.get("steam_guard_code"),
+    )

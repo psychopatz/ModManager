@@ -50,6 +50,7 @@ class ServerSettings:
     dynamic_currency_path: Path
     console_path: Path
     steamcmd_path: str | None
+    allowed_origins: list[str]
 
 
 @lru_cache(maxsize=1)
@@ -105,6 +106,12 @@ def get_server_settings() -> ServerSettings:
         file_settings.get("steam_cmd_path"),
     )
 
+    allowed_origins_raw = _first_non_empty(
+        os.getenv("ALLOWED_ORIGINS"),
+        file_settings.get("allowed_origins"),
+    )
+    allowed_origins = [o.strip() for o in allowed_origins_raw.split(",")] if allowed_origins_raw else []
+
     return ServerSettings(
         backend_root=BACKEND_ROOT,
         settings_file=settings_file,
@@ -113,6 +120,7 @@ def get_server_settings() -> ServerSettings:
         dynamic_currency_path=dynamic_currency_path,
         console_path=console_path,
         steamcmd_path=steamcmd_path,
+        allowed_origins=allowed_origins,
     )
 
 

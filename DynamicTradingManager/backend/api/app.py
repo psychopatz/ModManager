@@ -66,6 +66,7 @@ def create_app() -> FastAPI:
             "http://127.0.0.1:5173",
             "http://localhost:3000",
             "http://127.0.0.1:3000",
+            *settings.allowed_origins,
         ],
         allow_origin_regex=r"^(https?://(localhost|127\.0\.0\.1)(:\d+)?|vscode-webview://.*|https://.*\.puter\.com)$",
         allow_credentials=True,

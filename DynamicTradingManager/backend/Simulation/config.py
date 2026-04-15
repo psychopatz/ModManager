@@ -36,8 +36,9 @@ class BuildConfig:
 
 
 def default_paths() -> Paths:
-    project_root = SCRIPT_DIR
-    mod_common = project_root / "Contents/mods/DynamicTradingCommon/42.13/media/lua/shared/DT/Common"
+    from config.paths import get_mod_root, get_mod_common_path
+    project_root = get_mod_root("DynamicTradingCommon").parent.parent.parent
+    mod_common = get_mod_common_path("DynamicTradingCommon") / "media/lua/shared/DT/Common"
     output_root = project_root / "Scripts/SimulateGame/Output"
     output_web = output_root / "web"
     output_data = output_web / "assets/data"

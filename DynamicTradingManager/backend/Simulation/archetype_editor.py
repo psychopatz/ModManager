@@ -306,7 +306,8 @@ def _get_cached_portrait_catalog() -> dict[str, list[dict]]:
 
 
 def _get_portraits_root() -> Path:
-    return default_paths().root / "Contents/mods/DynamicTradingCommon/42.13/media/ui/Portraits"
+    from config.paths import get_portraits_root
+    return get_portraits_root()
 
 
 def _validate_archetype_block(

@@ -108,20 +108,19 @@ async def upload_manual_image(
     mod_root, colonies_root, currency_root = get_mod_roots()
 
     normalized_module = normalize_manual_module(module)
+    from config.paths import get_manual_assets_root
+    
     if normalized_module == "colony":
-        base_root = colonies_root
         base_url = "/static/manuals-colony"
-        mod_folder = "DynamicColonies"
+        mod_id = "DynamicColonies"
     elif normalized_module == "currency":
-        base_root = currency_root
         base_url = "/static/manuals-currency"
-        mod_folder = "CurrencyExpanded"
+        mod_id = "CurrencyExpanded"
     else:
-        base_root = mod_root
         base_url = "/static/manuals"
-        mod_folder = "DynamicTradingCommon"
+        mod_id = "DynamicTradingCommon"
 
-    assets_root = base_root / f"Contents/mods/{mod_folder}/42.13/media/ui/Manuals" / manual_id
+    assets_root = get_manual_assets_root(mod_id) / manual_id
     assets_root.mkdir(parents=True, exist_ok=True)
     filename = _build_unique_name(assets_root, file)
     file_path = assets_root / filename

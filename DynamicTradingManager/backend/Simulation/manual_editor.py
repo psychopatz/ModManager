@@ -5,7 +5,9 @@ import os
 import re
 from pathlib import Path
 
-from .config import default_paths
+from config.server_settings import get_server_settings
+from config.paths import get_manuals_root, get_manual_assets_root
+from .config import default_paths, Paths
 
 EDITOR_BEGIN = "-- DT_MANUAL_EDITOR_BEGIN"
 EDITOR_END = "-- DT_MANUAL_EDITOR_END"
@@ -104,7 +106,7 @@ def delete_manual_definition(manual_id: str, scope: str = DEFAULT_SCOPE, module:
 
 
 def _get_dynamic_trading_root() -> Path:
-    return default_paths().root / "Contents/mods/DynamicTradingCommon/42.13/media/lua/shared/DT/Common/Manuals"
+    return get_manuals_root("DynamicTradingCommon")
 
 
 def _get_dynamic_colonies_mod_root() -> Path:
@@ -113,7 +115,7 @@ def _get_dynamic_colonies_mod_root() -> Path:
 
 
 def _get_dynamic_colonies_root() -> Path:
-    return _get_dynamic_colonies_mod_root() / "Contents/mods/DynamicColonies/42.13/media/lua/shared/DC/Common/Manuals"
+    return get_manuals_root("DynamicColonies")
 
 
 def _get_currency_expanded_mod_root() -> Path:
@@ -122,7 +124,7 @@ def _get_currency_expanded_mod_root() -> Path:
 
 
 def _get_currency_expanded_root() -> Path:
-    return _get_currency_expanded_mod_root() / "Contents/mods/CurrencyExpanded/42.13/media/lua/shared/CE/Common/Manuals"
+    return get_manuals_root("CurrencyExpanded")
 
 
 def _get_manuals_roots(module: str = DEFAULT_MODULE) -> list[Path]:
@@ -138,10 +140,10 @@ def _get_manuals_roots(module: str = DEFAULT_MODULE) -> list[Path]:
 def _get_manual_assets_root(module: str = DEFAULT_MODULE) -> Path:
     normalized = _normalize_module(module)
     if normalized == "colony":
-        return _get_dynamic_colonies_mod_root() / "Contents/mods/DynamicColonies/42.13/media/ui/Manuals"
+        return get_manual_assets_root("DynamicColonies")
     if normalized == "currency":
-        return _get_currency_expanded_mod_root() / "Contents/mods/CurrencyExpanded/42.13/media/ui/Manuals"
-    return default_paths().root / "Contents/mods/DynamicTradingCommon/42.13/media/ui/Manuals"
+        return get_manual_assets_root("CurrencyExpanded")
+    return get_manual_assets_root("DynamicTradingCommon")
 
 
 def _get_manual_assets_root_url(module: str = DEFAULT_MODULE) -> str:
@@ -398,6 +400,26 @@ def _normalize_block(block: dict, page_id: str, position: int, used_section_ids:
             "text": str(block.get("text", "")).strip(),
         }
 
+    if block_type == "supporter_carousel":
+        supporters = []
+        for s in (block.get("supporters") or []):
+            supporters.append({
+                "id": str(s.get("id", "")).strip(),
+                "name": str(s.get("name", "")).strip(),
+                "total_donation": float(s.get("total_donation", s.get("totalDonation", 0))),
+                "image_path": str(s.get("image_path", s.get("imagePath", ""))).strip(),
+                "support_message": str(s.get("support_message", s.get("supportMessage", ""))).strip(),
+                "active": _normalize_bool(s.get("active", True)),
+            })
+        return {
+            "type": "supporter_carousel",
+            "title": str(block.get("title", "")).strip(),
+            "autoplay_ms": int(block.get("autoplay_ms", block.get("autoplayMs", 4000))),
+            "currency_symbol": str(block.get("currency_symbol", block.get("currencySymbol", "$"))).strip(),
+            "thank_you_text": str(block.get("thank_you_text", block.get("thankYouText", ""))).strip(),
+            "supporters": supporters,
+        }
+
     raise ValueError(f'Unsupported block type "{block_type}" on page "{page_id}".')
 
 
@@ -493,10 +515,29 @@ def _render_block(block: dict) -> str:
             f'{{ type = "image", path = "{_escape(block["path"])}", caption = "{_escape(block["caption"])}", '
             f'width = {int(block["width"])}, height = {int(block["height"])} }}'
         )
-    return (
-        f'{{ type = "callout", tone = "{_escape(block["tone"])}", title = "{_escape(block["title"])}", '
-        f'text = "{_escape(block["text"])}" }}'
-    )
+    if block["type"] == "callout":
+        return (
+            f'{{ type = "callout", tone = "{_escape(block["tone"])}", title = "{_escape(block["title"])}", '
+            f'text = "{_escape(block["text"])}" }}'
+        )
+
+    if block["type"] == "supporter_carousel":
+        supporters = []
+        for s in block["supporters"]:
+            s_lua = (
+                f'{{ id = "{_escape(s["id"])}", name = "{_escape(s["name"])}", '
+                f'totalDonation = {s["total_donation"]}, imagePath = "{_escape(s["image_path"])}", '
+                f'supportMessage = "{_escape(s["support_message"])}", active = {"true" if s["active"] else "false"} }}'
+            )
+            supporters.append(s_lua)
+        supporters_joined = ", ".join(supporters)
+        return (
+            f'{{ type = "supporter_carousel", title = "{_escape(block["title"])}", '
+            f'autoplayMs = {block["autoplay_ms"]}, currencySymbol = "{_escape(block["currency_symbol"])}", '
+            f'thankYouText = "{_escape(block["thank_you_text"])}", supporters = {{ {supporters_joined} }} }}'
+        )
+
+    return ""
 
 
 def _escape(value: str) -> str:

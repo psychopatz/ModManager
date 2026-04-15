@@ -17,16 +17,18 @@ from .normalize import (
 from .parser import _read_editor_payload
 
 
+from config.paths import get_manuals_root, get_manual_assets_root
+
 def _get_dynamic_trading_root() -> Path:
-    return default_paths().root / "Contents/mods/DynamicTradingCommon/42.13/media/lua/shared/DT/Common/Manuals"
+    return get_manuals_root("DynamicTradingCommon")
 
 
 def _get_dynamic_trading_v1_root() -> Path:
-    return default_paths().root / "Contents/mods/DynamicTradingV1/42.13/media/lua/shared/DT/V1/Manuals"
+    return get_manuals_root("DynamicTradingV1")
 
 
 def _get_dynamic_trading_v2_root() -> Path:
-    return default_paths().root / "Contents/mods/DynamicTradingV2/42.13/media/lua/shared/DT/V2/Manuals"
+    return get_manuals_root("DynamicTradingV2")
 
 
 def _get_dynamic_colonies_mod_root() -> Path:
@@ -34,7 +36,7 @@ def _get_dynamic_colonies_mod_root() -> Path:
 
 
 def _get_dynamic_colonies_root() -> Path:
-    return _get_dynamic_colonies_mod_root() / "Contents/mods/DynamicColonies/42.13/media/lua/shared/DC/Common/Manuals"
+    return get_manuals_root("DynamicColonies")
 
 
 def _get_currency_expanded_mod_root() -> Path:
@@ -42,7 +44,7 @@ def _get_currency_expanded_mod_root() -> Path:
 
 
 def _get_currency_expanded_root() -> Path:
-    return _get_currency_expanded_mod_root() / "Contents/mods/CurrencyExpanded/42.13/media/lua/shared/CE/Common/Manuals"
+    return get_manuals_root("CurrencyExpanded")
 
 
 def _get_manuals_roots(module: str = DEFAULT_MODULE) -> list[Path]:
@@ -61,10 +63,10 @@ def _get_manuals_roots(module: str = DEFAULT_MODULE) -> list[Path]:
 def _get_manual_assets_root(module: str = DEFAULT_MODULE) -> Path:
     normalized = _normalize_module(module)
     if normalized == "colony":
-        return _get_dynamic_colonies_mod_root() / "Contents/mods/DynamicColonies/42.13/media/ui/Manuals"
+        return get_manual_assets_root("DynamicColonies")
     if normalized == "currency":
-        return _get_currency_expanded_mod_root() / "Contents/mods/CurrencyExpanded/42.13/media/ui/Manuals"
-    return default_paths().root / "Contents/mods/DynamicTradingCommon/42.13/media/ui/Manuals"
+        return get_manual_assets_root("CurrencyExpanded")
+    return get_manual_assets_root("DynamicTradingCommon")
 
 
 def _get_manual_assets_root_url(module: str = DEFAULT_MODULE) -> str:

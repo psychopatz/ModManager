@@ -201,7 +201,11 @@ def _read_mod_info_fields(mod_info_path: Path) -> dict:
 
 
 def list_mod_versions(mod_root: Path) -> list[dict]:
-    mod_info_files = sorted((mod_root / "Contents/mods").glob("*/42.13/mod.info"))
+    # Look for mod.info in any version folder (e.g., 42.13, 42.16, common)
+    mod_info_files = sorted((mod_root / "Contents/mods").glob("*/[4-9]*[0-9]*/mod.info"))
+    # Also include 'common' if it has a mod.info (unlikely but possible)
+    mod_info_files.extend(sorted((mod_root / "Contents/mods").glob("*/common/mod.info")))
+    
     versions: list[dict] = []
 
     for mod_info_path in mod_info_files:

@@ -27,7 +27,9 @@ def create_app() -> FastAPI:
 
     app = FastAPI(title="Dynamic Trading Manager API")
 
-    portraits_root = settings.dynamic_trading_path / "Contents/mods/DynamicTradingCommon/42.13/media/ui/Portraits"
+    from config.paths import get_portraits_root, get_manual_assets_root
+    
+    portraits_root = get_portraits_root()
     if portraits_root.exists():
         app.mount("/static/portraits", StaticFiles(directory=str(portraits_root)), name="dt-portraits")
 
@@ -37,12 +39,12 @@ def create_app() -> FastAPI:
 
     if mod_root.exists():
         app.mount("/static/workshop", StaticFiles(directory=str(mod_root)), name="workshop-static")
-        manuals_static_root = mod_root / "Contents/mods/DynamicTradingCommon/42.13/media/ui/Manuals"
+        manuals_static_root = get_manual_assets_root("DynamicTradingCommon")
         manuals_static_root.mkdir(parents=True, exist_ok=True)
         app.mount("/static/manuals", StaticFiles(directory=str(manuals_static_root)), name="manuals-static")
 
     if colonies_root.exists():
-        manuals_colony_static_root = colonies_root / "Contents/mods/DynamicColonies/42.13/media/ui/Manuals"
+        manuals_colony_static_root = get_manual_assets_root("DynamicColonies")
         manuals_colony_static_root.mkdir(parents=True, exist_ok=True)
         app.mount(
             "/static/manuals-colony",
@@ -51,7 +53,7 @@ def create_app() -> FastAPI:
         )
 
     if currency_root.exists():
-        manuals_currency_static_root = currency_root / "Contents/mods/CurrencyExpanded/42.13/media/ui/Manuals"
+        manuals_currency_static_root = get_manual_assets_root("CurrencyExpanded")
         manuals_currency_static_root.mkdir(parents=True, exist_ok=True)
         app.mount(
             "/static/manuals-currency",

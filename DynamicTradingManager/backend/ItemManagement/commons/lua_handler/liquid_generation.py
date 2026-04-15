@@ -19,11 +19,10 @@ from .parsing import find_register_batch_bounds, extract_item_records, build_gro
 from .records import create_item_record, tags_list_to_dict
 
 
+from config.paths import get_fluids_lua_path
+
 LIQUID_REGISTRY_RELATIVE_PATH = Path("Container/DT_Liquid.lua")
-FLUID_REGISTRY_PATH = (
-    Path(SCRIPT_DIR)
-    / "Contents/mods/DynamicTradingCommon/42.13/media/lua/shared/DT/Common/Items/DT_Fluids.lua"
-)
+FLUID_REGISTRY_PATH = get_fluids_lua_path()
 
 
 def _estimate_container_only_price(item_id, props):

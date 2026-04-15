@@ -32,7 +32,8 @@ VANILLA_SCRIPTS_DIR = os.path.join(VANILLA_DIR, "generated/items/")
 _DISTRIB_BASE = VANILLA_DIR.replace("/scripts/", "/lua/server/")
 DISTRIBUTIONS_DIR = os.path.join(_DISTRIB_BASE, "Items/")
 
-MOD_ITEMS_DIR = str(SCRIPT_DIR / "Contents/mods/DynamicTradingCommon/42.13/media/lua/shared/DT/Common/Items")
+from config.paths import get_items_root
+MOD_ITEMS_DIR = str(get_items_root())
 OUTPUT_DIR = str(SCRIPT_DIR / "Scripts/Output")
 
 # Exclusion patterns for item registration

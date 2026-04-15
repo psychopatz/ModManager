@@ -420,44 +420,65 @@ def run_full_workshop_push(
     Unified task to prepare files, generate VDF, and upload to Steam.
     Provides full visibility in the TaskConsole.
     """
-    print("=== STARTING WORKSHOP PUSH WORKFLOW ===")
-    workshop_id = request_data.get("workshop_id") or resolve_workshop_id(mod_root)
-    if not workshop_id:
-        print("[ERROR] No workshop ID was found for this project.")
-        return False
-    
-    # 1. Prepare Staging
-    if request_data.get("update_files"):
-        print("\n[STEP 1/3] Preparing staging directory...")
-        if not prepare_staging(mod_root, staging_dir):
-            print("[ERROR] Staging preparation failed.")
+    try:
+        print("=== STARTING WORKSHOP PUSH WORKFLOW ===")
+        workshop_id = request_data.get("workshop_id") or resolve_workshop_id(mod_root)
+        if not workshop_id:
+            print("[ERROR] No workshop ID was found for this project.")
             return False
-    else:
-        print("\n[STEP 1/3] Skipping file update as requested.")
+        
+        # 1. Prepare Staging
+        if request_data.get("update_files"):
+            print("\n[STEP 1/3] Preparing staging directory...")
+            if not prepare_staging(mod_root, staging_dir):
+                print("[ERROR] Staging preparation failed.")
+                return False
+        else:
+            print("\n[STEP 1/3] Skipping file update as requested.")
 
-    # 2. Generate VDF
-    print("\n[STEP 2/3] Generating VDF script...")
-    success = generate_vdf(
-        staging_dir=staging_dir, 
-        vdf_path=vdf_path, 
-        workshop_id=workshop_id,
-        changenote=request_data.get("changenote", ""),
-        title=request_data.get("title") if request_data.get("update_metadata") else None,
-        description=request_data.get("description") if request_data.get("update_metadata") else None,
-        previewfile=str((mod_root / "preview.png").absolute()) if request_data.get("update_preview") else None,
-        visibility=request_data.get("visibility") if request_data.get("update_metadata") else None,
-        tags=request_data.get("tags") if request_data.get("update_metadata") else None
-    )
-    if not success:
-        print("[ERROR] VDF generation failed.")
-        return False
+        # 2. Generate VDF
+        print("\n[STEP 2/3] Generating VDF script...")
+        success = generate_vdf(
+            staging_dir=staging_dir, 
+            vdf_path=vdf_path, 
+            workshop_id=workshop_id,
+            changenote=request_data.get("changenote", ""),
+            title=request_data.get("title") if request_data.get("update_metadata") else None,
+            description=request_data.get("description") if request_data.get("update_metadata") else None,
+            previewfile=str((mod_root / "preview.png").absolute()) if request_data.get("update_preview") else None,
+            visibility=request_data.get("visibility") if request_data.get("update_metadata") else None,
+            tags=request_data.get("tags") if request_data.get("update_metadata") else None
+        )
+        if not success:
+            print("[ERROR] VDF generation failed.")
+            return False
 
-    # 3. Upload
-    print("\n[STEP 3/3] Running SteamCMD upload...")
-    return run_steamcmd_upload(
-        steamcmd_path,
-        vdf_path,
-        username,
-        password,
-        request_data.get("steam_guard_code"),
-    )
+        # 3. Upload
+        print("\n[STEP 3/3] Running SteamCMD upload...")
+        return run_steamcmd_upload(
+            steamcmd_path,
+            vdf_path,
+            username,
+            password,
+            request_data.get("steam_guard_code"),
+        )
+    finally:
+        # Clean up staging artifacts automatically after upload
+        print("\n[CLEANUP] Cleaning up staging artifacts...")
+        if staging_dir.exists():
+            try:
+                shutil.rmtree(staging_dir)
+                print(f"  [DELETED] {staging_dir.name}/")
+                logger.info(f"Cleaned up staging directory: {staging_dir}")
+            except Exception as e:
+                print(f"  [ERROR] Failed to delete staging_dir: {e}")
+                logger.error(f"Failed to delete staging_dir {staging_dir}: {e}")
+        
+        if vdf_path.exists():
+            try:
+                vdf_path.unlink()
+                print(f"  [DELETED] {vdf_path.name}")
+                logger.info(f"Cleaned up VDF file: {vdf_path}")
+            except Exception as e:
+                print(f"  [ERROR] Failed to delete vdf_path: {e}")
+                logger.error(f"Failed to delete vdf_path {vdf_path}: {e}")

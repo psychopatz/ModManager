@@ -71,6 +71,7 @@ export const deleteManualDefinition = (manualId, scope = 'manuals', module = 'co
 export const uploadManualImage = (formData) => api.post('/manuals/images', formData, {
   headers: { 'Content-Type': 'multipart/form-data' }
 });
+export const getBatchedGitHistory = (since, branch = 'develop') => api.get('/manuals/batch/git-history', { params: { since, branch } });
 
 // Workshop
 export const triggerWorkshopPrepare = (target) => api.post('/workshop/prepare', null, { params: { target } });

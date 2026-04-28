@@ -14,6 +14,7 @@ from ManualManagement import (
     load_manual_editor_data,
     save_manual_definition,
 )
+from GitManagement.diff_handler import get_batched_git_log
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["manuals"])
@@ -135,4 +136,17 @@ async def upload_manual_image(
         }
     except Exception as exc:
         logger.error("Error uploading manual image for %s: %s", manual_id, exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.get("/api/manuals/batch/git-history")
+async def get_batch_git_history(since: str = "2026-03-27", branch: str = "develop"):
+    try:
+        data = get_batched_git_log(since, branch)
+        return {
+            "success": True,
+            "history": data
+        }
+    except Exception as exc:
+        logger.error("Error fetching batched git history: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))

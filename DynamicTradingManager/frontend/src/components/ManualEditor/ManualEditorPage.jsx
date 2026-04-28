@@ -21,12 +21,13 @@ import DeleteOutlineIconMUI from '@mui/icons-material/DeleteOutline';
 import AddCircleOutlineIconMUI from '@mui/icons-material/AddCircleOutline';
 import SaveOutlinedIconMUI from '@mui/icons-material/SaveOutlined';
 
-import { createManualDefinition, deleteManualDefinition, getManualEditorData, saveManualDefinition, uploadManualImage } from '../../services/api';
+import { createManualDefinition, deleteManualDefinition, getManualEditorData, saveManualDefinition, uploadManualImage, getGitBranches } from '../../services/api';
 import { useDraftManagement } from '../../hooks/useDraftManagement';
 import { ManualPreview } from './ManualPreview';
 import { ManualDetailsForm } from './ManualDetailsForm';
 import { ChaptersEditor } from './ChaptersEditor';
 import { PagesEditor } from './PagesEditor';
+import BatchUpdateGenerator from './BatchUpdateGenerator';
 
 const NEW_MANUAL_KEY = '__new_manual__';
 const moduleOptions = [
@@ -160,8 +161,11 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState({ type: '', message: '' });
+  const [branches, setBranches] = useState(['develop', 'main']);
   const fileInputRef = useRef(null);
   const uploadTargetRef = useRef(null);
+  const [batchGeneratorOpen, setBatchGeneratorOpen] = useState(false);
+  const [selectedBranch, setSelectedBranch] = useState('develop');
 
   // Initialize with empty manual
   const [baseManual, setBaseManual] = useState(createEmptyManual(editorScope, undefined, 'common'));
@@ -234,6 +238,9 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
 
   useEffect(() => {
     loadEditor('', selectedModule);
+    if (isUpdateEditor) {
+        getGitBranches('common').then(res => setBranches(res.data)).catch(() => {});
+    }
   }, [editorScope, selectedModule]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ========== Manual Management Actions ==========
@@ -559,6 +566,24 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
             </Select>
           </FormControl>
 
+          {isUpdateEditor && (
+            <FormControl size="small" sx={{ minWidth: 140 }}>
+              <InputLabel id="manual-branch-label">Branch</InputLabel>
+              <Select
+                labelId="manual-branch-label"
+                label="Branch"
+                value={selectedBranch}
+                onChange={(e) => setSelectedBranch(e.target.value)}
+              >
+                {branches.map((b) => (
+                  <MenuItem key={b} value={b}>
+                    {b}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
+
           <Button
             startIcon={<RefreshIconMUI />}
             variant="outlined"
@@ -586,6 +611,17 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
           >
             {isNewManual ? 'Discard Draft' : isUpdateEditor ? 'Delete Update' : 'Delete Manual'}
           </Button>
+
+          {isUpdateEditor && (
+            <Button
+              variant="contained"
+              color="secondary"
+              onClick={() => setBatchGeneratorOpen(true)}
+              disabled={loading || saving}
+            >
+              Batch Generate Updates
+            </Button>
+          )}
 
         </Stack>
       </Stack>
@@ -690,6 +726,15 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
         {/* Preview */}
         <ManualPreview manual={draft} selectedPage={selectedPage} backendOrigin={backendOrigin} />
       </Box>
+
+      {isUpdateEditor && (
+        <BatchUpdateGenerator
+          open={batchGeneratorOpen}
+          onClose={() => setBatchGeneratorOpen(false)}
+          branch={selectedBranch}
+          onComplete={() => loadEditor(selectedManualKey)}
+        />
+      )}
 
       <Fab
         color={isDrafty ? 'warning' : 'primary'}

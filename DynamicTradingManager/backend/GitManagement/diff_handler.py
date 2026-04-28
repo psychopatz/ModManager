@@ -113,3 +113,66 @@ def format_for_ai(changes: dict):
     prompt += "Change Stats:\n" + changes["summary"] + "\n"
     prompt += "Code Diffs (Partial):\n" + changes["detail"]
     return prompt
+
+def get_batched_git_log(since_date: str, branch: str = "develop"):
+    """
+    Fetches and groups commits by date across all mod repositories.
+    """
+    from config.server_settings import get_server_settings
+    settings = get_server_settings()
+    
+    # We should detect all repos, but for now we follow the confirmed list
+    repos = {
+        "DynamicTrading": settings.dynamic_trading_path,
+        "DynamicColonies": settings.dynamic_colonies_path,
+        "CurrencyExpanded": settings.dynamic_currency_path,
+        "DynamicObjectives": settings.dynamic_trading_path.parent / "DynamicObjectives" 
+    }
+    
+    batched = {} # date -> repo -> [commits]
+    
+    for repo_name, path in repos.items():
+        if not path or not Path(path).exists():
+            continue
+            
+        try:
+            # Format: DATE|SUBJECT|BODY (with markers to avoid parsing issues)
+            # We use %as for author date (YYYY-MM-DD), %s subject, %b body
+            log_cmd = [
+                "git", "log", branch, 
+                f"--since={since_date} 00:00:00", 
+                "--format=COMMIT_START%as|%s|%b|COMMIT_END"
+            ]
+            
+            output = subprocess.check_output(log_cmd, cwd=path, encoding="utf-8")
+            parts = output.split("COMMIT_START")
+            
+            for part in parts:
+                if "COMMIT_END" not in part:
+                    continue
+                content = part.split("COMMIT_END")[0].strip()
+                if not content:
+                    continue
+                
+                fields = content.split("|", 2)
+                if len(fields) < 2:
+                    continue
+                    
+                date = fields[0]
+                subject = fields[1]
+                body = fields[2] if len(fields) > 2 else ""
+                
+                if date not in batched:
+                    batched[date] = {}
+                if repo_name not in batched[date]:
+                    batched[date][repo_name] = []
+                    
+                batched[date][repo_name].append({
+                    "subject": subject,
+                    "body": body.strip()
+                })
+        except Exception as e:
+            logger.warning(f"Error reading git log for {repo_name} on {branch}: {e}")
+            continue
+            
+    return batched

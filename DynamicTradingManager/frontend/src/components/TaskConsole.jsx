@@ -3,7 +3,7 @@ import { Box, Paper, Typography, IconButton, LinearProgress, Fade } from '@mui/m
 import { Close as CloseIcon, Terminal as TerminalIcon } from '@mui/icons-material';
 import { getTaskLogs, getTaskStatus } from '../services/api';
 
-const TaskConsole = ({ taskId, onClose }) => {
+const TaskConsole = ({ taskId, onClose, onSuccess }) => {
   const [logs, setLogs] = useState([]);
   const [status, setStatus] = useState('running');
   const [lastIndex, setLastIndex] = useState(0);
@@ -29,6 +29,9 @@ const TaskConsole = ({ taskId, onClose }) => {
 
         if (statusRes.data.status === 'completed' || statusRes.data.status === 'failed') {
           clearInterval(pollingRef.current);
+          if (statusRes.data.status === 'completed' && onSuccess) {
+            onSuccess();
+          }
         }
       } catch (err) {
         console.error('Polling error:', err);

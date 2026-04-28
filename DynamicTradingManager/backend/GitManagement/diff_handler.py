@@ -6,75 +6,75 @@ from config.server_settings import get_server_settings
 
 logger = logging.getLogger(__name__)
 
-def get_git_changes(branch: str = None, repo_path: Path = None):
+def get_git_changes(branch: str = "develop", repo_path: Path = None, limit: int = 150, since: str = None):
     """
-    Returns a summary of uncommitted changes (git status and short diff) 
-    and recent feature history from the specified branch.
+    Returns a summary of uncommitted changes and detailed recent history.
     """
     repo_path = repo_path or get_server_settings().dynamic_trading_path
     try:
         # Get status
-        status = subprocess.check_output(["git", "status", "--short"], cwd=repo_path).decode("utf-8")
+        status = subprocess.check_output(["git", "status", "--short"], cwd=repo_path, encoding="utf-8")
         
-        # Get diff summary (stat)
-        diff_stat = subprocess.check_output(["git", "diff", "--stat"], cwd=repo_path).decode("utf-8")
+        # Get diff summary
+        diff_stat = subprocess.check_output(["git", "diff", "--stat"], cwd=repo_path, encoding="utf-8")
         
-        # Get actual diff of recently modified files (last 5)
-        # We limit this to avoid hitting token limits later
         try:
-            diff_detail = subprocess.check_output(["git", "diff", "HEAD", "--", ":!DynamicTradingManager"], cwd=repo_path).decode("utf-8")
+            diff_detail = subprocess.check_output(["git", "diff", "HEAD", "--", ":!DynamicTradingManager"], cwd=repo_path, encoding="utf-8")
         except:
             diff_detail = ""
 
-        # Get recent commit history (last 150)
+        # Get detailed commit history (with bodies)
+        # Format: HASH|DATE|SUBJECT|BODY (with markers)
         target = branch if branch else "HEAD"
         commit_list = []
-        log_output = ""
         try:
-            # First try the target, if it fails, fallback to HEAD
-            try:
-                log_output = subprocess.check_output(["git", "log", target, "-n", "150", "--oneline"], cwd=repo_path).decode("utf-8")
-            except:
-                log_output = subprocess.check_output(["git", "log", "HEAD", "-n", "150", "--oneline"], cwd=repo_path).decode("utf-8")
+            log_cmd = [
+                "git", "log", target, "-n", str(limit),
+                "--format=COMMIT_START%h|%as|%s|%b|COMMIT_END"
+            ]
+            if since:
+                log_cmd.insert(2, f"--since={since}")
             
-            for line in log_output.split("\n"):
-                if not line.strip(): continue
-                parts = line.split(" ", 1)
-                h = parts[0]
-                msg = parts[1] if len(parts) > 1 else ""
+            log_output = subprocess.check_output(log_cmd, cwd=repo_path, encoding="utf-8")
+            
+            parts = log_output.split("COMMIT_START")
+            for part in parts:
+                if "COMMIT_END" not in part: continue
+                content = part.split("COMMIT_END")[0].strip()
+                if not content: continue
                 
-                # Robust type parsing (feat, fix, refactor, etc.)
+                fields = content.split("|", 3)
+                if len(fields) < 3: continue
+                
+                h = fields[0]
+                date = fields[1]
+                msg = fields[2]
+                body = fields[3].strip() if len(fields) > 3 else ""
+                
+                # Robust type parsing
                 msg_lower = msg.lower()
                 ctype = "other"
-                
                 if msg_lower.startswith("feat"): ctype = "feat"
                 elif msg_lower.startswith("fix"): ctype = "fix"
                 elif msg_lower.startswith("refactor"): ctype = "refactor"
                 elif msg_lower.startswith("chore"): ctype = "chore"
                 elif msg_lower.startswith("docs"): ctype = "docs"
-                # Check for bracket styles like [feat]
-                elif "[" in msg_lower and "]" in msg_lower:
-                    if "feat" in msg_lower.split("]")[0]: ctype = "feat"
-                    elif "fix" in msg_lower.split("]")[0]: ctype = "fix"
                 
                 commit_list.append({
                     "hash": h,
+                    "date": date,
                     "message": msg,
+                    "body": body,
                     "type": ctype,
-                    "raw": line
+                    "raw": f"{h} {msg}"
                 })
         except Exception as e:
-            logger.error(f"Error fetching log: {e}")
-            commit_list = []
-        except Exception as e:
-            logger.error(f"Error fetching log: {e}")
-            commit_list = []
+            logger.error(f"Error fetching detailed log: {e}")
         
         return {
             "status": status,
             "summary": diff_stat,
-            "detail": diff_detail[:5000], # Limit size
-            "history": log_output, # Keep raw for compatibility
+            "detail": diff_detail[:5000],
             "commits": commit_list
         }
     except Exception as e:

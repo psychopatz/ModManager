@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Alert, Box, Button, Paper, Stack, Typography } from '@mui/material';
 import ManualEditorPage from './ManualEditorPage';
-import GitReleaseAssistant from './GitReleaseAssistant';
-import { createManualDefinition, getManualEditorData, saveManualDefinition } from '../services/api';
+import GitAiAssistant from './Common/GitAiAssistant';
+import { createManualDefinition, getManualEditorData, saveManualDefinition, getWorkshopTargets } from '../services/api';
 
 const getTodayDateString = () => {
 	return new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
@@ -182,6 +182,17 @@ const UpdateVersionEditorPage = () => {
 	const [generatedText, setGeneratedText] = useState('');
 	const [status, setStatus] = useState({ type: '', message: '' });
 	const [editorReloadToken, setEditorReloadToken] = useState(0);
+	const [latestCommitHash, setLatestCommitHash] = useState('');
+	const [targets, setTargets] = useState([]);
+	const [selectedTarget, setSelectedTarget] = useState('dynamictrading');
+
+	useEffect(() => {
+		getWorkshopTargets().then(res => {
+			setTargets(res.data?.targets || []);
+			if (res.data?.default_target) setSelectedTarget(res.data.default_target);
+			else if (res.data?.targets?.length > 0) setSelectedTarget(res.data.targets[0].key);
+		}).catch(() => {});
+	}, []);
 
 	const applyJsonAsUpdatePage = async () => {
 		try {
@@ -199,6 +210,11 @@ const UpdateVersionEditorPage = () => {
 				await createManualDefinition(manual, 'updates', module);
 				setStatus({ type: 'success', message: `Created What's New page ${manual.manual_id} (${module}).` });
 			}
+			
+			if (latestCommitHash) {
+				localStorage.setItem('dt_update_system_prompt_last_hash', latestCommitHash);
+			}
+			
 			setEditorReloadToken((current) => current + 1);
 		} catch (error) {
 			setStatus({
@@ -210,14 +226,18 @@ const UpdateVersionEditorPage = () => {
 
 	return (
 		<Stack spacing={2}>
-			<GitReleaseAssistant
+			<GitAiAssistant
 				title="Update Helper (Git + Puter)"
 				helperText="Generate strict JSON and auto-build a What's New page from the output."
-				outputLabel="Generated What's New"
 				outputValue={generatedText}
 				onOutputChange={setGeneratedText}
-				promptStorageKey="dt_update_system_prompt"
+				storageKey="dt_update_system_prompt"
 				defaultPrompt={defaultPrompt}
+				onLatestHash={setLatestCommitHash}
+				availableTargets={targets}
+				selectedTarget={selectedTarget}
+				onTargetChange={setSelectedTarget}
+				showSuiteToggle={true}
 			/>
 
 			<Paper sx={{ p: 2 }}>

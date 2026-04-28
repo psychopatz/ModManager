@@ -15,6 +15,9 @@ import {
   Typography,
 } from '@mui/material';
 import { getBatchedGitHistory, createManualDefinition } from '../../services/api';
+import { useGitAi } from '../../hooks/useGitAi';
+import { ExpandMore as ExpandMoreIcon, ExpandLess as ExpandLessIcon, RestartAlt as ResetIcon } from '@mui/icons-material';
+import { Collapse, IconButton } from '@mui/material';
 
 const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop' }) => {
   const [since, setSince] = useState('2026-03-27');
@@ -25,6 +28,12 @@ const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop' })
   const [currentStep, setCurrentStep] = useState('');
   const [status, setStatus] = useState({ type: '', message: '' });
   const [improveWithAI, setImproveWithAI] = useState(true);
+  const [showPrompt, setShowPrompt] = useState(false);
+
+  const { systemPrompt, setSystemPrompt, resetPrompt, generateContent } = useGitAi({
+    storageKey: 'batch_update_system_prompt',
+    defaultPrompt: 'Refine the following git commits into a clean, professional "What\'s New" bullet list for a Project Zomboid mod update. Group by module if appropriate.\n\nReturn ONLY the bullet points.',
+  });
 
   const fetchHistory = async () => {
     setLoading(true);
@@ -83,13 +92,13 @@ const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop' })
             // Improvement with AI if checked
             if (improveWithAI && window.puter) {
                 setCurrentStep(`Refining ${date} with AI...`);
-                const rawCommits = Object.entries(dayData).map(([repo, commits]) => {
-                    return `${repo}:\n${commits.map(c => `- ${c.subject}${c.body ? `\n  ${c.body.split('\n')[0]}` : ''}`).join('\n')}`;
-                }).join('\n\n');
                 
-                const prompt = `Refine the following git commits into a clean, professional "What's New" bullet list for a Project Zomboid mod update. Group by module if appropriate.\n\nCommits for ${date}:\n${rawCommits}\n\nReturn ONLY the bullet points.`;
-                const aiResponse = await window.puter.ai.chat(prompt);
-                const refinedText = aiResponse?.message?.content?.trim() || '';
+                const refinedText = await generateContent({
+                    targetName: `Update ${date}`,
+                    branch,
+                    commits: dayData,
+                    customInstructions: `Commits for ${date}:`
+                });
                 
                 pages[0].blocks.push({
                     type: "bullet_list",
@@ -170,10 +179,41 @@ const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop' })
             </Button>
           </Stack>
 
-          <FormControlLabel
-            control={<Checkbox checked={improveWithAI} onChange={(e) => setImproveWithAI(e.target.checked)} disabled={processing} />}
-            label="Batch improve commits using AI (Puter AI)"
-          />
+          <Stack spacing={1}>
+            <FormControlLabel
+              control={<Checkbox checked={improveWithAI} onChange={(e) => setImproveWithAI(e.target.checked)} disabled={processing} />}
+              label="Batch improve commits using AI (Puter AI)"
+            />
+            
+            {improveWithAI && (
+              <Box>
+                <Button 
+                   size="small" 
+                   onClick={() => setShowPrompt(!showPrompt)}
+                   startIcon={showPrompt ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                >
+                  Edit Batch System Prompt
+                </Button>
+                <Collapse in={showPrompt}>
+                  <Stack spacing={1} sx={{ mt: 1, p: 2, bgcolor: 'rgba(0,0,0,0.03)', borderRadius: 2 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Typography variant="caption" fontWeight={800}>SYSTEM PROMPT</Typography>
+                      <Button size="small" startIcon={<ResetIcon />} onClick={resetPrompt} sx={{ fontSize: '0.65rem' }}>Reset</Button>
+                    </Box>
+                    <TextField
+                      fullWidth
+                      multiline
+                      rows={4}
+                      variant="filled"
+                      value={systemPrompt}
+                      onChange={(e) => setSystemPrompt(e.target.value)}
+                      sx={{ '& .MuiInputBase-input': { fontSize: '0.8rem' } }}
+                    />
+                  </Stack>
+                </Collapse>
+              </Box>
+            )}
+          </Stack>
 
           {processing && (
             <Box>

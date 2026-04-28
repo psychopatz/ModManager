@@ -36,6 +36,39 @@ def _parse_workshop_title(repo_path: Path) -> str:
     return repo_path.name
 
 
+def _discover_sub_mods(repo_path: Path) -> list[dict]:
+    """
+    Returns a list of sub-mods found in the repo by scanning for mod.info files.
+    """
+    mods_dir = repo_path / "Contents" / "mods"
+    if not mods_dir.exists():
+        return []
+
+    sub_mods = []
+    # Find all mod.info files under Contents/mods
+    for mod_info_path in mods_dir.glob("**/mod.info"):
+        try:
+            mod_data = {}
+            with open(mod_info_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    if "=" in line:
+                        k, v = line.split("=", 1)
+                        mod_data[k.strip()] = v.strip()
+            
+            if "name" in mod_data:
+                sub_mods.append({
+                    "id": mod_data.get("id", mod_info_path.parent.name),
+                    "name": mod_data["name"],
+                    "description": mod_data.get("description", "")
+                })
+        except Exception as e:
+            logger.debug(f"Error parsing mod.info at {mod_info_path}: {e}")
+            
+    # Sort for consistency
+    sub_mods.sort(key=lambda m: m["name"].lower())
+    return sub_mods
+
+
 def _iter_workspace_paths(default_root: Path):
     workspace_file = Path(os.getenv("MOD_WORKSPACE_FILE", str(default_root / "DynamicTrading.code-workspace")))
     if not workspace_file.exists():
@@ -104,6 +137,8 @@ def list_workshop_projects():
                 "workshop_id": workshop_id,
                 "has_workshop_id": bool(workshop_id),
                 "is_default": repo_path == default_root,
+                "has_git": (repo_path / ".git").exists(),
+                "sub_mods": _discover_sub_mods(repo_path),
             }
         )
 
@@ -145,6 +180,8 @@ def resolve_project_target(target: str | None = None):
             "workshop_id": resolve_workshop_id(target_path),
             "has_workshop_id": bool(resolve_workshop_id(target_path)),
             "is_default": target_path == _default_mod_root(),
+            "has_git": (target_path / ".git").exists(),
+            "sub_mods": _discover_sub_mods(target_path),
         }
 
     raise FileNotFoundError(f'Unable to resolve workshop project "{target}".')

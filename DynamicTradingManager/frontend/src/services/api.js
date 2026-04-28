@@ -87,7 +87,9 @@ export const uploadWorkshopImage = (formData, target) => api.post('/workshop/ima
 });
 
 // Git
-export const getGitChanges = (branch, target) => api.get('/git/changes', { params: { branch, target } });
+export const getGitChanges = (branch, target, since = '') => api.get('/git/changes', { params: { branch, target, since } });
 export const getGitBranches = (target) => api.get('/git/branches', { params: { target } });
+export const getSuiteGitLog = (branch, limit = 100) => api.get('/git/suite/log', { params: { branch, limit } });
+export const getSuiteBranches = () => api.get('/git/suite/branches');
 
 export default api;

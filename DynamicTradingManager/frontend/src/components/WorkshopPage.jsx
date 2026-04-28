@@ -47,7 +47,7 @@ import {
 } from '@mui/icons-material';
 import * as api from '../services/api';
 import TaskConsole from './TaskConsole';
-import GitReleaseAssistant from './GitReleaseAssistant';
+import GitAiAssistant from './Common/GitAiAssistant';
 
 const workshopDefaultPrompt = `Task:
 1. Produce a PROFESSIONAL Steam Workshop change note.
@@ -102,6 +102,7 @@ const WorkshopPage = () => {
   const [loading, setLoading] = useState(true);
   const [activeTaskId, setActiveTaskId] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
+  const [latestCommitHash, setLatestCommitHash] = useState('');
 
   // Base API URL detection (assumes backend is on port 8000)
   const apiBaseUrl = window.location.origin.replace(':5173', ':8000');
@@ -300,17 +301,18 @@ const WorkshopPage = () => {
       </Box>
 
       <Stack spacing={4}>
-        <GitReleaseAssistant
+        <GitAiAssistant
           title="Workshop Git + AI Assistant"
-          helperText="Select project, branch, and commit set to generate a workshop changelog with full parity to the update helper."
-          outputLabel="Generated Change Note"
+          helperText="Select project, branch, and commit set to generate a workshop changelog."
           outputValue={changenote}
           onOutputChange={setChangenote}
-          promptStorageKey="dt_workshop_system_prompt"
+          storageKey="workshop_git_prompt"
           defaultPrompt={workshopDefaultPrompt}
           selectedTarget={selectedTarget}
           onTargetChange={setSelectedTarget}
           availableTargets={targets}
+          showSuiteToggle={(selectedTargetInfo?.sub_mods?.length > 1)}
+          onLatestHash={setLatestCommitHash}
         />
 
         <Paper elevation={4} sx={{ borderRadius: 4, p: 3, border: '1px solid', borderColor: 'divider' }}>
@@ -484,7 +486,17 @@ const WorkshopPage = () => {
       </Stack>
 
       <input type="file" accept="image/*.png" style={{ display: 'none' }} ref={fileInputRef} onChange={handleImageUpload} />
-      {activeTaskId && <TaskConsole taskId={activeTaskId} onClose={() => setActiveTaskId(null)} />}
+      {activeTaskId && (
+        <TaskConsole 
+          taskId={activeTaskId} 
+          onClose={() => setActiveTaskId(null)} 
+          onSuccess={() => {
+            if (latestCommitHash) {
+              localStorage.setItem('workshop_git_prompt_last_hash', latestCommitHash);
+            }
+          }}
+        />
+      )}
       <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
         <Alert severity={snackbar.severity}>{snackbar.message}</Alert>
       </Snackbar>

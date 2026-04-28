@@ -31,11 +31,11 @@ import BatchUpdateGenerator from './BatchUpdateGenerator';
 
 const NEW_MANUAL_KEY = '__new_manual__';
 const moduleOptions = [
-  { value: 'common', label: 'Common' },
-  { value: 'v1', label: 'V1' },
-  { value: 'v2', label: 'V2' },
-  { value: 'colony', label: 'Colonies' },
-  { value: 'currency', label: 'Currency Expanded' },
+  { value: 'common', label: 'Common', repo: 'dynamictrading' },
+  { value: 'v1', label: 'V1', repo: 'dynamictrading' },
+  { value: 'v2', label: 'V2', repo: 'dynamictrading' },
+  { value: 'colony', label: 'Colonies', repo: 'dynamiccolonies' },
+  { value: 'currency', label: 'Currency Expanded', repo: 'currencyexpanded' },
 ];
 
 // ========== Helper Functions ==========
@@ -207,9 +207,12 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
     setLoading(true);
     try {
       const response = await getManualEditorData(editorScope, module);
-      setData(response.data);
-
-      const manuals = response.data?.manuals || [];
+      const filteredManuals = response.data?.manuals || [];
+      const manuals = isUpdateEditor 
+        ? [...filteredManuals].sort((a, b) => b.manual_id.localeCompare(a.manual_id))
+        : filteredManuals;
+      
+      setData({ ...response.data, manuals });
       const nextManual = manuals.find((manual) => manual.manual_id === preferredKey) || manuals[0] || null;
 
       if (nextManual) {
@@ -239,7 +242,8 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
   useEffect(() => {
     loadEditor('', selectedModule);
     if (isUpdateEditor) {
-        getGitBranches('common').then(res => setBranches(res.data)).catch(() => {});
+        const repo = moduleOptions.find(o => o.value === selectedModule)?.repo || 'dynamictrading';
+        getGitBranches(repo).then(res => setBranches(res.data)).catch(() => {});
     }
   }, [editorScope, selectedModule]); // eslint-disable-line react-hooks/exhaustive-deps
 

@@ -20,7 +20,7 @@ import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
-import { getArchetypeEditorData, saveArchetypeDefinition } from '../services/api';
+import { getArchetypeEditorData, saveArchetypeDefinition, getWorkshopTargets } from '../services/api';
 
 const DRAG_MIME = 'application/x-dt-archetype-entry';
 
@@ -291,8 +291,11 @@ const ArchetypeEditorPage = () => {
   const [tagSearch, setTagSearch] = useState('');
   const [selectedItem, setSelectedItem] = useState(null);
   const [issueReplacement, setIssueReplacement] = useState(null);
-  const [pendingIssueKeysByArchetype, setPendingIssueKeysByArchetype] = useState({});
   const [portraitIndexes, setPortraitIndexes] = useState({});
+  const [targets, setTargets] = useState([]);
+  const [modules, setModules] = useState([]);
+  const [selectedModule, setSelectedModule] = useState('');
+  const [pendingIssueKeysByArchetype, setPendingIssueKeysByArchetype] = useState({});
 
   const deferredTagSearch = useDeferredValue(tagSearch);
   const backendOrigin = useMemo(() => {
@@ -314,9 +317,25 @@ const ArchetypeEditorPage = () => {
     setDraftForbid(draft.forbid);
     setDraftWants(draft.wants);
     setIssueReplacement(null);
-    setPendingIssueKeysByArchetype({});
     setPortraitIndexes({});
   }, []);
+
+  const loadTargets = useCallback(async () => {
+    try {
+      const res = await getWorkshopTargets();
+      setTargets(res.data?.targets || []);
+      const foundModules = res.data?.modules || [];
+      setModules(foundModules);
+      const defaultMod = res.data?.default_module || (foundModules.length > 0 ? foundModules[0].id : 'DynamicTradingCommon');
+      setSelectedModule(defaultMod);
+    } catch (error) {
+      console.error('Failed to load targets', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadTargets();
+  }, [loadTargets]);
 
   const mergeSavedArchetype = useCallback((savedArchetype) => {
     setData((current) => {
@@ -339,11 +358,12 @@ const ArchetypeEditorPage = () => {
     });
   }, []);
 
-  const loadData = useCallback(async (preferredArchetypeId = '') => {
+  const loadData = useCallback(async (preferredArchetypeId = '', moduleOverride) => {
+    const targetModule = moduleOverride || selectedModule;
     setLoading(true);
     setStatus({ type: '', message: '' });
     try {
-      const response = await getArchetypeEditorData();
+      const response = await getArchetypeEditorData(targetModule);
       applyPayload(response.data, preferredArchetypeId);
     } catch (error) {
       setStatus({
@@ -353,11 +373,13 @@ const ArchetypeEditorPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [applyPayload]);
+  }, [applyPayload, selectedModule]);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    if (selectedModule) {
+      loadData('', selectedModule);
+    }
+  }, [selectedModule, loadData]);
 
   const selectedArchetype = useMemo(
     () => data?.archetypes?.find((row) => row.archetype_id === selectedArchetypeId) || null,
@@ -510,6 +532,7 @@ const ArchetypeEditorPage = () => {
       const response = await saveArchetypeDefinition(
         selectedArchetypeId,
         buildSavePayload(currentDraft, selectedArchetypeId),
+        selectedModule
       );
       mergeSavedArchetype(response.data.archetype);
       const draft = createDraftFromArchetype(response.data.archetype);
@@ -690,6 +713,20 @@ const ArchetypeEditorPage = () => {
             </Box>
 
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25} sx={{ flexShrink: 0 }}>
+              <Stack direction="row" spacing={0.5} sx={{ overflowX: 'auto', pb: 1, px: 1 }}>
+                {modules.map(m => (
+                  <Chip
+                    key={m.id}
+                    label={m.name}
+                    clickable
+                    color={selectedModule === m.id ? 'primary' : 'default'}
+                    onClick={() => {
+                        if (isDirty && !window.confirm('Switch modules and discard unsaved changes?')) return;
+                        setSelectedModule(m.id);
+                    }}
+                  />
+                ))}
+              </Stack>
               <Button
                 variant="outlined"
                 startIcon={<RefreshIcon />}

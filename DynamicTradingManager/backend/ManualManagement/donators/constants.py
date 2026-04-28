@@ -1,6 +1,6 @@
 MANUAL_ID = "dt_support_hall_of_fame"
 MANUAL_TYPE = "donators"
-MODULE = "common"
+MODULE = "DynamicTradingCommon"
 SOURCE_FOLDER = "Support"
 CHAPTER_ID = "hall_of_fame"
 PAGE_ID = "hall_of_fame_showcase"

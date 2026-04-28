@@ -22,20 +22,21 @@ const slugify = (value) => String(value || '')
   .replace(/^_+|_+$/g, '');
 
 const audienceOptions = [
-  { value: 'common', label: 'Common' },
-  { value: 'v1', label: 'Dynamic Trading V1' },
-  { value: 'v2', label: 'Dynamic Trading V2' },
-  { value: 'colony', label: 'Dynamic Colonies' },
-  { value: 'currency', label: 'Currency Expanded' },
+  { value: 'DynamicTradingCommon', label: 'Common Library' },
+  { value: 'DynamicTrading', label: 'Dynamic Trading V1' },
+  { value: 'DynamicTradingV2', label: 'Dynamic Trading V2' },
+  { value: 'DynamicColonies', label: 'Dynamic Colonies' },
+  { value: 'CurrencyExpanded', label: 'Currency Expanded' },
 ];
 
 const getDefaultSourceFolder = (module, editorScope = 'manuals') => {
   if (editorScope === 'updates') {
     return 'WhatsNew';
   }
-  if (module === 'v1') return 'V1';
-  if (module === 'v2') return 'V2';
-  if (module === 'colony') return 'Colony';
+  const lowered = String(module || '').toLowerCase();
+  if (lowered === 'dynamictrading') return 'V1';
+  if (lowered === 'dynamictradingv2') return 'V2';
+  if (lowered === 'dynamiccolonies') return 'Colony';
   return 'Universal';
 };
 
@@ -43,16 +44,17 @@ const getSourceFolderOptions = (module, editorScope = 'manuals') => {
   if (editorScope === 'updates') {
     return [{ value: 'WhatsNew', label: "What's New" }];
   }
-  if (module === 'v1') {
+  const lowered = String(module || '').toLowerCase();
+  if (lowered === 'dynamictrading') {
     return [{ value: 'V1', label: 'V1' }];
   }
-  if (module === 'v2') {
+  if (lowered === 'dynamictradingv2') {
     return [{ value: 'V2', label: 'V2' }];
   }
-  if (module === 'colony') {
+  if (lowered === 'dynamiccolonies') {
     return [{ value: 'Colony', label: 'Colonies' }];
   }
-  if (module === 'currency') {
+  if (lowered === 'currencyexpanded') {
     return [{ value: 'Universal', label: 'Currency Expanded' }];
   }
   return [
@@ -61,7 +63,7 @@ const getSourceFolderOptions = (module, editorScope = 'manuals') => {
   ];
 };
 
-const getPrimaryAudience = (manual) => manual?.audiences?.[0] || 'common';
+const getPrimaryAudience = (manual) => manual?.audiences?.[0] || 'DynamicTradingCommon';
 const TITLE_MAX_LENGTH = 22;
 const DESCRIPTION_MAX_LENGTH = 69;
 
@@ -111,7 +113,7 @@ export const ManualDetailsForm = ({
       next.source_folder = getDefaultSourceFolder(value, editorScope || 'manuals');
       if ((editorScope || 'manuals') === 'updates') {
         next.manual_type = 'whats_new';
-      } else if (value === 'currency' && !next.manual_id.startsWith('ce_')) {
+      } else if (String(value || '').toLowerCase() === 'currencyexpanded' && !next.manual_id.startsWith('ce_')) {
         next.manual_id = slugify(next.manual_id || 'ce_manual_new');
       }
     });

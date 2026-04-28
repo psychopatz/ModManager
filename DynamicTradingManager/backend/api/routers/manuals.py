@@ -21,7 +21,7 @@ router = APIRouter(tags=["manuals"])
 
 
 @router.get("/api/manuals/editor")
-async def get_manual_editor_data(scope: str = "manuals", module: str = "common"):
+async def get_manual_editor_data(scope: str = "manuals", module: str = "DynamicTradingCommon"):
     try:
         return load_manual_editor_data(scope=scope, module=normalize_manual_module(module))
     except Exception as exc:
@@ -77,7 +77,7 @@ async def remove_manual(manual_id: str, scope: str = "manuals", module: str = "c
 @router.post("/api/manuals/images")
 async def upload_manual_image(
     manual_id: str = Form(...),
-    module: str = Form("common"),
+    module: str = Form("DynamicTradingCommon"),
     file: UploadFile = File(...),
 ):
     def _resolve_extension(upload: UploadFile, original_name: str) -> str:
@@ -111,17 +111,20 @@ async def upload_manual_image(
     normalized_module = normalize_manual_module(module)
     from config.paths import get_manual_assets_root
     
-    if normalized_module == "colony":
+    # We resolve the actual Mod ID and base URL dynamically
+    mod_id = normalized_module # We assume normalized_module is the Mod ID (lowercased)
+    
+    # Resolve the proper-cased Mod ID for path finding
+    from ProjectManagement.projects import get_flattened_modules
+    actual_mod_id = next((m["id"] for m in get_flattened_modules() if m["id"].lower() == normalized_module.lower()), "DynamicTradingCommon")
+    
+    base_url = "/static/manuals"
+    if normalized_module.lower() == "dynamiccolonies":
         base_url = "/static/manuals-colony"
-        mod_id = "DynamicColonies"
-    elif normalized_module == "currency":
+    elif normalized_module.lower() == "currencyexpanded":
         base_url = "/static/manuals-currency"
-        mod_id = "CurrencyExpanded"
-    else:
-        base_url = "/static/manuals"
-        mod_id = "DynamicTradingCommon"
 
-    assets_root = get_manual_assets_root(mod_id) / manual_id
+    assets_root = get_manual_assets_root(actual_mod_id) / manual_id
     assets_root.mkdir(parents=True, exist_ok=True)
     filename = _build_unique_name(assets_root, file)
     file_path = assets_root / filename

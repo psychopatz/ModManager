@@ -80,7 +80,7 @@ class ManualSaveRequest(BaseModel):
     title: str
     description: Optional[str] = Field(default="", max_length=69)
     start_page_id: Optional[str] = ""
-    audiences: List[str] = ["common"]
+    audiences: List[str] = ["DynamicTradingCommon"]
     sort_order: Optional[int] = None
     release_version: Optional[str] = ""
     popup_version: Optional[str] = ""

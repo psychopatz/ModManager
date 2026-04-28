@@ -21,7 +21,7 @@ import DeleteOutlineIconMUI from '@mui/icons-material/DeleteOutline';
 import AddCircleOutlineIconMUI from '@mui/icons-material/AddCircleOutline';
 import SaveOutlinedIconMUI from '@mui/icons-material/SaveOutlined';
 
-import { createManualDefinition, deleteManualDefinition, getManualEditorData, saveManualDefinition, uploadManualImage, getGitBranches } from '../../services/api';
+import { createManualDefinition, deleteManualDefinition, getManualEditorData, saveManualDefinition, uploadManualImage, getGitBranches, getWorkshopTargets } from '../../services/api';
 import { useDraftManagement } from '../../hooks/useDraftManagement';
 import { ManualPreview } from './ManualPreview';
 import { ManualDetailsForm } from './ManualDetailsForm';
@@ -30,13 +30,6 @@ import { PagesEditor } from './PagesEditor';
 import BatchUpdateGenerator from './BatchUpdateGenerator';
 
 const NEW_MANUAL_KEY = '__new_manual__';
-const moduleOptions = [
-  { value: 'common', label: 'Common', repo: 'dynamictrading' },
-  { value: 'v1', label: 'V1', repo: 'dynamictrading' },
-  { value: 'v2', label: 'V2', repo: 'dynamictrading' },
-  { value: 'colony', label: 'Colonies', repo: 'dynamiccolonies' },
-  { value: 'currency', label: 'Currency Expanded', repo: 'currencyexpanded' },
-];
 
 // ========== Helper Functions ==========
 
@@ -53,9 +46,6 @@ const getDefaultSourceFolder = (module, editorScope = 'manuals') => {
   if (editorScope === 'updates') {
     return 'WhatsNew';
   }
-  if (module === 'v1') return 'V1';
-  if (module === 'v2') return 'V2';
-  if (module === 'colony') return 'Colony';
   return 'Universal';
 };
 
@@ -64,20 +54,12 @@ const getTodayUpdateId = () => {
   return `dt_update_${today}`;
 };
 
-const createEmptyManual = (editorScope = 'manuals', suggestedId, module = 'common') => {
+const createEmptyManual = (editorScope = 'manuals', suggestedId, module = 'DynamicTradingCommon') => {
   const isUpdateEditor = editorScope === 'updates';
-  const resolvedModule = moduleOptions.some((option) => option.value === module) ? module : 'common';
+  const resolvedModule = module;
   const defaultId = isUpdateEditor
     ? getTodayUpdateId()
-    : resolvedModule === 'colony'
-      ? 'dc_manual_new'
-      : resolvedModule === 'currency'
-        ? 'ce_manual_new'
-      : resolvedModule === 'v1'
-        ? 'dt_v1_manual_new'
-        : resolvedModule === 'v2'
-          ? 'dt_v2_manual_new'
-          : 'manual_new';
+    : `${resolvedModule}_manual_new`;
   return {
     manual_id: suggestedId || defaultId,
     title: '',
@@ -138,14 +120,14 @@ const createBlock = (type) => {
   }
 };
 
-const getPrimaryAudience = (manual) => manual?.audiences?.[0] || 'common';
+const getPrimaryAudience = (manual) => manual?.audiences?.[0] || 'DynamicTradingCommon';
 
 const audienceOptions = [
-  { value: 'common', label: 'Common' },
-  { value: 'v1', label: 'Dynamic Trading V1' },
-  { value: 'v2', label: 'Dynamic Trading V2' },
-  { value: 'colony', label: 'Dynamic Colonies' },
-  { value: 'currency', label: 'Currency Expanded' },
+  { value: 'DynamicTradingCommon', label: 'Common Library' },
+  { value: 'DynamicTrading', label: 'Dynamic Trading V1' },
+  { value: 'DynamicTradingV2', label: 'Dynamic Trading V2' },
+  { value: 'DynamicColonies', label: 'Dynamic Colonies' },
+  { value: 'CurrencyExpanded', label: 'Currency Expanded' },
 ];
 
 const getAudienceLabel = (manual) => audienceOptions.find((option) => option.value === getPrimaryAudience(manual))?.label || 'Common';
@@ -155,7 +137,7 @@ const getAudienceLabel = (manual) => audienceOptions.find((option) => option.val
 const ManualEditorPage = ({ editorScope = 'manuals' }) => {
   const isUpdateEditor = editorScope === 'updates';
   const [data, setData] = useState({ manuals: [], assets_base_url: '/static/manuals' });
-  const [selectedModule, setSelectedModule] = useState('common');
+  const [selectedModule, setSelectedModule] = useState('');
   const [selectedManualKey, setSelectedManualKey] = useState('');
   const [selectedPageId, setSelectedPageId] = useState('');
   const [loading, setLoading] = useState(true);
@@ -166,9 +148,33 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
   const uploadTargetRef = useRef(null);
   const [batchGeneratorOpen, setBatchGeneratorOpen] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState('develop');
+  const [modules, setModules] = useState([]);
+  const [targets, setTargets] = useState([]);
+
+  const moduleOptions = useMemo(() => {
+    return modules.map(m => ({ value: m.id, label: m.name, repo: m.project_key }));
+  }, [modules]);
+
+  useEffect(() => {
+    getWorkshopTargets().then(res => {
+      setTargets(res.data?.targets || []);
+      setModules(res.data?.modules || []);
+      if (res.data?.default_module) {
+        setSelectedModule(res.data.default_module);
+      }
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (moduleOptions.length > 0 && !moduleOptions.some(o => o.value === selectedModule)) {
+       setSelectedModule(moduleOptions[0].value);
+    }
+  }, [moduleOptions, selectedModule]);
+
+  const getAudienceLabel = (manual) => moduleOptions.find((option) => option.value === getPrimaryAudience(manual))?.label || 'Common';
 
   // Initialize with empty manual
-  const [baseManual, setBaseManual] = useState(createEmptyManual(editorScope, undefined, 'common'));
+  const [baseManual, setBaseManual] = useState(createEmptyManual(editorScope, undefined, 'DynamicTradingCommon'));
 
   // Use draft management hook with scoped localStorage
   const { draft, setDraft, discardDraft, clearDraft, isDrafty } = useDraftManagement(editorScope, baseManual);
@@ -204,6 +210,7 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
   // ========== Load Data from Backend ==========
 
   const loadEditor = async (preferredKey = '', module = selectedModule, preferredPageId = '') => {
+    if (!module) return;
     setLoading(true);
     try {
       const response = await getManualEditorData(editorScope, module);
@@ -240,10 +247,12 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
   };
 
   useEffect(() => {
-    loadEditor('', selectedModule);
-    if (isUpdateEditor) {
-        const repo = moduleOptions.find(o => o.value === selectedModule)?.repo || 'dynamictrading';
-        getGitBranches(repo).then(res => setBranches(res.data)).catch(() => {});
+    if (selectedModule) {
+      loadEditor('', selectedModule);
+      if (isUpdateEditor) {
+          const repo = moduleOptions.find(o => o.value === selectedModule)?.repo || 'dynamictrading';
+          getGitBranches(repo).then(res => setBranches(res.data)).catch(() => {});
+      }
     }
   }, [editorScope, selectedModule]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -259,15 +268,7 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
   const createManual = () => {
     const suggestedId = isUpdateEditor
       ? getTodayUpdateId()
-      : selectedModule === 'colony'
-        ? `dc_manual_${(data.manuals?.length || 0) + 1}`
-        : selectedModule === 'currency'
-          ? `ce_manual_${(data.manuals?.length || 0) + 1}`
-          : selectedModule === 'v1'
-            ? `dt_v1_manual_${(data.manuals?.length || 0) + 1}`
-            : selectedModule === 'v2'
-              ? `dt_v2_manual_${(data.manuals?.length || 0) + 1}`
-              : `manual_${(data.manuals?.length || 0) + 1}`;
+      : `${selectedModule}_manual_${(data.manuals?.length || 0) + 1}`;
     const next = createEmptyManual(editorScope, suggestedId, selectedModule);
     next.sort_order = isUpdateEditor ? Math.max(10, (data.manuals?.length || 0) + 10) : 300000 + (data.manuals?.length || 0);
     setSelectedManualKey(NEW_MANUAL_KEY);
@@ -309,8 +310,6 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
         module: getPrimaryAudience(draft),
       };
       const payloadModule = getPrimaryAudience(payload);
-
-      console.log('Saving manual payload:', payload);
 
       if (isNewManual) {
         await createManualDefinition(payload, editorScope, payloadModule);
@@ -547,8 +546,8 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
           </Typography>
           <Typography variant="body2" color="text.secondary">
             {isUpdateEditor
-              ? 'Manage release notes across Common, V1, V2, Dynamic Colonies, and Currency Expanded.'
-              : 'Edit manuals across Common, V1, V2, Dynamic Colonies, and Currency Expanded, including chapters, pages, images, and deep links.'}
+              ? 'Manage release notes across all modules.'
+              : 'Edit manuals across all modules, including chapters, pages, images, and deep links.'}
           </Typography>
         </Box>
 
@@ -735,8 +734,10 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
         <BatchUpdateGenerator
           open={batchGeneratorOpen}
           onClose={() => setBatchGeneratorOpen(false)}
-          branch={selectedBranch}
           onComplete={() => loadEditor(selectedManualKey)}
+          branch={selectedBranch}
+          targets={targets}
+          modules={modules}
         />
       )}
 

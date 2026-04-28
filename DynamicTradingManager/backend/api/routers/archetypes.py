@@ -10,20 +10,21 @@ router = APIRouter(tags=["archetypes"])
 
 
 @router.get("/api/archetypes/editor")
-async def get_archetype_editor_data():
+async def get_archetype_editor_data(module: str = "DynamicTradingCommon"):
     try:
-        return load_archetype_editor_data()
+        return load_archetype_editor_data(mod_id=module)
     except Exception as exc:
         logger.error("Error loading archetype editor data: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
 
 
 @router.put("/api/archetypes/{archetype_id}/allocations")
-async def update_archetype_allocations(archetype_id: str, request: ArchetypeSaveRequest):
+async def update_archetype_allocations(archetype_id: str, request: ArchetypeSaveRequest, module: str = "DynamicTradingCommon"):
     try:
         payload = save_archetype_definition(
             archetype_id,
             request.model_dump(),
+            mod_id=module
         )
         return {
             "success": True,

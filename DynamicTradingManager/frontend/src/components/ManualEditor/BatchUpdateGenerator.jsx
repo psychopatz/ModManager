@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Alert,
   Box,
@@ -17,9 +17,9 @@ import {
 import { getBatchedGitHistory, createManualDefinition } from '../../services/api';
 import { useGitAi } from '../../hooks/useGitAi';
 import { ExpandMore as ExpandMoreIcon, ExpandLess as ExpandLessIcon, RestartAlt as ResetIcon } from '@mui/icons-material';
-import { Collapse, IconButton } from '@mui/material';
+import { Collapse, IconButton, Chip } from '@mui/material';
 
-const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop' }) => {
+const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop', targets = [], modules = [] }) => {
   const [since, setSince] = useState('2026-03-27');
   const [history, setHistory] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -27,8 +27,52 @@ const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop' })
   const [progress, setProgress] = useState(0);
   const [currentStep, setCurrentStep] = useState('');
   const [status, setStatus] = useState({ type: '', message: '' });
-  const [improveWithAI, setImproveWithAI] = useState(true);
   const [showPrompt, setShowPrompt] = useState(false);
+  const [selectedModule, setSelectedModule] = useState('');
+  const [improveWithAI, setImproveWithAI] = useState(false);
+
+  const moduleOptions = useMemo(() => {
+    return modules.map(m => ({ value: m.id, label: m.name, repo: m.project_key }));
+  }, [modules]);
+
+  useEffect(() => {
+      if (moduleOptions.length > 0 && !moduleOptions.some(o => o.value === selectedModule)) {
+          setSelectedModule(moduleOptions[0].value);
+      }
+  }, [moduleOptions]);
+
+  const [typeFilters, setTypeFilters] = useState(() => {
+    const saved = localStorage.getItem('git_ai_assistant_type_filters');
+    return saved ? JSON.parse(saved) : ['feat', 'fix', 'refactor', 'perf', 'docs', 'chore', 'other'];
+  });
+
+  const parseCommitType = (subject) => {
+    if (!subject || typeof subject !== 'string') return 'other';
+    const match = subject.match(/^(\w+)(\(.*\))?:/);
+    return match ? match[1].toLowerCase() : 'other';
+  };
+
+  const getTypeColor = (type) => {
+    switch (type) {
+      case 'feat': return '#3b82f6';
+      case 'fix': return '#ef4444';
+      case 'refactor': return '#f59e0b';
+      case 'perf': return '#8b5cf6';
+      case 'docs': return '#10b981';
+      case 'chore': return '#6b7280';
+      case 'style': return '#ec4899';
+      case 'test': return '#6366f1';
+      default: return '#9ca3af';
+    }
+  };
+
+  const toggleTypeFilter = (type) => {
+    setTypeFilters(prev => {
+        const next = prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type];
+        localStorage.setItem('git_ai_assistant_type_filters', JSON.stringify(next));
+        return next;
+    });
+  };
 
   const { systemPrompt, setSystemPrompt, resetPrompt, generateContent } = useGitAi({
     storageKey: 'batch_update_system_prompt',
@@ -59,8 +103,29 @@ const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop' })
 
     for (let i = 0; i < total; i++) {
         const date = dates[i];
-        const dayData = history[date];
-        setCurrentStep(`Processing ${date}...`);
+        const dayRepos = history[date];
+        
+        // Filter dayData by repo and type
+        const filteredDayData = {};
+        let totalCommits = 0;
+        
+        for (const [repo, commits] of Object.entries(dayRepos)) {
+            const filtered = commits.filter(c => {
+                const type = parseCommitType(c.subject || c.message);
+                return typeFilters.includes(type) || (typeFilters.includes('other') && !['feat', 'fix', 'refactor', 'perf', 'docs', 'chore', 'style', 'test'].includes(type));
+            });
+            if (filtered.length > 0) {
+                filteredDayData[repo] = filtered;
+                totalCommits += filtered.length;
+            }
+        }
+
+        if (totalCommits === 0) {
+            setProgress(Math.round(((i + 1) / total) * 100));
+            continue;
+        }
+
+        setCurrentStep(`Processing ${date} (${totalCommits} commits)...`);
         
         try {
             let pageContent = '';
@@ -96,7 +161,7 @@ const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop' })
                 const refinedText = await generateContent({
                     targetName: `Update ${date}`,
                     branch,
-                    commits: dayData,
+                    commits: filteredDayData,
                     customInstructions: `Commits for ${date}:`
                 });
                 
@@ -106,7 +171,7 @@ const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop' })
                 });
             } else {
                 // Manual grouping
-                for (const [repo, commits] of Object.entries(dayData)) {
+                for (const [repo, commits] of Object.entries(filteredDayData)) {
                     pages[0].blocks.push({
                         type: "heading",
                         id: `repo_${repo.toLowerCase()}_${date.replace(/-/g, '_')}`,
@@ -138,7 +203,7 @@ const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop' })
                 pages
             };
 
-            await createManualDefinition(payload, 'updates', 'common');
+            await createManualDefinition(payload, 'updates', selectedModule);
         } catch (error) {
             console.error(`Error processing ${date}:`, error);
         }
@@ -177,6 +242,47 @@ const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop' })
             <Button variant="outlined" onClick={fetchHistory} disabled={loading || processing}>
               {loading ? 'Fetching...' : 'Check History'}
             </Button>
+          </Stack>
+
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            {['feat', 'fix', 'refactor', 'perf', 'docs', 'chore', 'style', 'test', 'other'].map(type => (
+              <Chip
+                key={type}
+                label={type.toUpperCase()}
+                size="small"
+                clickable
+                onClick={() => toggleTypeFilter(type)}
+                sx={{ 
+                    fontSize: '0.65rem', 
+                    height: 20, 
+                    fontWeight: 800,
+                    bgcolor: typeFilters.includes(type) ? getTypeColor(type) : 'transparent',
+                    color: typeFilters.includes(type) ? '#fff' : 'text.secondary',
+                    border: '1px solid',
+                    borderColor: typeFilters.includes(type) ? getTypeColor(type) : 'divider',
+                    '&:hover': {
+                        bgcolor: typeFilters.includes(type) ? getTypeColor(type) : 'rgba(0,0,0,0.04)',
+                        opacity: 0.9
+                    }
+                }}
+              />
+            ))}
+          </Box>
+
+          <Stack direction="row" spacing={2} alignItems="center">
+            <Typography variant="subtitle2">Target Module:</Typography>
+            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
+                {moduleOptions.map((opt) => (
+                    <Chip
+                        key={opt.value}
+                        label={opt.label}
+                        size="small"
+                        clickable
+                        color={selectedModule === opt.value ? 'primary' : 'default'}
+                        onClick={() => setSelectedModule(opt.value)}
+                    />
+                ))}
+            </Stack>
           </Stack>
 
           <Stack spacing={1}>

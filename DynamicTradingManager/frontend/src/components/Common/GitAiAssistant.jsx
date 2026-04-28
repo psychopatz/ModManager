@@ -223,7 +223,8 @@ const GitAiAssistant = ({
         targetName: activeTargetName,
         branch,
         commits: selectedList,
-        customInstructions
+        customInstructions,
+        subMods: selectedTargetInfo?.sub_mods || []
       });
       onOutputChange(result);
       setStatus({ type: 'success', message: 'Generated notes with smart grouping.' });

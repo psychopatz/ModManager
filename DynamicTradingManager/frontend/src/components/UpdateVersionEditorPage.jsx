@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Alert, Box, Button, Paper, Stack, Typography } from '@mui/material';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Alert, Box, Button, Chip, Paper, Stack, Typography } from '@mui/material';
 import ManualEditorPage from './ManualEditorPage';
 import GitAiAssistant from './Common/GitAiAssistant';
 import { createManualDefinition, getManualEditorData, saveManualDefinition, getWorkshopTargets } from '../services/api';
@@ -121,11 +121,11 @@ const normalizeBlock = (block, index) => {
 	};
 };
 
-const buildManualPayload = (input) => {
+const buildManualPayload = (input, targetModule = 'common') => {
 	const payload = input?.manual ? input.manual : input;
 	const module = ['common', 'v1', 'v2', 'colony', 'currency'].includes(payload.module)
 		? payload.module
-		: 'common';
+		: targetModule;
 	const manualId = slugify(payload.manual_id || getTodayUpdateId());
 
 	const chapters = Array.isArray(payload.chapters) && payload.chapters.length > 0
@@ -184,13 +184,26 @@ const UpdateVersionEditorPage = () => {
 	const [editorReloadToken, setEditorReloadToken] = useState(0);
 	const [latestCommitHash, setLatestCommitHash] = useState('');
 	const [targets, setTargets] = useState([]);
+	const [modules, setModules] = useState([]);
 	const [selectedTarget, setSelectedTarget] = useState('dynamictrading');
+	const [selectedModule, setSelectedModule] = useState('');
+
+	const moduleOptions = useMemo(() => {
+		return modules.map(m => ({ value: m.id, label: m.name, repo: m.project_key }));
+	}, [modules]);
 
 	useEffect(() => {
 		getWorkshopTargets().then(res => {
-			setTargets(res.data?.targets || []);
+			const foundTargets = res.data?.targets || [];
+			setTargets(foundTargets);
+			const foundModules = res.data?.modules || [];
+			setModules(foundModules);
+			
 			if (res.data?.default_target) setSelectedTarget(res.data.default_target);
-			else if (res.data?.targets?.length > 0) setSelectedTarget(res.data.targets[0].key);
+			else if (foundTargets.length > 0) setSelectedTarget(foundTargets[0].key);
+
+			if (res.data?.default_module) setSelectedModule(res.data.default_module);
+			else if (foundModules.length > 0) setSelectedModule(foundModules[0].id);
 		}).catch(() => {});
 	}, []);
 
@@ -198,7 +211,7 @@ const UpdateVersionEditorPage = () => {
 		try {
 			setStatus({ type: '', message: '' });
 			const parsed = extractJsonPayload(generatedText);
-			const { module, manual } = buildManualPayload(parsed);
+			const { module, manual } = buildManualPayload(parsed, selectedModule);
 
 			const existing = await getManualEditorData('updates', module);
 			const alreadyExists = (existing.data?.manuals || []).some((item) => item.manual_id === manual.manual_id);
@@ -241,6 +254,21 @@ const UpdateVersionEditorPage = () => {
 			/>
 
 			<Paper sx={{ p: 2 }}>
+				<Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
+					<Typography variant="subtitle2">Save To Module:</Typography>
+					<Stack direction="row" spacing={1}>
+						{moduleOptions.map((opt) => (
+							<Chip
+								key={opt.value}
+								label={opt.label}
+								size="small"
+								clickable
+								color={selectedModule === opt.value ? 'primary' : 'default'}
+								onClick={() => setSelectedModule(opt.value)}
+							/>
+						))}
+					</Stack>
+				</Stack>
 				<Stack spacing={1.5}>
 					<Typography variant="h6">JSON Import To What's New</Typography>
 					<Typography variant="body2" color="text.secondary">

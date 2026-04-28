@@ -1,7 +1,8 @@
+import os
 import json
 import logging
-import os
 from pathlib import Path
+from functools import lru_cache
 
 from config.server_settings import get_server_settings
 from WorkshopManagement.workshop import resolve_workshop_id
@@ -59,7 +60,8 @@ def _discover_sub_mods(repo_path: Path) -> list[dict]:
                 sub_mods.append({
                     "id": mod_data.get("id", mod_info_path.parent.name),
                     "name": mod_data["name"],
-                    "description": mod_data.get("description", "")
+                    "description": mod_data.get("description", ""),
+                    "path": str(mod_info_path.parent)
                 })
         except Exception as e:
             logger.debug(f"Error parsing mod.info at {mod_info_path}: {e}")
@@ -146,42 +148,83 @@ def list_workshop_projects():
     return projects
 
 
-def resolve_project_target(target: str | None = None):
+def resolve_project_target(target: str | None) -> dict:
     projects = list_workshop_projects()
-    if not projects:
-        raise FileNotFoundError("No workshop projects were discovered.")
-
     if not target:
-        project = projects[0]
-        return {**project, "path": Path(project["path"])}
+        for p in projects:
+            if p["is_default"]:
+                return p
+        return projects[0]
 
     normalized = _normalize_key(target)
-    target_path = Path(target).expanduser().resolve()
+    for p in projects:
+        if p["key"] == normalized:
+            return p
 
-    for project in projects:
-        if normalized and normalized in {
-            project["key"],
-            _normalize_key(project["name"]),
-            _normalize_key(project["title"]),
-        }:
-            return {**project, "path": Path(project["path"])}
+    raise FileNotFoundError(f"Workshop project '{target}' not found (normalized: '{normalized}')")
 
-        if target_path == Path(project["path"]):
-            return {**project, "path": Path(project["path"])}
 
-    if target_path.exists() and (target_path / "Contents").exists():
-        repo_name = target_path.name
-        return {
-            "key": _normalize_key(repo_name),
-            "name": repo_name,
-            "title": _parse_workshop_title(target_path),
-            "path": target_path,
-            "has_preview": (target_path / "preview.png").exists(),
-            "workshop_id": resolve_workshop_id(target_path),
-            "has_workshop_id": bool(resolve_workshop_id(target_path)),
-            "is_default": target_path == _default_mod_root(),
-            "has_git": (target_path / ".git").exists(),
-            "sub_mods": _discover_sub_mods(target_path),
-        }
+@lru_cache(maxsize=1)
+def get_all_sub_mods() -> list[dict]:
+    """Returns a flattened list of all discovered sub-mods with their metadata."""
+    sub_mods = []
+    for project in list_workshop_projects():
+        for mod in project.get("sub_mods", []):
+            sub_mods.append(mod)
+    return sub_mods
 
-    raise FileNotFoundError(f'Unable to resolve workshop project "{target}".')
+
+def get_mod_path_by_id(mod_id: str) -> Path | None:
+    """Resolves a Mod ID to its absolute directory path (case-insensitive)."""
+    target = mod_id.lower()
+    for mod in get_all_sub_mods():
+        if mod["id"].lower() == target:
+            return Path(mod["path"])
+    return None
+
+
+@lru_cache(maxsize=32)
+def find_media_subfolder(mod_id: str, subpath: str) -> Path | None:
+    """
+    Search for a subfolder (e.g. 'Manuals', 'ArchetypeDefinitions') 
+    inside any of the mod's version folders (media/lua/shared/...).
+    """
+    all_subs = get_all_sub_mods()
+    target = mod_id.lower()
+    candidate_roots = [Path(m["path"]) for m in all_subs if m["id"].lower() == target]
+    
+    if not candidate_roots:
+        return None
+        
+    for root in candidate_roots:
+        # Search directly in mod root
+        media_root = root / "media"
+        if media_root.exists():
+            for candidate in media_root.rglob(subpath):
+                if candidate.is_dir():
+                    return candidate
+        
+        # Search in sibling folders (e.g. if root is '42.16' and media is in 'common')
+        # We check the parent directory for ANY 'media' folder
+        parent = root.parent
+        if parent != root:
+            for candidate in parent.rglob(subpath):
+                # Ensure we are still within the same mod's reach and it's a media path
+                if candidate.is_dir() and "media" in candidate.parts:
+                    return candidate
+            
+    return None
+
+
+def get_flattened_modules():
+    """Returns a list of modules derived from all sub-mods across all projects."""
+    modules = []
+    for project in list_workshop_projects():
+        for mod in project.get("sub_mods", []):
+            modules.append({
+                "id": mod["id"],
+                "name": mod["name"],
+                "project_key": project["key"],
+                "is_default": project["is_default"] and mod["id"] == "DynamicTradingCommon"
+            })
+    return modules

@@ -39,13 +39,13 @@ REQUIRED_ARCHETYPE_FIELDS = {"name", "allocations"}
 ALLOWED_ALLOCATION_FIELDS = {"tags", "item", "count"}
 
 
-def load_archetype_editor_data() -> dict:
-    paths = default_paths()
-    items = _get_cached_items()
-    taxonomy_tags = _get_cached_taxonomy_tags()
+def load_archetype_editor_data(mod_id: str = "DynamicTradingCommon") -> dict:
+    paths = default_paths(mod_id=mod_id)
+    items = _get_cached_items(mod_id)
+    taxonomy_tags = _get_cached_taxonomy_tags(mod_id)
     archetypes = _load_archetypes(paths.mod_common / "ArchetypeDefinitions", items, taxonomy_tags, _get_cached_vanilla_items())
     all_tags = _collect_all_tags(items, archetypes)
-    portrait_catalog = _get_cached_portrait_catalog()
+    portrait_catalog = _get_cached_portrait_catalog(mod_id)
 
     archetype_item_coverage: dict[str, set[str]] = {}
     served_item_ids: set[str] = set()
@@ -120,10 +120,10 @@ def load_archetype_editor_data() -> dict:
     }
 
 
-def save_archetype_definition(archetype_id: str, payload: dict) -> dict:
-    paths = default_paths()
-    items = _get_cached_items()
-    taxonomy_tags = _get_cached_taxonomy_tags()
+def save_archetype_definition(archetype_id: str, payload: dict, mod_id: str = "DynamicTradingCommon") -> dict:
+    paths = default_paths(mod_id=mod_id)
+    items = _get_cached_items(mod_id)
+    taxonomy_tags = _get_cached_taxonomy_tags(mod_id)
     archetypes = _load_archetypes(paths.mod_common / "ArchetypeDefinitions", items, taxonomy_tags, _get_cached_vanilla_items())
     archetype = next((row for row in archetypes if row["archetype_id"] == archetype_id), None)
     if archetype is None:
@@ -155,15 +155,15 @@ def _collect_all_tags(items: Dict[str, ItemDef], archetypes: list[dict] | None =
     return tags
 
 
-@lru_cache(maxsize=1)
-def _get_cached_items() -> Dict[str, ItemDef]:
-    paths = default_paths()
+@lru_cache(maxsize=8)
+def _get_cached_items(mod_id: str = "DynamicTradingCommon") -> Dict[str, ItemDef]:
+    paths = default_paths(mod_id=mod_id)
     return parse_items(paths.mod_common / "Items")
 
 
-@lru_cache(maxsize=1)
-def _get_cached_taxonomy_tags() -> set[str]:
-    return _collect_all_tags(_get_cached_items())
+@lru_cache(maxsize=8)
+def _get_cached_taxonomy_tags(mod_id: str = "DynamicTradingCommon") -> set[str]:
+    return _collect_all_tags(_get_cached_items(mod_id))
 
 
 @lru_cache(maxsize=1)
@@ -182,8 +182,7 @@ def _load_archetypes(archetypes_root: Path, items: Dict[str, ItemDef], taxonomy_
 
     for lua_file in find_lua_files(archetypes_root):
         normalized = str(lua_file).replace("\\", "/")
-        if "/Items/" not in normalized:
-            continue
+        # Removed hardcoded "/Items/" filter if possible, or made it more inclusive
         archetypes.extend(_parse_archetype_file(lua_file, items, taxonomy_tags, vanilla_items, portrait_catalog))
 
     return archetypes
@@ -215,6 +214,9 @@ def _parse_archetype_file(
 
         name_match = re.search(r'name\s*=\s*"([^"]+)"', block)
         name = name_match.group(1).strip() if name_match else archetype_id
+        
+        module_match = re.search(r'module\s*=\s*"([^"]+)"', block)
+        module_id = module_match.group(1).strip() if module_match else None
         expert_tags = parse_quoted_list(table_field_block(block, "expertTags"))
         forbid = parse_quoted_list(table_field_block(block, "forbid"))
         wants = [
@@ -263,8 +265,10 @@ def _parse_archetype_file(
 
         archetypes.append(
             {
+                "position": index,
                 "archetype_id": archetype_id,
                 "name": name,
+                "module": module_id,
                 "expert_tags": expert_tags,
                 "forbid": forbid,
                 "wants": wants,
@@ -281,11 +285,11 @@ def _parse_archetype_file(
     return archetypes
 
 
-@lru_cache(maxsize=1)
-def _get_cached_portrait_catalog() -> dict[str, list[dict]]:
-    portraits_root = _get_portraits_root()
+@lru_cache(maxsize=8)
+def _get_cached_portrait_catalog(mod_id: str = "DynamicTradingCommon") -> dict[str, list[dict]]:
+    portraits_root = _get_portraits_root(mod_id)
     catalog: dict[str, list[dict]] = {}
-    if not portraits_root.exists():
+    if not portraits_root or not portraits_root.exists():
         return catalog
 
     for archetype_dir in sorted([path for path in portraits_root.iterdir() if path.is_dir()]):
@@ -305,9 +309,9 @@ def _get_cached_portrait_catalog() -> dict[str, list[dict]]:
     return catalog
 
 
-def _get_portraits_root() -> Path:
+def _get_portraits_root(mod_id: str = "DynamicTradingCommon") -> Path:
     from config.paths import get_portraits_root
-    return get_portraits_root()
+    return get_portraits_root(mod_id)
 
 
 def _validate_archetype_block(
@@ -718,8 +722,10 @@ def _normalize_wants(values: List[dict] | None) -> list[dict]:
 
 def _normalize_archetype_payload(payload: dict, items: Dict[str, ItemDef], archetype_id: str) -> dict:
     name = str(payload.get("name", "")).strip() or archetype_id
+    module = str(payload.get("module", "")).strip() or None
     return {
         "name": name,
+        "module": module,
         "allocations": _normalize_entries(payload.get("allocations") or [], items),
         "expert_tags": _normalize_tag_list(payload.get("expert_tags")),
         "forbid": _normalize_tag_list(payload.get("forbid")),
@@ -793,6 +799,9 @@ def _escape_lua_string(value: str) -> str:
 def _render_archetype_block(archetype_id: str, payload: dict) -> str:
     lines = ["{"]
     lines.append(f'    name = "{_escape_lua_string(payload["name"])}",')
+    if payload.get("module"):
+        lines.append(f'    module = "{_escape_lua_string(payload["module"])}",')
+    
     lines.append(f'    allocations = {_render_allocations(payload["allocations"])}' + ("," if payload["expert_tags"] or payload["wants"] or payload["forbid"] is not None else ""))
 
     if payload["expert_tags"]:

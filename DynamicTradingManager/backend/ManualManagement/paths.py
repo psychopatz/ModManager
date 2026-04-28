@@ -5,7 +5,7 @@ from pathlib import Path
 from config.server_settings import get_server_settings
 from Simulation.config import default_paths
 
-from .constants import ALL_MODULES, DEFAULT_MODULE, DEFAULT_SCOPE
+from .constants import DEFAULT_MODULE, DEFAULT_SCOPE
 from .normalize import (
     _module_matches_payload,
     _normalize_module,
@@ -18,62 +18,28 @@ from .parser import _read_editor_payload
 
 
 from config.paths import get_manuals_root, get_manual_assets_root
+from ProjectManagement.projects import list_workshop_projects
 
-def _get_dynamic_trading_root() -> Path:
-    return get_manuals_root("DynamicTradingCommon")
-
-
-def _get_dynamic_trading_v1_root() -> Path:
-    return get_manuals_root("DynamicTradingV1")
-
-
-def _get_dynamic_trading_v2_root() -> Path:
-    return get_manuals_root("DynamicTradingV2")
-
-
-def _get_dynamic_colonies_mod_root() -> Path:
-    return get_server_settings().dynamic_colonies_path
-
-
-def _get_dynamic_colonies_root() -> Path:
-    return get_manuals_root("DynamicColonies")
-
-
-def _get_currency_expanded_mod_root() -> Path:
-    return get_server_settings().dynamic_currency_path
-
-
-def _get_currency_expanded_root() -> Path:
-    return get_manuals_root("CurrencyExpanded")
-
+def _get_manual_root_for_mod(mod_id: str) -> Path:
+    from config.paths import get_manuals_root
+    return get_manuals_root(mod_id)
 
 def _get_manuals_roots(module: str = DEFAULT_MODULE) -> list[Path]:
     normalized = _normalize_module(module)
-    if normalized == "v1":
-        return [_get_dynamic_trading_v1_root()]
-    if normalized == "v2":
-        return [_get_dynamic_trading_v2_root()]
-    if normalized == "colony":
-        return [_get_dynamic_colonies_root()]
-    if normalized == "currency":
-        return [_get_currency_expanded_root()]
-    return [_get_dynamic_trading_root()]
+    return [_get_manual_root_for_mod(normalized)]
 
 
 def _get_manual_assets_root(module: str = DEFAULT_MODULE) -> Path:
     normalized = _normalize_module(module)
-    if normalized == "colony":
-        return get_manual_assets_root("DynamicColonies")
-    if normalized == "currency":
-        return get_manual_assets_root("CurrencyExpanded")
-    return get_manual_assets_root("DynamicTradingCommon")
+    return get_manual_assets_root(normalized)
 
 
 def _get_manual_assets_root_url(module: str = DEFAULT_MODULE) -> str:
     normalized = _normalize_module(module)
-    if normalized == "colony":
+    # Map to static folders based on established naming conventions
+    if normalized.lower() == "dynamiccolonies":
         return "/static/manuals-colony"
-    if normalized == "currency":
+    if normalized.lower() == "currencyexpanded":
         return "/static/manuals-currency"
     return "/static/manuals"
 
@@ -81,6 +47,21 @@ def _get_manual_assets_root_url(module: str = DEFAULT_MODULE) -> str:
 def _get_manual_asset_base_url(module: str | None, manual_id: str) -> str:
     return f'{_get_manual_assets_root_url(module or DEFAULT_MODULE)}/{manual_id}'
 
+
+def _get_manual_prefix(mod_id: str) -> str:
+    """Extracts a prefix like DT_Manual_ or DC_Manual_ based on the Mod ID."""
+    # Try to find an existing manual file to steal the prefix from
+    root = _get_manual_root_for_mod(mod_id)
+    if root.exists():
+        for f in root.glob("*Manual_*.lua"):
+            if "_" in f.name:
+                return f.name.split("Manual_")[0] + "Manual_"
+    
+    # Fallback: Generate from Mod ID (Capitals)
+    capitals = "".join(c for c in mod_id if c.isupper())
+    if capitals:
+         return f"{capitals}_Manual_"
+    return "Manual_"
 
 def _get_manual_file_path(
     manual_id: str,
@@ -90,20 +71,22 @@ def _get_manual_file_path(
 ) -> Path:
     normalized_module = _normalize_module(module)
     folder = _normalize_source_folder(source_folder, None, scope=scope, module=normalized_module)
-    if normalized_module == "v1":
-        return _get_dynamic_trading_v1_root() / folder / f"DT_Manual_{manual_id}.lua"
-    if normalized_module == "v2":
-        return _get_dynamic_trading_v2_root() / folder / f"DT_Manual_{manual_id}.lua"
-    if normalized_module == "colony":
-        return _get_dynamic_colonies_root() / f"DC_Manual_{manual_id}.lua"
-    if normalized_module == "currency":
-        return _get_currency_expanded_root() / folder / f"CE_Manual_{manual_id}.lua"
-    return _get_dynamic_trading_root() / folder / f"DT_Manual_{manual_id}.lua"
+    
+    root = _get_manual_root_for_mod(normalized_module)
+    prefix = _get_manual_prefix(normalized_module)
+        
+    return root / folder / f"{prefix}{manual_id}.lua"
 
 
 def _find_existing_manual_file(manual_id: str, module: str | None = None) -> Path:
     normalized_id = _slugify(manual_id)
-    module_candidates = [_normalize_module(module)] if module else list(ALL_MODULES)
+    if module:
+        module_candidates = [_normalize_module(module)]
+    else:
+        # Dynamically discover all unique mod IDs for broad search
+        from ProjectManagement.projects import get_flattened_modules
+        module_candidates = list(set(m["id"].lower() for m in get_flattened_modules()))
+
     for candidate_module in module_candidates:
         for root in _get_manuals_roots(candidate_module):
             if not root.exists():

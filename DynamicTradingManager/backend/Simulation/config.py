@@ -35,13 +35,31 @@ class BuildConfig:
     flash_duration_days: int = 3
 
 
-def default_paths() -> Paths:
-    from config.paths import get_mod_root, get_mod_common_path
-    project_root = get_mod_root("DynamicTradingCommon").parent.parent.parent
-    mod_common = get_mod_common_path("DynamicTradingCommon") / "media/lua/shared/DT/Common"
+def default_paths(mod_id: str = "DynamicTradingCommon") -> Paths:
+    from config.paths import get_mod_root, get_archetypes_root
+    
+    # Resolve roots dynamically
+    mod_root = get_mod_root(mod_id)
+    project_root = mod_root.parent.parent.parent if mod_root.parts else Path()
+    
+    # Resolve mod_common: we need the directory that CONTAINS 'ArchetypeDefinitions' and 'Items'
+    # get_archetypes_root returns the ArchetypeDefinitions dir itself, so we need its parent
+    archetypes_dir = get_archetypes_root(mod_id)
+    if archetypes_dir and archetypes_dir.exists():
+        mod_common = archetypes_dir.parent
+    else:
+        from config.paths import get_items_root
+        items_dir = get_items_root(mod_id)
+        if items_dir and items_dir.exists():
+            mod_common = items_dir.parent
+        else:
+            # Final fallback
+            mod_common = mod_root / "common" / "media" / "lua" / "shared" / "DT" / "Common"
+    
     output_root = project_root / "Scripts/SimulateGame/Output"
     output_web = output_root / "web"
     output_data = output_web / "assets/data"
+    
     return Paths(
         root=project_root,
         mod_common=mod_common,
@@ -49,3 +67,10 @@ def default_paths() -> Paths:
         output_web=output_web,
         output_data=output_data,
     )
+RiversidePaths = {
+    "DynamicTradingCommon": "media/lua/shared/DT/Common",
+    "DynamicTradingV1": "media/lua/shared/DT/V1",
+    "DynamicTradingV2": "media/lua/shared/DT/V2",
+    "DynamicColonies": "media/lua/shared/DC/Common",
+    "CurrencyExpanded": "media/lua/shared/CE/Common",
+}

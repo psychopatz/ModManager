@@ -111,9 +111,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--scope", default="manuals", choices=["manuals", "updates"], help="Editor scope")
     parser.add_argument(
         "--module",
-        default="common",
-        choices=["common", "v1", "v2", "colony", "currency"],
-        help="Target module",
+        default="DynamicTradingCommon",
+        help="Target module (Mod ID)",
     )
 
     subparsers = parser.add_subparsers(dest="command", required=True)

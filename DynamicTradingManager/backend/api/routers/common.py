@@ -7,7 +7,7 @@ from fastapi import HTTPException
 from config.server_settings import get_server_settings
 from DebugManagement import LogParser
 from ItemManagement import load_vanilla_items
-from ProjectManagement import list_workshop_projects, resolve_project_target
+from ProjectManagement import list_workshop_projects, resolve_project_target, get_flattened_modules
 
 _settings = get_server_settings()
 CONSOLE_PATH = str(_settings.console_path)
@@ -61,10 +61,7 @@ def get_mod_roots():
 
 
 def normalize_manual_module(module: Optional[str]) -> str:
-    normalized = str(module or "common").strip().lower()
-    if normalized in {"v1", "v2", "colony", "currency", "common"}:
-        return normalized
-    return "common"
+    return str(module or "DynamicTradingCommon").strip()
 
 
 def get_workshop_project_or_404(target: Optional[str] = None):
@@ -76,5 +73,12 @@ def get_workshop_project_or_404(target: Optional[str] = None):
 
 def serialize_workshop_projects():
     projects = list_workshop_projects()
+    modules = get_flattened_modules()
     default_target = next((project["key"] for project in projects if project["is_default"]), None)
-    return {"targets": projects, "default_target": default_target}
+    default_module = next((m["id"] for m in modules if m["is_default"]), "DynamicTradingCommon")
+    return {
+        "targets": projects, 
+        "modules": modules,
+        "default_target": default_target,
+        "default_module": default_module
+    }

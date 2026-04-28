@@ -12,6 +12,7 @@ class ItemDef:
     stock_min: int
     stock_max: int
     chance: Optional[float] = None
+    module: Optional[str] = None
     source_file: str = ""
 
 
@@ -62,3 +63,4 @@ class TagDef:
     tag: str
     price_mult: float = 1.0
     weight: float = 50.0
+    module: Optional[str] = None

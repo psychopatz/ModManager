@@ -57,8 +57,8 @@ export const previewPricing = (payload) => api.post('/pricing/preview', payload)
 export const getPricingAudit = (params) => api.get('/pricing/audit', { params });
 export const getPricingTags = () => api.get('/pricing/tags');
 export const previewPricingTag = (payload) => api.post('/pricing/tags/preview', payload);
-export const getArchetypeEditorData = () => api.get('/archetypes/editor');
-export const saveArchetypeDefinition = (archetypeId, payload) => api.put(`/archetypes/${archetypeId}/allocations`, payload);
+export const getArchetypeEditorData = (module = 'DynamicTradingCommon') => api.get('/archetypes/editor', { params: { module } });
+export const saveArchetypeDefinition = (archetypeId, payload, module = 'DynamicTradingCommon') => api.put(`/archetypes/${archetypeId}/allocations`, payload, { params: { module } });
 export const getDonatorsDefinition = () => api.get('/donators');
 export const saveDonatorsDefinition = (payload) => api.put('/donators', payload);
 export const uploadDonatorImage = (formData) => api.post('/donators/images', formData, {

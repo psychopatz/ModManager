@@ -40,7 +40,7 @@ async def save_donators(request: DonatorsSaveRequest):
 @router.post("/api/donators/images")
 async def upload_donator_image(
     file: UploadFile = File(...),
-    module: str = Form("common"),
+    module: str = Form("DynamicTradingCommon"),
 ):
     try:
         normalized_module = normalize_manual_module(module)

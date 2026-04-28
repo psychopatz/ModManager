@@ -17,27 +17,19 @@ def _normalize_bool(value) -> bool:
 
 
 def _normalize_audience(value: str | None) -> str | None:
-    text = str(value or "").strip().lower()
+    text = str(value or "").strip()
     if not text:
         return None
-    if text in {"all", "shared", "universal"}:
-        return "common"
-    if text in {"dtv1", "dynamictrading"}:
-        return "v1"
-    if text in {"dtv2", "dynamictradingv2"}:
-        return "v2"
-    if text == "dynamiccolonies":
-        return "colony"
-    if text in {"currency", "ce", "currencyexpanded", "currency_expanded"}:
-        return "currency"
+    
+    # We return the raw ID. The discovery logic is case-insensitive.
     return text
 
 
 def _normalize_module(value: str | None) -> str:
     normalized = _normalize_audience(value)
-    if normalized in {"v1", "v2", "colony", "currency", "common"}:
-        return normalized
-    return DEFAULT_MODULE
+    if not normalized:
+        return DEFAULT_MODULE
+    return normalized
 
 
 def _infer_module(module: str | None, payload: dict | None = None, file_path: Path | None = None) -> str:
@@ -46,19 +38,9 @@ def _infer_module(module: str | None, payload: dict | None = None, file_path: Pa
         return normalized
 
     if file_path is not None:
-        lowered = str(file_path).replace("\\", "/").lower()
-        if "/dynamiccolonies/" in lowered:
-            return "colony"
-        if "/currencyexpanded/" in lowered:
-            return "currency"
-        if "/dt/v1/manuals/" in lowered:
-            return "v1"
-        if "/dt/v2/manuals/" in lowered:
-            return "v2"
-        if "/manuals/v1/" in lowered:
-            return "v1"
-        if "/manuals/v2/" in lowered:
-            return "v2"
+        # We no longer hardcode path mappings.
+        # Fallback to path-based discovery if needed, but usually the UI provides the module.
+        pass
 
     if payload:
         audiences = _normalize_audiences(payload.get("audiences"), _slugify(payload.get("manual_id")))
@@ -83,14 +65,8 @@ def _normalize_audiences(raw_audiences, manual_id: str, fallback_module: str = D
     if audiences:
         return audiences
 
-    if manual_id.startswith("dc_"):
-        return ["colony"]
-    if _normalize_module(fallback_module) == "currency":
-        return ["currency"]
-    if "v1" in manual_id:
-        return ["v1"]
-    if "v2" in manual_id:
-        return ["v2"]
+    # If no audiences specified, we just return the default. 
+    # We no longer infer based on manual_id prefixes (legacy dc_, v1, v2)
     return [DEFAULT_AUDIENCE]
 
 
@@ -120,38 +96,7 @@ def _normalize_source_folder(
         return "WhatsNew"
 
     normalized_module = _normalize_module(module)
-    if normalized_module == "colony":
-        return "Colony"
-    if normalized_module == "currency":
-        return "Universal"
-
-    if file_path is not None:
-        parent_name = file_path.parent.name
-        if parent_name in VALID_SOURCE_FOLDERS:
-            if parent_name == "WhatsNew":
-                return "Universal"
-            return parent_name
-
-    folder = str(raw_folder or "").strip().replace("\\", "/")
-    if folder in VALID_SOURCE_FOLDERS:
-        if folder == "WhatsNew":
-            return "Universal"
-        return folder
-
-    lowered = folder.lower()
-    for candidate in VALID_SOURCE_FOLDERS:
-        if lowered == candidate.lower():
-            if candidate == "WhatsNew":
-                return "Universal"
-            return candidate
-
     primary = (audiences or [DEFAULT_AUDIENCE])[0]
-    if primary == "v1":
-        return "V1"
-    if primary == "v2":
-        return "V2"
-    if primary == "colony":
-        return "Colony"
     return "Universal"
 
 
@@ -159,9 +104,9 @@ def _default_sort_order(manual_id: str, audiences: list[str], is_whats_new: bool
     primary = (audiences or [DEFAULT_AUDIENCE])[0]
     base = 300000
 
-    if primary in {"v1", "v2"}:
+    if primary in {"dynamictrading", "dynamictradingv2"}:
         base = 100000
-    elif primary == "colony":
+    elif primary == "dynamiccolonies":
         base = 200000
 
     if is_whats_new or manual_id == "dt_whats_new":

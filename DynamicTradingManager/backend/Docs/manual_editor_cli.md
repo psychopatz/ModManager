@@ -33,7 +33,7 @@ Recommended wrapper (auto-uses project venv):
 Common flags:
 
 - `--scope manuals|updates` (default: `manuals`)
-- `--module common|v1|v2|colony|currency` (default: `common`)
+- `--module ModID` (default: `DynamicTradingCommon`)
 
 Payload input (for `create`, `update`, `upsert`):
 
@@ -46,25 +46,25 @@ Payload input (for `create`, `update`, `upsert`):
 List manuals:
 
 ```bash
-python manual_editor_cli.py --scope manuals --module common list
+python manual_editor_cli.py --scope manuals --module DynamicTradingCommon list
 ```
 
 Upsert from file:
 
 ```bash
-./manual_editor_cli.sh --scope manuals --module common upsert --payload-file ./payload.json
+./manual_editor_cli.sh --scope manuals --module DynamicTradingCommon upsert --payload-file ./payload.json
 ```
 
 Upsert from stdin:
 
 ```bash
-cat payload.json | ./manual_editor_cli.sh --scope manuals --module common upsert
+cat payload.json | ./manual_editor_cli.sh --scope manuals --module DynamicTradingCommon upsert
 ```
 
 Delete manual:
 
 ```bash
-./manual_editor_cli.sh --scope manuals --module common delete manual_new
+./manual_editor_cli.sh --scope manuals --module DynamicTradingCommon delete manual_new
 ```
 
 ## Minimal payload template
@@ -75,7 +75,7 @@ Delete manual:
 	"title": "Manual Title",
 	"description": "Short description up to 69 chars",
 	"start_page_id": "intro",
-	"audiences": ["common"],
+	"audiences": ["DynamicTradingCommon"],
 	"sort_order": 300000,
 	"source_folder": "Universal",
 	"chapters": [

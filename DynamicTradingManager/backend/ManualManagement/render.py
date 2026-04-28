@@ -1,10 +1,53 @@
-from __future__ import annotations
-
 import json
+import re
+import functools
 from pathlib import Path
+from typing import Dict
 
 from .constants import EDITOR_BEGIN, EDITOR_END
 from .normalize import _normalize_module
+from ProjectManagement.projects import get_mod_path_by_id
+
+_GLOBAL_CACHE: Dict[str, str] = {}
+
+def _discover_lua_global(mod_id: str) -> str:
+    """
+    Search mod files for 'function GlobalObject.RegisterManual' to find the 
+    correct Lua global for this mod.
+    """
+    if mod_id in _GLOBAL_CACHE:
+        return _GLOBAL_CACHE[mod_id]
+        
+    root = get_mod_path_by_id(mod_id)
+    if not root:
+        return "DynamicTrading" # Fallback
+        
+    # Search the mod's lua folder and its sibling folder roots
+    search_paths = [root]
+    if root.parent.name not in ["mods", "Contents"]:
+        search_paths.append(root.parent)
+        
+    pattern = re.compile(r"function\s+([a-zA-Z0-9_]+)\.RegisterManual")
+    
+    for start_path in search_paths:
+        for lua_file in start_path.rglob("*.lua"):
+            try:
+                content = lua_file.read_text(encoding="utf-8", errors="ignore")
+                match = pattern.search(content)
+                if match:
+                    global_obj = match.group(1)
+                    _GLOBAL_CACHE[mod_id] = global_obj
+                    return global_obj
+            except Exception:
+                continue
+                
+    # Fallback to core mod if not found in specific mod
+    if mod_id != "DynamicTradingCommon":
+        core_global = _discover_lua_global("DynamicTradingCommon")
+        _GLOBAL_CACHE[mod_id] = core_global
+        return core_global
+        
+    return "DynamicTrading"
 
 
 def _escape(value: str) -> str:
@@ -66,13 +109,11 @@ def _render_manual_file(payload: dict) -> str:
     json_comment = "\n".join(f"-- {line}" for line in json_text.splitlines())
     audience_values = ", ".join(f'"{_escape(audience)}"' for audience in payload["audiences"])
 
-    module_name = _normalize_module(payload.get("module"))
-    if module_name == "currency":
-        register_guard = "if CurrencyExpanded and CurrencyExpanded.RegisterManual then"
-        register_call = "CurrencyExpanded.RegisterManual"
-    else:
-        register_guard = "if DynamicTrading and DynamicTrading.RegisterManual then"
-        register_call = "DynamicTrading.RegisterManual"
+    mod_id = payload.get("module") or "DynamicTradingCommon"
+    lua_global = _discover_lua_global(mod_id)
+    
+    register_guard = f"if {lua_global} and {lua_global}.RegisterManual then"
+    register_call = f"{lua_global}.RegisterManual"
 
     lines = [
         EDITOR_BEGIN,

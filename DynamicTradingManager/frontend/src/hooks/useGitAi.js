@@ -26,7 +26,7 @@ export const useGitAi = ({
       throw new Error('Puter.js not found. AI features unavailable.');
     }
 
-    const { targetName, branch, commits, customInstructions } = context;
+    const { targetName, branch, commits, customInstructions, subMods = [] } = context;
     
     let commitSummary = '';
     if (Array.isArray(commits)) {
@@ -39,7 +39,12 @@ export const useGitAi = ({
         }).join('\n\n');
     }
 
-    const prompt = `Project Context: ${targetName || 'Manual'}\nBranch: ${branch}\n\nCommits:\n${commitSummary}\n\nRules:\n${systemPrompt}\n\n${customInstructions || ''}`;
+    let prompt = `Project Context: ${targetName || 'Manual'}\nBranch: ${branch}\n\n`;
+    if (subMods?.length > 0) {
+        prompt += `Detected Sub-mods: ${subMods.map(m => `"${m.id}" (${m.name})`).join(', ')}\n`;
+        prompt += `Please include "module": "MOD_ID" in the root of your JSON output if you can identify which mod these changes belong to.\n\n`;
+    }
+    prompt += `Commits:\n${commitSummary}\n\nRules:\n${systemPrompt}\n\n${customInstructions || ''}`;
     
     const response = await window.puter.ai.chat(prompt);
     return response?.message?.content?.trim() || '';

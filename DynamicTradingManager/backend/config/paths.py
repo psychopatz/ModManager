@@ -13,10 +13,6 @@ def get_mod_root(mod_id: str) -> Path:
     if path:
         return path
     
-    # Fallback to legacy structure if not found in discovery
-    settings = get_server_settings()
-    if mod_id in ["DynamicTradingCommon", "DynamicTradingV1", "DynamicTradingV2"]:
-        return settings.dynamic_trading_path / "Contents/mods" / mod_id
     return Path()
 
 def get_mod_common_path(mod_id: str) -> Path:

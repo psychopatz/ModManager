@@ -29,6 +29,15 @@ def _normalize_module(value: str | None) -> str:
     normalized = _normalize_audience(value)
     if not normalized:
         return DEFAULT_MODULE
+        
+    lower_val = normalized.lower()
+    if lower_val == "common":
+        return "DynamicTradingCommon"
+    if lower_val == "v1":
+        return "DynamicTrading"
+    if lower_val == "v2":
+        return "DynamicTradingV2"
+        
     return normalized
 
 

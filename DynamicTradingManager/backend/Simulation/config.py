@@ -67,10 +67,3 @@ def default_paths(mod_id: str = "DynamicTradingCommon") -> Paths:
         output_web=output_web,
         output_data=output_data,
     )
-RiversidePaths = {
-    "DynamicTradingCommon": "media/lua/shared/DT/Common",
-    "DynamicTradingV1": "media/lua/shared/DT/V1",
-    "DynamicTradingV2": "media/lua/shared/DT/V2",
-    "DynamicColonies": "media/lua/shared/DC/Common",
-    "CurrencyExpanded": "media/lua/shared/CE/Common",
-}

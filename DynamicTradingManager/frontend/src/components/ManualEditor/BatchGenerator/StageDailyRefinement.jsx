@@ -44,6 +44,7 @@ const StageDailyRefinement = ({
                     <Stack spacing={0.5}>
                         {days.map(date => {
                             const page = attachedBatch.pages.find(p => p.date === date);
+                            const stage1Item = (attachedBatch.stage1Items || []).find(i => i.date === date);
                             const stream = attachedBatch.streamingData?.[date];
                             const isProcessing = attachedBatch.currentStep.includes(date) || (stream?.status === 'streaming');
                             
@@ -87,6 +88,15 @@ const StageDailyRefinement = ({
                                                     )}
                                                 </Stack>
                                             </Box>
+
+                                            {stage1Item && (
+                                                <Box>
+                                                    <Typography variant="caption" sx={{ fontWeight: 800, opacity: 0.5, display: 'block', mb: 1 }}>STAGE 1 STRUCTURED OUTPUT</Typography>
+                                                    <Typography variant="caption" sx={{ display: 'block', mb: 0.5 }}>Impact: {stage1Item.impact}</Typography>
+                                                    <Typography variant="caption" sx={{ display: 'block', mb: 0.5 }}>Tags: {(stage1Item.tags || []).join(', ') || 'none'}</Typography>
+                                                    <Typography variant="caption" sx={{ display: 'block', opacity: 0.7 }}>Refs: {(stage1Item.commitRefs || []).length}</Typography>
+                                                </Box>
+                                            )}
                                         </Stack>
                                     </AccordionDetails>
                                 </Accordion>

@@ -26,7 +26,7 @@ import BatchConfigForm from './BatchGenerator/BatchConfigForm';
 import BatchProcessMonitor from './BatchGenerator/BatchProcessMonitor';
 
 const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop', module = '', targets = [], modules = [], attachedBatchId = null }) => {
-  const { batches, spawnBatch, openBatchId, closeFullView, retryDay, consolidateBatch, saveBatchVolume } = useBatchSystem();
+  const { batches, spawnBatch, openBatchId, closeFullView, retryDay, consolidateBatch, saveBatchVolume, listBatchCaches, clearBatchCache } = useBatchSystem();
   
   // State for Configuration
   const [since, setSince] = useState(localStorage.getItem('git_batch_since') || new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0]);
@@ -49,9 +49,15 @@ const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop', m
   const [systemPrompt, setSystemPrompt] = useState(localStorage.getItem('git_batch_system_prompt') || "");
   const [consolidationPrompt, setConsolidationPrompt] = useState(localStorage.getItem('git_batch_consolidation_prompt') || "");
   const [showPrompt, setShowPrompt] = useState(false);
+  const [showConsolidationPrompt, setShowConsolidationPrompt] = useState(true);
   const [showConsolidationSettings, setShowConsolidationSettings] = useState(false);
   const [sectionsExpanded, setSectionsExpanded] = useState({ daily: true, consolidation: false, workshop: false });
   const [availableBranches, setAvailableBranches] = useState([]);
+  const [cacheOutputs, setCacheOutputs] = useState(localStorage.getItem('git_batch_cache_outputs') !== 'false');
+  const [resumeCacheId, setResumeCacheId] = useState('');
+  const [resumeFromStage, setResumeFromStage] = useState(2);
+  const [cachedRuns, setCachedRuns] = useState([]);
+  const [autoSaveAfterConsolidation, setAutoSaveAfterConsolidation] = useState(localStorage.getItem('git_batch_auto_save') !== 'false');
 
   // Persistent state updates
   useEffect(() => {
@@ -59,10 +65,16 @@ const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop', m
     localStorage.setItem('git_batch_until', until);
     localStorage.setItem('git_batch_branch', branchName);
     localStorage.setItem('git_batch_improve_ai', improveWithAI);
+    localStorage.setItem('git_batch_auto_save', autoSaveAfterConsolidation);
+    localStorage.setItem('git_batch_cache_outputs', cacheOutputs);
     localStorage.setItem('git_batch_type_filters', JSON.stringify(typeFilters));
     if (systemPrompt) localStorage.setItem('git_batch_system_prompt', systemPrompt);
     if (consolidationPrompt) localStorage.setItem('git_batch_consolidation_prompt', consolidationPrompt);
-  }, [since, until, branchName, improveWithAI, typeFilters, systemPrompt, consolidationPrompt]);
+  }, [since, until, branchName, improveWithAI, autoSaveAfterConsolidation, cacheOutputs, typeFilters, systemPrompt, consolidationPrompt]);
+
+  useEffect(() => {
+    setCachedRuns(listBatchCaches());
+  }, [listBatchCaches, batches, open]);
 
   // Sync with prop when it changes
   useEffect(() => {
@@ -131,7 +143,11 @@ const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop', m
         typeFilters,
         improveWithAI,
         systemPrompt,
-        consolidationPrompt
+      consolidationPrompt,
+      autoSaveAfterConsolidation,
+      cacheOutputs,
+      resumeCacheId: resumeCacheId || null,
+      resumeFromStage: resumeCacheId ? resumeFromStage : 1,
     });
     setSectionsExpanded({ daily: true, consolidation: false, workshop: false });
   };
@@ -210,9 +226,22 @@ const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop', m
                 typeFilters={typeFilters} toggleTypeFilter={toggleTypeFilter} 
                 getTypeColor={getTypeColor}
                 improveWithAI={improveWithAI} setImproveWithAI={setImproveWithAI}
+                autoSaveAfterConsolidation={autoSaveAfterConsolidation} setAutoSaveAfterConsolidation={setAutoSaveAfterConsolidation}
+                cacheOutputs={cacheOutputs} setCacheOutputs={setCacheOutputs}
                 showPrompt={showPrompt} setShowPrompt={setShowPrompt}
                 systemPrompt={systemPrompt} setSystemPrompt={setSystemPrompt} 
                 resetPrompt={resetPrompt}
+                showConsolidationPrompt={showConsolidationPrompt}
+                setShowConsolidationPrompt={setShowConsolidationPrompt}
+                consolidationPrompt={consolidationPrompt}
+                setConsolidationPrompt={setConsolidationPrompt}
+                resetConsolidationPrompt={resetConsolidationPrompt}
+                cachedRuns={cachedRuns}
+                resumeCacheId={resumeCacheId}
+                setResumeCacheId={setResumeCacheId}
+                resumeFromStage={resumeFromStage}
+                setResumeFromStage={setResumeFromStage}
+                clearBatchCache={clearBatchCache}
               />
           )}
       </DialogContent>

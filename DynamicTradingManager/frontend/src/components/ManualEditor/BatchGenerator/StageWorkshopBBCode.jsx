@@ -43,6 +43,12 @@ const StageWorkshopBBCode = ({
 
             <Collapse in={sectionsExpanded.workshop}>
                 <Box sx={{ pl: 2, pb: 2, pr: 1 }}>
+                    {attachedBatch.generatedUpdateTitle && (
+                        <Typography variant="caption" sx={{ display: 'block', mb: 1, opacity: 0.8 }}>
+                            Final title: {attachedBatch.generatedUpdateTitle}
+                        </Typography>
+                    )}
+
                     {attachedBatch.workshopMetadata ? (
                         <Box sx={{ p: 1.5, bgcolor: 'rgba(0,0,0,0.2)', borderRadius: 1.5, border: '1px solid rgba(255,255,255,0.05)', position: 'relative' }}>
                             <IconButton 

@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
-    Stack, TextField, Button, Box, Chip, FormControlLabel, Checkbox, 
-    Collapse, Typography, Alert, Paper, Autocomplete
+    Stack, TextField, Button, Box, Chip, FormControlLabel, Checkbox,
+    Collapse, Typography, Alert, Paper, Autocomplete, Select, MenuItem, InputLabel, FormControl
 } from '@mui/material';
 import {
     RestartAlt as ResetIcon,
@@ -20,8 +20,16 @@ const BatchConfigForm = ({
     history,
     typeFilters, toggleTypeFilter, getTypeColor,
     improveWithAI, setImproveWithAI,
+    autoSaveAfterConsolidation, setAutoSaveAfterConsolidation,
+    cacheOutputs, setCacheOutputs,
     showPrompt, setShowPrompt,
     systemPrompt, setSystemPrompt, resetPrompt,
+    showConsolidationPrompt, setShowConsolidationPrompt,
+    consolidationPrompt, setConsolidationPrompt, resetConsolidationPrompt,
+    cachedRuns,
+    resumeCacheId, setResumeCacheId,
+    resumeFromStage, setResumeFromStage,
+    clearBatchCache,
 }) => {
     const parseCommitType = (subject) => {
         if (!subject || typeof subject !== 'string') return 'other';
@@ -176,6 +184,60 @@ const BatchConfigForm = ({
                     control={<Checkbox checked={improveWithAI} onChange={(e) => setImproveWithAI(e.target.checked)} />}
                     label={<Typography variant="body2" fontWeight={800}>Batch improve commits using AI</Typography>}
                 />
+
+                <FormControlLabel
+                    control={<Checkbox checked={cacheOutputs} onChange={(e) => setCacheOutputs(e.target.checked)} />}
+                    label={<Typography variant="body2" fontWeight={800}>Cache Stage outputs in local storage</Typography>}
+                />
+
+                <FormControlLabel
+                    control={<Checkbox checked={autoSaveAfterConsolidation} onChange={(e) => setAutoSaveAfterConsolidation(e.target.checked)} />}
+                    label={<Typography variant="body2" fontWeight={800}>Auto-save assembled update to manual/Lua after consolidation</Typography>}
+                />
+
+                <Stack direction="row" spacing={1.5} alignItems="center">
+                    <FormControl size="small" sx={{ minWidth: 280 }}>
+                        <InputLabel id="resume-cache-label">Resume from cache</InputLabel>
+                        <Select
+                            labelId="resume-cache-label"
+                            value={resumeCacheId}
+                            label="Resume from cache"
+                            onChange={(e) => setResumeCacheId(e.target.value)}
+                        >
+                            <MenuItem value="">None</MenuItem>
+                            {(cachedRuns || []).map((entry) => (
+                                <MenuItem key={entry.batchId} value={entry.batchId}>
+                                    {`${entry.module || 'Module'} | ${entry.since || '?'} -> ${entry.until || '?'} | S1:${entry.stage1Count}`}
+                                </MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
+
+                    <FormControl size="small" sx={{ minWidth: 180 }} disabled={!resumeCacheId}>
+                        <InputLabel id="resume-stage-label">Resume stage</InputLabel>
+                        <Select
+                            labelId="resume-stage-label"
+                            value={resumeFromStage}
+                            label="Resume stage"
+                            onChange={(e) => setResumeFromStage(Number(e.target.value))}
+                        >
+                            <MenuItem value={2}>Stage 2</MenuItem>
+                            <MenuItem value={3}>Stage 3</MenuItem>
+                        </Select>
+                    </FormControl>
+
+                    <Button
+                        variant="outlined"
+                        color="warning"
+                        disabled={!resumeCacheId}
+                        onClick={() => {
+                            clearBatchCache(resumeCacheId);
+                            setResumeCacheId('');
+                        }}
+                    >
+                        Clear Selected Cache
+                    </Button>
+                </Stack>
                 
                 {improveWithAI && (
                     <Box>
@@ -201,6 +263,33 @@ const BatchConfigForm = ({
                                     value={systemPrompt}
                                     onChange={(e) => setSystemPrompt(e.target.value)}
                                     sx={{ '& .MuiInputBase-input': { fontSize: '0.8rem' } }}
+                                />
+                            </Stack>
+                        </Collapse>
+
+                        <Button
+                            size="small"
+                            onClick={() => setShowConsolidationPrompt(!showConsolidationPrompt)}
+                            startIcon={showConsolidationPrompt ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                            sx={{ fontSize: '0.7rem', fontWeight: 800, mt: 1 }}
+                        >
+                            Consolidation Prompt
+                        </Button>
+
+                        <Collapse in={showConsolidationPrompt}>
+                            <Stack spacing={1} sx={{ mt: 1, p: 2, bgcolor: 'rgba(33,150,243,0.05)', borderRadius: 2, border: '1px solid rgba(33,150,243,0.2)' }}>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <Typography variant="caption" fontWeight={800}>THEMATIC CONSOLIDATION PROMPT</Typography>
+                                    <Button size="small" startIcon={<ResetIcon />} onClick={resetConsolidationPrompt} sx={{ fontSize: '0.65rem' }}>Reset</Button>
+                                </Box>
+                                <TextField
+                                    fullWidth
+                                    multiline
+                                    rows={5}
+                                    variant="filled"
+                                    value={consolidationPrompt}
+                                    onChange={(e) => setConsolidationPrompt(e.target.value)}
+                                    sx={{ '& .MuiInputBase-input': { fontSize: '0.8rem', fontFamily: 'monospace' } }}
                                 />
                             </Stack>
                         </Collapse>

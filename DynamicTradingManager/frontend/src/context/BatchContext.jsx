@@ -1,8 +1,186 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { getBatchedGitHistory, getDonatorsDefinition, createManualDefinition, llmChat, llmChatStream } from '../services/api';
+import { getBatchedGitHistory, getDonatorsDefinition, createManualDefinition, saveManualDefinition, llmChat, llmChatStream } from '../services/api';
 import { loadLLMConfig } from '../utils/llmUtils';
 
 const slugify = (str) => str.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+const STAGE2_CATEGORIES = ['Features', 'Fixes', 'QoL', 'Performance', 'Balance', 'Misc'];
+const CACHE_PREFIX = 'git_batch_cache_';
+
+const safeJsonParse = (raw, fallback = null) => {
+    if (!raw) return fallback;
+    try {
+        return JSON.parse(raw);
+    } catch (e) {
+        return fallback;
+    }
+};
+
+const extractSection = (text, header) => {
+    const pattern = new RegExp(`\\\\[${header}\\\\]([\\\\s\\\\S]*?)(?=\\\\n\\\\[[A-Z_]+\\\\]|$)`, 'i');
+    const match = text.match(pattern);
+    return match ? match[1].trim() : '';
+};
+
+const parseStage1StructuredItem = (text, fallback) => {
+    const clean = (text || '').replace(/```[\\s\\S]*?```/g, (m) => m.replace(/```/g, '')).trim();
+    const titleFromTag = extractSection(clean, 'TITLE').split('\n')[0]?.trim() || '';
+    const impactFromTag = extractSection(clean, 'IMPACT').split('\n')[0]?.trim() || '';
+    const tagsRaw = extractSection(clean, 'TAGS').split('\n')[0] || '';
+    const explanation = extractSection(clean, 'EXPLANATION') || clean;
+    const refsSection = extractSection(clean, 'COMMIT_REFS');
+
+    const commitRefs = refsSection
+        ? refsSection
+                .split('\n')
+                .map((line) => line.replace(/^[-*]\s*/, '').trim())
+                .filter(Boolean)
+        : (fallback.commitRefs || []);
+
+    const tags = tagsRaw
+        ? tagsRaw
+                .split(',')
+                .map((t) => t.trim())
+                .filter(Boolean)
+        : (fallback.tags || []);
+
+    const item = {
+        id: fallback.id,
+        date: fallback.date,
+        sourceRepos: fallback.sourceRepos,
+        title: titleFromTag || fallback.title,
+        explanation: explanation || fallback.explanation,
+        impact: impactFromTag || fallback.impact,
+        tags,
+        commitRefs,
+        parseWarnings: []
+    };
+
+    if (!titleFromTag) item.parseWarnings.push('Missing [TITLE], fallback used.');
+    if (!impactFromTag) item.parseWarnings.push('Missing [IMPACT], fallback used.');
+    if (!extractSection(clean, 'EXPLANATION')) item.parseWarnings.push('Missing [EXPLANATION], full response used.');
+    if (!refsSection) item.parseWarnings.push('Missing [COMMIT_REFS], fallback used.');
+
+    return item;
+};
+
+const categoryFromLabel = (label = '') => {
+    const normalized = label.trim().toLowerCase();
+    const hit = STAGE2_CATEGORIES.find((c) => c.toLowerCase() === normalized);
+    return hit || 'Misc';
+};
+
+const parseStage2Categorization = (content, items) => {
+    const lines = (content || '').split('\n').map((l) => l.trim()).filter(Boolean);
+    const map = {};
+    const summaries = {};
+    STAGE2_CATEGORIES.forEach((c) => { summaries[c] = ''; });
+
+    let overallTitle = 'Update Summary';
+    let inMap = false;
+    let inSummaries = false;
+
+    for (const line of lines) {
+        if (/^OVERALL_TITLE\s*:/i.test(line)) {
+            overallTitle = line.replace(/^OVERALL_TITLE\s*:/i, '').trim() || overallTitle;
+            continue;
+        }
+        if (/^CATEGORY_MAP\s*:/i.test(line)) {
+            inMap = true;
+            inSummaries = false;
+            continue;
+        }
+        if (/^CATEGORY_SUMMARIES\s*:/i.test(line)) {
+            inMap = false;
+            inSummaries = true;
+            continue;
+        }
+
+        if (inMap) {
+            const mapMatch = line.match(/^[-*]\s*(.*?)\s*=>\s*(.+)$/);
+            if (mapMatch) {
+                map[mapMatch[1].trim()] = categoryFromLabel(mapMatch[2].trim());
+            }
+            continue;
+        }
+
+        if (inSummaries) {
+            const summaryMatch = line.match(/^([A-Za-z]+)\s*:\s*(.*)$/);
+            if (summaryMatch) {
+                const category = categoryFromLabel(summaryMatch[1]);
+                summaries[category] = summaryMatch[2].trim();
+            }
+        }
+    }
+
+    items.forEach((item) => {
+        if (!map[item.id]) map[item.id] = 'Misc';
+    });
+
+    return { overallTitle, map, summaries };
+};
+
+const normalizeOverallTitle = (title, categorization, stage1Items) => {
+    const clean = (title || '').trim();
+    const looksDateOnly = /^(daily|weekly|monthly)?\s*(update|update log|changelog|release notes)?\s*\(?[a-z]*\s*\d{1,2}(?:\s*[-–]\s*\d{1,2})?,?\s*\d{4}\)?$/i.test(clean)
+        || /^\d{4}-\d{2}-\d{2}(\s*[-–]\s*\d{4}-\d{2}-\d{2})?$/i.test(clean)
+        || clean.length < 8;
+
+    if (!looksDateOnly) return clean;
+
+    const categoryCounts = STAGE2_CATEGORIES.map((category) => ({
+        category,
+        count: stage1Items.filter((item) => categorization.map[item.id] === category).length,
+    }))
+        .filter((row) => row.count > 0 && row.category !== 'Misc')
+        .sort((a, b) => b.count - a.count);
+
+    if (categoryCounts.length === 0) return 'Mod Update Roundup';
+    if (categoryCounts.length === 1) return `${categoryCounts[0].category} Spotlight Update`;
+    return `${categoryCounts[0].category} and ${categoryCounts[1].category} Update Roundup`;
+};
+
+const assembleCategoryPages = (stage1Items, categorization) => {
+    return STAGE2_CATEGORIES
+        .map((category) => {
+            const items = stage1Items.filter((item) => categorization.map[item.id] === category);
+            if (items.length === 0) return null;
+
+            const blocks = [];
+            if (categorization.summaries?.[category]) {
+                blocks.push({
+                    type: 'callout',
+                    tone: 'info',
+                    title: `${category} Highlights`,
+                    text: categorization.summaries[category]
+                });
+            }
+
+            items.forEach((item) => {
+                blocks.push({
+                    type: 'heading',
+                    id: `item_${slugify(item.id || item.title || 'entry')}`,
+                    level: 2,
+                    text: item.title
+                });
+                blocks.push({ type: 'paragraph', text: item.explanation });
+                blocks.push({ type: 'callout', tone: 'success', title: 'Impact', text: item.impact || 'General improvements.' });
+                if ((item.tags || []).length) {
+                    blocks.push({ type: 'bullet_list', items: item.tags.map((t) => `Tag: ${t}`) });
+                }
+                if ((item.commitRefs || []).length) {
+                    blocks.push({ type: 'bullet_list', items: item.commitRefs.map((r) => `Ref: ${r}`) });
+                }
+            });
+
+            return {
+                id: `cat_${slugify(category)}`,
+                chapter_id: 'release_notes',
+                title: category,
+                blocks
+            };
+        })
+        .filter(Boolean);
+};
 
 const BatchContext = createContext();
 
@@ -14,8 +192,8 @@ export const useBatchSystem = () => {
 
 export const BatchProvider = ({ children }) => {
   const [batches, setBatches] = useState(() => {
-    const saved = localStorage.getItem('global_active_batches');
-    return saved ? JSON.parse(saved) : [];
+        const saved = localStorage.getItem('global_active_batches');
+        return safeJsonParse(saved, []);
   });
   const [openBatchId, setOpenBatchId] = useState(null);
   const batchesRef = useRef([]);
@@ -36,6 +214,54 @@ export const BatchProvider = ({ children }) => {
   const updateBatch = useCallback((id, updates) => {
     setBatches(prev => prev.map(b => b.id === id ? { ...b, ...updates } : b));
   }, []);
+
+    const saveBatchCache = useCallback((batchId, partial) => {
+        const cacheKey = `${CACHE_PREFIX}${batchId}`;
+        const current = safeJsonParse(localStorage.getItem(cacheKey), {});
+        const next = {
+            ...current,
+            ...partial,
+            updatedAt: Date.now(),
+        };
+        localStorage.setItem(cacheKey, JSON.stringify(next));
+
+        const index = safeJsonParse(localStorage.getItem(`${CACHE_PREFIX}index`), []);
+        if (!index.includes(batchId)) {
+            localStorage.setItem(`${CACHE_PREFIX}index`, JSON.stringify([...index, batchId]));
+        }
+    }, []);
+
+    const loadBatchCache = useCallback((batchId) => {
+        return safeJsonParse(localStorage.getItem(`${CACHE_PREFIX}${batchId}`), null);
+    }, []);
+
+    const listBatchCaches = useCallback(() => {
+        const index = safeJsonParse(localStorage.getItem(`${CACHE_PREFIX}index`), []);
+        return index
+            .map((batchId) => {
+                const cache = safeJsonParse(localStorage.getItem(`${CACHE_PREFIX}${batchId}`), null);
+                if (!cache) return null;
+                return {
+                    batchId,
+                    module: cache.module,
+                    since: cache.since,
+                    until: cache.until,
+                    updatedAt: cache.updatedAt,
+                    stage1Count: (cache.stage1Items || []).length,
+                    hasStage2: !!cache.categorization,
+                    hasFinalPayload: !!cache.finalPages,
+                    generatedUpdateTitle: cache.generatedUpdateTitle || ''
+                };
+            })
+            .filter(Boolean)
+            .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    }, []);
+
+    const clearBatchCache = useCallback((batchId) => {
+        localStorage.removeItem(`${CACHE_PREFIX}${batchId}`);
+        const index = safeJsonParse(localStorage.getItem(`${CACHE_PREFIX}index`), []);
+        localStorage.setItem(`${CACHE_PREFIX}index`, JSON.stringify(index.filter((id) => id !== batchId)));
+    }, []);
 
   const pauseBatch = useCallback((id) => updateBatch(id, { paused: true }), [updateBatch]);
   const resumeBatch = useCallback((id) => updateBatch(id, { paused: false }), [updateBatch]);
@@ -98,6 +324,7 @@ export const BatchProvider = ({ children }) => {
 
   const spawnBatch = useCallback(async (config) => {
     const id = `batch_${Date.now()}`;
+        const resumeCache = config.resumeCacheId ? loadBatchCache(config.resumeCacheId) : null;
     const newBatch = {
       id,
       modName: config.moduleLabel || config.module,
@@ -106,7 +333,12 @@ export const BatchProvider = ({ children }) => {
       progress: 0,
       currentStep: 'Starting...',
       logs: [],
-      pages: [],
+            pages: resumeCache?.pages || [],
+            stage1Items: resumeCache?.stage1Items || [],
+            categorization: resumeCache?.categorization || null,
+            generatedUpdateTitle: resumeCache?.generatedUpdateTitle || '',
+            finalPages: resumeCache?.finalPages || null,
+        history: config.history || resumeCache?.history || null,
       streamingData: {},
       paused: false,
       config,
@@ -115,9 +347,9 @@ export const BatchProvider = ({ children }) => {
     setBatches(prev => [...prev, newBatch]);
     
     // Start the process in the background
-    processBatch(id, config);
+        processBatch(id, { ...config, _resolvedResumeCache: resumeCache });
     return id;
-  }, []);
+    }, [loadBatchCache]);
 
   const removeBatch = useCallback((id) => {
     if (abortRefs.current[id]) abortRefs.current[id].abort();
@@ -158,12 +390,33 @@ export const BatchProvider = ({ children }) => {
     // Add default header block (can be replaced by AI title later)
     page.blocks.push({ type: "heading", id: `heading_${pageId}`, level: 1, text: `Updates for ${date}` });
             
-    let refinedText = '';
+        let refinedText = '';
     let aiAttempted = false;
+        const commitRefs = [];
+        const fallbackTags = new Set();
+
+        Object.entries(filteredDayData).forEach(([repo, commits]) => {
+            commits.forEach((c) => {
+                commitRefs.push(`${repo}: ${c.subject || c.message || 'Untitled commit'}`);
+                const parsedType = parseCommitType(c.subject || c.message || '');
+                if (parsedType && parsedType !== 'other') fallbackTags.add(parsedType);
+            });
+        });
+
+        const fallbackStructuredItem = {
+            id: `item_${pageId}`,
+            date,
+            sourceRepos: Object.keys(filteredDayData),
+            title: `Updates for ${date}`,
+            explanation: 'Summary generated from commit activity for this day.',
+            impact: 'Incremental improvements and fixes.',
+            tags: Array.from(fallbackTags),
+            commitRefs
+        };
 
     if (improveWithAI) {
         aiAttempted = true;
-        const prompt = `${systemPrompt}\n\nIMPORTANT: Start your response with [TITLE: Your Thematic Title] on the very first line.\n\nCommits for ${date}:\n${JSON.stringify(filteredDayData, null, 2)}`;
+        const expansionPrompt = `${systemPrompt || 'You are an expert release notes writer.'}\n\nProduce markdown using this exact structure and markers:\n[TITLE]\nSingle concise title\n[IMPACT]\nOne sentence impact\n[TAGS]\ncomma,separated,tags\n[EXPLANATION]\n2-5 bullet points or short paragraphs explaining user-facing changes\n[COMMIT_REFS]\n- Repo: commit subject\n\nRules:\n- No JSON output\n- Keep grounded to provided commits\n- Do not invent features\n\nCommits for ${date}:\n${JSON.stringify(filteredDayData, null, 2)}`;
         const llmConfig = loadLLMConfig();
         const provider = llmConfig.providers[llmConfig.activeProvider] || {};
         const ctrl = new AbortController();
@@ -187,7 +440,7 @@ export const BatchProvider = ({ children }) => {
                     return b;
                 }));
 
-                const response = await window.puter.ai.chat(prompt);
+                const response = await window.puter.ai.chat(expansionPrompt);
                 refinedText = response?.toString() || '';
                 
                 // Final update
@@ -210,7 +463,7 @@ export const BatchProvider = ({ children }) => {
                     model: provider.model,
                     messages: [
                         { role: 'system', content: systemPrompt },
-                        { role: 'user', content: `Commits for ${date}:\n${JSON.stringify(filteredDayData, null, 2)}` },
+                        { role: 'user', content: expansionPrompt },
                     ],
                     thinking: true
                 }, ctrl.signal);
@@ -279,6 +532,8 @@ export const BatchProvider = ({ children }) => {
         }
     }
             
+    let structuredItem = { ...fallbackStructuredItem };
+
     if (!refinedText || refinedText.trim() === '%ContextNotFound%') {
         if (aiAttempted && refinedText.trim() === '%ContextNotFound%') {
             log('system', `   (Skipped ${date}: Trivial changes)`);
@@ -289,6 +544,11 @@ export const BatchProvider = ({ children }) => {
             }
         }
     } else {
+                structuredItem = parseStage1StructuredItem(refinedText, fallbackStructuredItem);
+                if (structuredItem.parseWarnings.length > 0) {
+                    log('warning', `   Stage 1 parse warnings for ${date}: ${structuredItem.parseWarnings.join(' ')}`);
+                }
+
         const lines = refinedText.split('\n');
         
         // Extract Title: Look for [TITLE: ...] or a leading # Header
@@ -338,10 +598,24 @@ export const BatchProvider = ({ children }) => {
     setBatches(prev => prev.map(b => {
         if (b.id === batchId) {
             const otherPages = b.pages.filter(p => p.date !== date);
-            return { ...b, pages: [...otherPages, page].sort((a,b) => b.date.localeCompare(a.date)) };
+                        const otherItems = (b.stage1Items || []).filter((item) => item.date !== date);
+                        const stage1Items = [...otherItems, structuredItem].sort((a, b) => b.date.localeCompare(a.date));
+                        const pages = [...otherPages, page].sort((a,b) => b.date.localeCompare(a.date));
+                        return { ...b, pages, stage1Items };
         }
         return b;
     }));
+
+        const batchState = batchesRef.current.find((b) => b.id === batchId);
+        if (batchState?.config?.cacheOutputs) {
+            saveBatchCache(batchId, {
+                module: batchState.module,
+                since: batchState.config.since,
+                until: batchState.config.until,
+                pages: (batchState.pages || []).filter((p) => p.date !== date).concat([page]),
+                stage1Items: (batchState.stage1Items || []).filter((item) => item.date !== date).concat([structuredItem]),
+            });
+        }
   };
 
   const retryDay = useCallback(async (id, date) => {
@@ -355,7 +629,7 @@ export const BatchProvider = ({ children }) => {
       }
       
       const { config } = b;
-      const historyRes = await getBatchedGitHistory(config.since, config.branch);
+    const historyRes = await getBatchedGitHistory(config.since, config.until, config.branch, config.module);
       const history = historyRes.data.history || {};
       const dayRepos = history[date];
       if (!dayRepos) return;
@@ -364,41 +638,123 @@ export const BatchProvider = ({ children }) => {
       await processDay(id, date, dayRepos, config);
   }, [addLog]);
 
-  const consolidateBatch = async (batchId, customPrompt = null) => {
+    const consolidateBatch = async (batchId, customPrompt = null) => {
     const b = batchesRef.current.find(x => x.id === batchId);
-    if (!b || b.pages.length === 0) return;
+                if (!b || (b.stage1Items || []).length === 0) return null;
 
     const log = (type, msg) => addLog(batchId, type, msg);
     log('system', 'Starting agentic consolidation pass...');
     updateBatch(batchId, { currentStep: 'Consolidating pages...' });
 
-    const pageSummaries = b.pages.map(p => ({
-        id: p.id,
-        title: p.title,
-        summary: p.blocks.map(bl => bl.text || bl.items?.join(', ') || '').join(' ').slice(0, 500)
-    }));
+        const stage1TitlePayload = b.stage1Items.map((item) => ({
+            id: item.id,
+            date: item.date,
+            title: item.title,
+        }));
 
-    const defaultConsolidationPrompt = `You are a professional release notes editor. Below is a list of update pages generated from git history.
-Some pages might overlap in theme (e.g., several days of "UI Improvements"). 
-Your goal: Group these into 3-5 high-level thematic pages.
-Output your decision as a JSON object: 
-{
-  "pages": [
-    { "title": "New Thematic Title", "source_page_ids": ["page_id_1", "page_id_2"] }
-  ],
-  "workshop_bbcode": "[B]Steam Workshop BBCode Summary Here[/B]"
-}
+        const defaultConsolidationPrompt = `You are categorizing update titles into fixed categories.
 
-Input:
-${JSON.stringify(pageSummaries, null, 2)}`;
+    Before writing your answer, ask yourself this internal question and answer it silently:
+    "What headline would make players immediately understand the value of this update without relying on dates?"
+
+Allowed categories only:
+- Features
+- Fixes
+- QoL
+- Performance
+- Balance
+- Misc
+
+Output markdown only in this exact format:
+OVERALL_TITLE: creative, player-facing title (not date-only)
+CATEGORY_MAP:
+- item_id => Features|Fixes|QoL|Performance|Balance|Misc
+CATEGORY_SUMMARIES:
+Features: one short line
+Fixes: one short line
+QoL: one short line
+Performance: one short line
+Balance: one short line
+Misc: one short line
+
+Rules:
+- Use only item ids provided
+- Every item id must be assigned exactly once
+- Do not output JSON
+- Do not use titles like "Daily Update Log (date range)" or date-only names
+
+Input items:
+${stage1TitlePayload.map((item) => `- ${item.id} | ${item.date} | ${item.title}`).join('\n')}`;
 
     const finalPrompt = customPrompt || defaultConsolidationPrompt;
 
     updateStreamingData(batchId, "_consolidation", { status: 'streaming', thinking: '', content: '' });
 
     try {
+        const llmConfig = loadLLMConfig();
+        const provider = llmConfig.providers[llmConfig.activeProvider] || {};
+
+        if (provider.is_browser_only) {
+            if (!window.puter) throw new Error('Puter.js not available.');
+            const response = await window.puter.ai.chat(finalPrompt);
+            const streamContent = response?.toString() || '';
+
+            updateStreamingData(batchId, "_consolidation", {
+                content: streamContent,
+                thinking: '',
+                status: 'completed'
+            });
+
+            const categorization = parseStage2Categorization(streamContent, b.stage1Items || []);
+            categorization.overallTitle = normalizeOverallTitle(categorization.overallTitle, categorization, b.stage1Items || []);
+            const newPages = assembleCategoryPages(b.stage1Items || [], categorization);
+            const workshopLines = STAGE2_CATEGORIES
+              .filter((cat) => newPages.find((p) => p.title === cat))
+              .map((cat) => `• ${cat}: ${categorization.summaries?.[cat] || 'Updates available.'}`)
+              .join('\n');
+            const workshopMetadata = `[B]${categorization.overallTitle || 'Update Summary'}[/B]\n${workshopLines}`;
+
+            updateBatch(batchId, {
+                consolidatedPages: newPages,
+                categorization,
+                generatedUpdateTitle: categorization.overallTitle,
+                finalPages: newPages,
+                workshopMetadata,
+                currentStep: 'Consolidation complete',
+                consolidationError: null
+            });
+
+            if (b.config?.cacheOutputs) {
+              saveBatchCache(batchId, {
+                module: b.module,
+                since: b.config.since,
+                until: b.config.until,
+                stage1Items: b.stage1Items,
+                categorization,
+                generatedUpdateTitle: categorization.overallTitle,
+                finalPages: newPages,
+                workshopMetadata,
+                pages: b.pages,
+              });
+            }
+
+            log('success', 'Batch consolidated into thematic pages!');
+            return { newPages, workshopMetadata, categorization };
+        }
+
+        if (!provider.base_url || !provider.model) {
+            throw new Error('Active LLM provider is missing base_url or model. Configure it in LLM Settings.');
+        }
+
         const stream = await llmChatStream({
-            messages: [{ role: 'system', content: 'You are a JSON-only response agent.' }, { role: 'user', content: finalPrompt }]
+            base_url: provider.base_url,
+            api_key: provider.api_key,
+            model: provider.model,
+            messages: [
+                { role: 'system', content: 'You are a strict categorization assistant. Follow the requested markdown format exactly.' },
+                { role: 'user', content: finalPrompt }
+            ],
+            thinking: !!llmConfig.thinking
         });
 
         const reader = stream.getReader();
@@ -430,51 +786,51 @@ ${JSON.stringify(pageSummaries, null, 2)}`;
             }
         }
 
-        let decision;
-        try {
-            const jsonText = streamContent.replace(/```json|```/g, '').trim();
-            decision = JSON.parse(jsonText);
-        } catch (e) {
-            log('error', `Consolidation response was not valid JSON: ${e.message}`);
-            updateBatch(batchId, { 
-                status: 'error', 
-                error: `Consolidation failed: AI response was not valid JSON. You can retry.`, 
-                currentStep: 'Consolidation ERROR' 
-            });
-            return;
-        }
+        const categorization = parseStage2Categorization(streamContent, b.stage1Items || []);
+        categorization.overallTitle = normalizeOverallTitle(categorization.overallTitle, categorization, b.stage1Items || []);
+        const newPages = assembleCategoryPages(b.stage1Items || [], categorization);
+
+        const workshopLines = STAGE2_CATEGORIES
+          .filter((cat) => newPages.find((p) => p.title === cat))
+          .map((cat) => `• ${cat}: ${categorization.summaries?.[cat] || 'Updates available.'}`)
+          .join('\n');
+
+        const workshopMetadata = `[B]${categorization.overallTitle || 'Update Summary'}[/B]\n${workshopLines}`;
 
         updateStreamingData(batchId, "_consolidation", { status: 'completed' });
 
-        const newPages = decision.pages.map((group, idx) => {
-            const sourcePages = b.pages.filter(p => group.source_page_ids.includes(p.id));
-            const blocks = [];
-            sourcePages.forEach(p => {
-                blocks.push({ type: 'heading', level: 2, text: p.title });
-                blocks.push(...p.blocks.filter(bl => bl.level !== 1)); // Skip redundant H1s
-            });
-
-            return {
-                id: `consolidated_${idx}`,
-                chapter_id: "release_notes",
-                title: group.title,
-                blocks
-            };
-        });
-
         updateBatch(batchId, { 
             consolidatedPages: newPages, 
-            workshopMetadata: decision.workshop_bbcode,
+            categorization,
+            generatedUpdateTitle: categorization.overallTitle,
+            finalPages: newPages,
+            workshopMetadata,
             currentStep: 'Consolidation complete',
             consolidationError: null
         });
+
+        if (b.config?.cacheOutputs) {
+          saveBatchCache(batchId, {
+            module: b.module,
+            since: b.config.since,
+            until: b.config.until,
+            stage1Items: b.stage1Items,
+            categorization,
+            generatedUpdateTitle: categorization.overallTitle,
+            finalPages: newPages,
+            workshopMetadata,
+            pages: b.pages,
+          });
+        }
         updateStreamingData(batchId, "_consolidation", { status: 'completed' }); // Ensure it marks as done
         log('success', 'Batch consolidated into thematic pages!');
+        return { newPages, workshopMetadata, categorization };
 
     } catch (e) {
         log('error', `Consolidation failed: ${e.message}`);
         updateBatch(batchId, { consolidationError: e.message });
         updateStreamingData(batchId, "_consolidation", { status: 'error', error: e.message });
+        return null;
     }
   };
 
@@ -486,6 +842,14 @@ ${JSON.stringify(pageSummaries, null, 2)}`;
 
     try {
         log('system', `Starting background batch: ${since} -> ${until}`);
+
+            if (config._resolvedResumeCache?.stage1Items?.length > 0) {
+                updateBatch(id, {
+                    stage1Items: config._resolvedResumeCache.stage1Items,
+                    pages: config._resolvedResumeCache.pages || [],
+                    currentStep: 'Loaded Stage 1 cache'
+                });
+            }
         
         setStep('Fetching donators...');
         let currentDonators = null;
@@ -505,36 +869,52 @@ ${JSON.stringify(pageSummaries, null, 2)}`;
             }
             history = historyRes.data.history;
         }
+        updateBatch(id, { history });
         
+        const skipStage1 = config.resumeFromStage === 2 && config._resolvedResumeCache?.stage1Items?.length > 0;
         const allDates = Object.keys(history).sort();
         const rangeDates = allDates.filter(d => d >= since && d <= until);
         const total = rangeDates.length;
 
-        for (let i = 0; i < total; i++) {
-            while (true) {
-                const currentBatch = batchesRef.current.find(b => b.id === id);
-                if (!currentBatch) return; 
-                if (!currentBatch.paused) break;
-                await new Promise(r => setTimeout(r, 500));
-            }
+        if (!skipStage1) {
+          for (let i = 0; i < total; i++) {
+              while (true) {
+                  const currentBatch = batchesRef.current.find(b => b.id === id);
+                  if (!currentBatch) return; 
+                  if (!currentBatch.paused) break;
+                  await new Promise(r => setTimeout(r, 500));
+              }
 
-            const date = rangeDates[i];
-            setStep(`Processing ${date}...`);
-            const dayRepos = history[date];
+              const date = rangeDates[i];
+              setStep(`Processing ${date}...`);
+              const dayRepos = history[date];
 
-            if (dayRepos) {
-                log('system', `-> Building Page for ${date}`);
-                await processDay(id, date, dayRepos, config);
-            }
-            
-            setProg(Math.round(((i + 1) / total) * 100));
+              if (dayRepos) {
+                  log('system', `-> Building Page for ${date}`);
+                  await processDay(id, date, dayRepos, config);
+              }
+              
+              setProg(Math.round(((i + 1) / total) * 100));
+          }
+        } else {
+          setProg(100);
+          setStep('Stage 1 skipped via cache');
         }
 
         updateBatch(id, { progress: 100 });
-        await consolidateBatch(id);
+                let pages = [];
+                if (config.resumeFromStage !== 3) {
+                    const consolidationResult = await consolidateBatch(id, config.consolidationPrompt);
+                    pages = [...(consolidationResult?.newPages || [])];
+                } else {
+                    const finalBatch = batchesRef.current.find(b => b.id === id);
+                    pages = [...(finalBatch?.finalPages || finalBatch?.consolidatedPages || [])];
+                }
 
-        const finalBatch = batchesRef.current.find(b => b.id === id);
-        const pages = [...(finalBatch?.pages || [])];
+                if (pages.length === 0) {
+                    const finalBatch = batchesRef.current.find(b => b.id === id);
+                    pages = [...(finalBatch?.finalPages || finalBatch?.consolidatedPages || [])];
+                }
 
         if (pages.length === 0) {
             log('system', 'No updates found in selected range.');
@@ -542,8 +922,8 @@ ${JSON.stringify(pageSummaries, null, 2)}`;
             return;
         }
 
-        if (currentDonators) {
-             pages.push({
+           if (currentDonators) {
+               pages.push({
                 id: "hall_of_fame",
                 chapter_id: "release_notes",
                 title: currentDonators.page_title || "Hall of Fame",
@@ -555,8 +935,18 @@ ${JSON.stringify(pageSummaries, null, 2)}`;
             });
         }
 
-        log('success', 'Batch daily refinement complete. You can now run thematic consolidation.');
-        updateBatch(id, { status: 'refining_done', currentStep: 'Daily Refinement Complete' });
+                updateBatch(id, {
+                    finalPages: pages,
+                    status: 'refining_done',
+                    currentStep: config.autoSaveAfterConsolidation ? 'Auto-saving assembled update...' : 'Stage 3 ready (commit when ready)'
+                });
+
+                if (config.autoSaveAfterConsolidation) {
+                    await saveBatchVolume(id, { pages });
+                    return;
+                }
+
+                log('success', 'Batch daily refinement complete. Stage 3 is ready for manual commit.');
 
     } catch (error) {
         log('error', `Batch Failed: ${error.message}`);
@@ -564,7 +954,7 @@ ${JSON.stringify(pageSummaries, null, 2)}`;
     }
   };
 
-  const saveBatchVolume = async (batchId) => {
+    const saveBatchVolume = async (batchId, overrides = {}) => {
       const batch = batchesRef.current.find(b => b.id === batchId);
       if (!batch) return;
 
@@ -572,7 +962,7 @@ ${JSON.stringify(pageSummaries, null, 2)}`;
           updateBatch(batchId, { currentStep: 'Finalizing Save...', status: 'saving' });
           
           const { since, until, module } = batch.config;
-          const pages = batch.consolidatedPages || batch.pages; // Use consolidated if available
+          const pages = overrides.pages || batch.finalPages || batch.consolidatedPages || batch.pages; // Use assembled pages when available
           
           const capitals = module.replace(/[^A-Z]/g, '') || 'Upd';
           const volId = `${capitals}_Upd_${until.replace(/-/g, '_')}`;
@@ -580,7 +970,7 @@ ${JSON.stringify(pageSummaries, null, 2)}`;
           const payload = {
               manual_id: volId,
               module: module,
-              title: `Update: ${since.slice(5).replace(/-/g, '/')} - ${until.slice(5).replace(/-/g, '/')}`,
+              title: overrides.title || batch.generatedUpdateTitle || `Update: ${since.slice(5).replace(/-/g, '/')} - ${until.slice(5).replace(/-/g, '/')}`,
               description: `Consolidated updates from ${since} to ${until}`,
               start_page_id: pages[0]?.id || "index",
               audiences: [module],
@@ -591,9 +981,28 @@ ${JSON.stringify(pageSummaries, null, 2)}`;
               pages
           };
 
-          await createManualDefinition(payload, 'updates', module);
+                    try {
+                        await createManualDefinition(payload, 'updates', module);
+                    } catch (createErr) {
+                        const detail = String(createErr?.response?.data?.detail || createErr?.message || '');
+                        if (/already exists|duplicate|manual/i.test(detail)) {
+                            await saveManualDefinition(volId, payload, 'updates', module);
+                        } else {
+                            throw createErr;
+                        }
+                    }
           addLog(batchId, 'success', `VOLUME SAVED: ${volId} (${pages.length} pages)`);
           updateBatch(batchId, { status: 'success', currentStep: 'Completed' });
+
+                    if (batch.config?.cacheOutputs) {
+                        saveBatchCache(batchId, {
+                            module,
+                            since,
+                            until,
+                            finalPages: pages,
+                            generatedUpdateTitle: payload.title,
+                        });
+                    }
       } catch (error) {
           addLog(batchId, 'error', `Final Save Failed: ${error.message}`);
           updateBatch(batchId, { status: 'error', error: error.message, currentStep: 'Save ERROR' });
@@ -603,7 +1012,7 @@ ${JSON.stringify(pageSummaries, null, 2)}`;
   const dismissBatch = useCallback((id) => updateBatch(id, { dismissed: true }), [updateBatch]);
 
   return (
-    <BatchContext.Provider value={{ batches, spawnBatch, removeBatch, skipBatchItem, pauseBatch, resumeBatch, restartBatch, retryDay, openBatchId, openFullView, closeFullView, dismissBatch, consolidateBatch, saveBatchVolume }}>
+        <BatchContext.Provider value={{ batches, spawnBatch, removeBatch, skipBatchItem, pauseBatch, resumeBatch, restartBatch, retryDay, openBatchId, openFullView, closeFullView, dismissBatch, consolidateBatch, saveBatchVolume, listBatchCaches, clearBatchCache }}>
       {children}
     </BatchContext.Provider>
   );

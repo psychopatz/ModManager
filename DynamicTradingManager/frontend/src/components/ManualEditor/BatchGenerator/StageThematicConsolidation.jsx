@@ -47,6 +47,13 @@ const StageThematicConsolidation = ({
             <Collapse in={sectionsExpanded.consolidation}>
                 <Box sx={{ pl: 2, pb: 2, pr: 1 }}>
                     <Stack spacing={2}>
+                        {attachedBatch.generatedUpdateTitle && (
+                            <Box sx={{ p: 1.5, bgcolor: 'rgba(33, 150, 243, 0.08)', borderRadius: 1.5, border: '1px solid rgba(33, 150, 243, 0.2)' }}>
+                                <Typography variant="caption" sx={{ fontWeight: 800, color: 'info.main', display: 'block', mb: 0.5 }}>OVERALL UPDATE TITLE</Typography>
+                                <Typography variant="body2" sx={{ fontWeight: 700 }}>{attachedBatch.generatedUpdateTitle}</Typography>
+                            </Box>
+                        )}
+
                         {(attachedBatch.consolidatedPages || []).map((page, idx) => (
                             <Box key={idx} sx={{ p: 1.5, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 1.5, border: '1px solid rgba(255,255,255,0.05)' }}>
                                 <Typography variant="caption" sx={{ fontWeight: 800, color: 'info.main', display: 'block', mb: 0.5 }}>{page.title.toUpperCase()}</Typography>
@@ -55,6 +62,17 @@ const StageThematicConsolidation = ({
                                 </Typography>
                             </Box>
                         ))}
+
+                        {attachedBatch.categorization?.map && (
+                            <Box sx={{ p: 1.5, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 1.5, border: '1px solid rgba(255,255,255,0.05)' }}>
+                                <Typography variant="caption" sx={{ fontWeight: 800, opacity: 0.7, display: 'block', mb: 1 }}>CATEGORY MAP PREVIEW</Typography>
+                                {Object.entries(attachedBatch.categorization.map).slice(0, 10).map(([itemId, category]) => (
+                                    <Typography key={itemId} variant="caption" sx={{ display: 'block', fontFamily: 'monospace', opacity: 0.8 }}>
+                                        {itemId} =&gt; {category}
+                                    </Typography>
+                                ))}
+                            </Box>
+                        )}
 
                         <Button 
                             size="small" 

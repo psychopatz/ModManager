@@ -594,8 +594,9 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
             <Select
               labelId="manual-module-view-label"
               label="Module View"
-              value={selectedModule}
+              value={moduleOptions.some(o => o.value === selectedModule) ? selectedModule : ""}
               onChange={(e) => setSelectedModule(e.target.value)}
+              disabled={moduleOptions.length === 0}
             >
               {moduleOptions.map((option) => (
                 <MenuItem key={option.value} value={option.value}>
@@ -611,8 +612,9 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
               <Select
                 labelId="manual-branch-label"
                 label="Branch"
-                value={selectedBranch}
+                value={branches.includes(selectedBranch) ? selectedBranch : ""}
                 onChange={(e) => handleBranchChange(e.target.value)}
+                disabled={branches.length === 0}
               >
                 {branches.map((b) => (
                   <MenuItem key={b} value={b}>

@@ -203,7 +203,7 @@ export const ManualDetailsForm = ({
             <Select
               labelId="manual-audience-label"
               label="Module"
-              value={getPrimaryAudience(draft)}
+              value={audienceOptions.some(o => o.value === getPrimaryAudience(draft)) ? getPrimaryAudience(draft) : ""}
               onChange={(e) => handleAudienceChange(e.target.value)}
             >
               {audienceOptions.map((option) => (
@@ -234,7 +234,9 @@ export const ManualDetailsForm = ({
             <Select
               labelId="manual-source-folder-label"
               label="Definition Folder"
-              value={draft.source_folder || getDefaultSourceFolder(getPrimaryAudience(draft), editorScope)}
+              value={sourceFolderOptions.some(o => o.value === (draft.source_folder || getDefaultSourceFolder(getPrimaryAudience(draft), editorScope))) 
+                ? (draft.source_folder || getDefaultSourceFolder(getPrimaryAudience(draft), editorScope)) 
+                : ""}
               onChange={(e) => handleSourceFolderChange(e.target.value)}
             >
               {sourceFolderOptions.map((option) => (

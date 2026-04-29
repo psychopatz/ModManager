@@ -32,6 +32,7 @@ import { useLLM } from '../../hooks/useLLM';
 
 const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop', module = '', targets = [], modules = [], attachedBatchId = null }) => {
   const { batches, spawnBatch, openBatchId, closeFullView, removeBatch } = useBatchSystem();
+  const { activeProvider } = useLLM();
   
   // Detached mode detection
   const activeBatchId = attachedBatchId || openBatchId;

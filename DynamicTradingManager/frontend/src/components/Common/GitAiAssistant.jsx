@@ -272,10 +272,10 @@ const GitAiAssistant = ({
             <FormControl size="small" sx={{ minWidth: 200 }}>
               <InputLabel>Project</InputLabel>
               <Select 
-                value={suiteMode ? 'suite' : selectedTarget} 
+                value={suiteMode ? 'suite' : (availableTargets.some(t => t.key === selectedTarget) ? selectedTarget : "")} 
                 label="Project" 
                 onChange={(e) => onTargetChange(e.target.value)}
-                disabled={suiteMode}
+                disabled={suiteMode || availableTargets.length === 0}
               >
                 {suiteMode ? (
                   <MenuItem value="suite">All Projects (Suite)</MenuItem>
@@ -288,16 +288,14 @@ const GitAiAssistant = ({
           <FormControl size="small" sx={{ minWidth: 140 }}>
             <InputLabel>Branch</InputLabel>
             <Select 
-              value={branches.includes(branch) ? branch : (branches[0] || 'develop')} 
+              value={branches.includes(branch) ? branch : ""} 
               label="Branch" 
               onChange={(e) => setBranch(e.target.value)}
+              disabled={branches.length === 0}
             >
               {branches.map(b => (
                 <MenuItem key={b} value={b}>{b}</MenuItem>
               ))}
-              {!branches.includes(branch) && branch && (
-                <MenuItem value={branch}>{branch}</MenuItem>
-              )}
             </Select>
           </FormControl>
 

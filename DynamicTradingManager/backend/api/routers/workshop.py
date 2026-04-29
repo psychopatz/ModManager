@@ -42,15 +42,19 @@ async def get_workshop_targets():
 
 @router.get("/api/workshop/metadata")
 async def get_workshop_metadata(target: Optional[str] = None):
-    project = get_workshop_project_or_404(target)
-    mod_root = project["path"]
-    workshop_txt_path = mod_root / "workshop.txt"
-    return {
-        **parse_workshop_txt(workshop_txt_path),
-        "target": project["key"],
-        "project_name": project["name"],
-        "project_title": project["title"],
-    }
+    try:
+        project = get_workshop_project_or_404(target)
+        mod_root = project["path"]
+        workshop_txt_path = mod_root / "workshop.txt"
+        return {
+            **parse_workshop_txt(workshop_txt_path),
+            "target": project["key"],
+            "project_name": project["name"],
+            "project_title": project["title"],
+        }
+    except Exception as exc:
+        logger.exception("Failed to fetch workshop metadata for target %s", target)
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @router.get("/api/workshop/sync")
@@ -119,12 +123,16 @@ async def trigger_workshop_push(request: WorkshopPushRequest):
 
 @router.get("/api/workshop/versions")
 async def get_workshop_versions(target: Optional[str] = None):
-    project = get_workshop_project_or_404(target)
-    return {
-        "target": project["key"],
-        "project_name": project["name"],
-        "versions": list_mod_versions(project["path"]),
-    }
+    try:
+        project = get_workshop_project_or_404(target)
+        return {
+            "target": project["key"],
+            "project_name": project["name"],
+            "versions": list_mod_versions(project["path"]),
+        }
+    except Exception as exc:
+        logger.exception("Failed to fetch workshop versions for target %s", target)
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @router.post("/api/workshop/versions/increment")

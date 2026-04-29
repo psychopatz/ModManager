@@ -279,7 +279,12 @@ const WorkshopPage = () => {
         <Stack direction="row" spacing={2} alignItems="center">
           <FormControl size="small" sx={{ minWidth: 220 }}>
             <InputLabel>Project</InputLabel>
-            <Select value={selectedTarget} label="Project" onChange={(e) => setSelectedTarget(e.target.value)}>
+            <Select 
+              value={targets.some(t => t.key === selectedTarget) ? selectedTarget : ""} 
+              label="Project" 
+              onChange={(e) => setSelectedTarget(e.target.value)}
+              disabled={targets.length === 0}
+            >
               {targets.map((target) => (
                 <MenuItem key={target.key} value={target.key}>
                   {target.name}

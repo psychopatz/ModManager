@@ -156,41 +156,48 @@ async def stream_completion(
     if max_tokens is not None:
         kwargs["max_tokens"] = max_tokens
 
-    if thinking:
+    if thinking and ("o1-" in model or "o3-" in model):
         kwargs.setdefault("extra_body", {})
         kwargs["extra_body"]["reasoning_effort"] = "high"
 
-    logger.info("Starting LLM stream: model=%s base_url=%s", model, base_url)
+    logger.info("Starting LLM stream: model=%s base_url=%s thinking=%s", model, base_url, thinking)
 
     try:
         stream_response = await client.chat.completions.create(**kwargs)
         async for chunk in stream_response:
-            if not chunk.choices:
-                continue
-            delta = chunk.choices[0].delta
-            
-            payload = {}
-            if delta and delta.content:
-                payload["content"] = delta.content
-            
-            # Look for reasoning content
-            reasoning = None
-            if hasattr(delta, "reasoning_content") and delta.reasoning_content:
-                reasoning = delta.reasoning_content
-            elif hasattr(delta, "thinking") and delta.thinking:
-                reasoning = delta.thinking
-            
-            if reasoning:
-                payload["thinking"] = reasoning
-            
-            if chunk.model:
-                payload["model"] = chunk.model
+            try:
+                if not chunk.choices:
+                    continue
+                delta = chunk.choices[0].delta
                 
-            if payload:
-                yield json.dumps(payload) + "\n"
+                payload = {}
+                if delta and hasattr(delta, "content") and delta.content:
+                    payload["content"] = delta.content
+                
+                # Look for reasoning content in multiple possible fields
+                reasoning = None
+                if delta:
+                    if hasattr(delta, "reasoning_content") and delta.reasoning_content:
+                        reasoning = delta.reasoning_content
+                    elif hasattr(delta, "thinking") and delta.thinking:
+                        reasoning = delta.thinking
+                    # Some providers might put it in content if thinking toggle is off but model thinks anyway
+                
+                if reasoning:
+                    payload["thinking"] = reasoning
+                
+                if chunk.model:
+                    payload["model"] = chunk.model
+                    
+                if payload:
+                    yield json.dumps(payload) + "\n"
+            except Exception as inner_exc:
+                logger.error("Error processing stream chunk: %s", inner_exc, exc_info=True)
+                continue
+                
     except Exception as exc:
-        logger.error("Error in LLM stream: %s", exc)
-        yield json.dumps({"error": str(exc)}) + "\n"
+        logger.error("Error in LLM stream: %s", exc, exc_info=True)
+        yield json.dumps({"error": str(exc) or "Unknown stream error"}) + "\n"
     finally:
         await client.close()
 

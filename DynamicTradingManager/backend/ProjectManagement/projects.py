@@ -24,7 +24,7 @@ def _parse_workshop_title(repo_path: Path) -> str:
         return repo_path.name
 
     try:
-        with open(workshop_txt, "r", encoding="utf-8") as handle:
+        with open(workshop_txt, "r", encoding="utf-8", errors="replace") as handle:
             for raw_line in handle:
                 line = raw_line.strip()
                 if line.startswith("title="):
@@ -50,7 +50,7 @@ def _discover_sub_mods(repo_path: Path) -> list[dict]:
     for mod_info_path in mods_dir.glob("**/mod.info"):
         try:
             mod_data = {}
-            with open(mod_info_path, "r", encoding="utf-8") as f:
+            with open(mod_info_path, "r", encoding="utf-8", errors="replace") as f:
                 for line in f:
                     if "=" in line:
                         k, v = line.split("=", 1)
@@ -110,10 +110,16 @@ def _iter_candidate_paths():
         yield from add(path)
 
     parent = default_root.parent
-    if parent.exists():
-        for child in sorted(parent.iterdir(), key=lambda item: item.name.lower()):
-            if child.is_dir():
-                yield from add(child)
+    if parent.exists() and parent.is_dir():
+        try:
+            for child in sorted(parent.iterdir(), key=lambda item: item.name.lower()):
+                try:
+                    if child.is_dir():
+                        yield from add(child)
+                except Exception:
+                    continue
+        except Exception as exc:
+            logger.warning("Error scanning parent directory %s: %s", parent, exc)
 
 
 def list_workshop_projects():
@@ -121,28 +127,31 @@ def list_workshop_projects():
     projects = []
 
     for repo_path in _iter_candidate_paths():
-        if not repo_path.exists() or not (repo_path / "Contents").exists():
-            continue
+        try:
+            if not repo_path.exists() or not (repo_path / "Contents").exists():
+                continue
 
-        workshop_id = resolve_workshop_id(repo_path)
-        repo_name = repo_path.name
-        project_key = _normalize_key(repo_name)
-        title = _parse_workshop_title(repo_path)
+            workshop_id = resolve_workshop_id(repo_path)
+            repo_name = repo_path.name
+            project_key = _normalize_key(repo_name)
+            title = _parse_workshop_title(repo_path)
 
-        projects.append(
-            {
-                "key": project_key,
-                "name": repo_name,
-                "title": title,
-                "path": str(repo_path),
-                "has_preview": (repo_path / "preview.png").exists(),
-                "workshop_id": workshop_id,
-                "has_workshop_id": bool(workshop_id),
-                "is_default": repo_path == default_root,
-                "has_git": (repo_path / ".git").exists(),
-                "sub_mods": _discover_sub_mods(repo_path),
-            }
-        )
+            projects.append(
+                {
+                    "key": project_key,
+                    "name": repo_name,
+                    "title": title,
+                    "path": str(repo_path),
+                    "has_preview": (repo_path / "preview.png").exists(),
+                    "workshop_id": workshop_id,
+                    "has_workshop_id": bool(workshop_id),
+                    "is_default": repo_path == default_root,
+                    "has_git": (repo_path / ".git").exists(),
+                    "sub_mods": _discover_sub_mods(repo_path),
+                }
+            )
+        except Exception as exc:
+            logger.error("Failed to discover project at %s: %s", repo_path, exc)
 
     projects.sort(key=lambda item: (not item["is_default"], item["name"].lower()))
     return projects

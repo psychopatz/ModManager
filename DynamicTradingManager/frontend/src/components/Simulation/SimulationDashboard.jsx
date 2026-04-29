@@ -291,7 +291,11 @@ export default function SimulationDashboard() {
                     <Box sx={{ mb: 2, display: 'flex', gap: 2, alignItems: 'center' }}>
                         <FormControl sx={{ minWidth: 200 }}>
                             <InputLabel>Selecting Trader</InputLabel>
-                            <Select value={selectedTrader} label="Selecting Trader" onChange={handleTraderChange}>
+                            <Select 
+                                value={baseData?.archetypes && baseData.archetypes[selectedTrader] ? selectedTrader : ""} 
+                                label="Selecting Trader" 
+                                onChange={handleTraderChange}
+                            >
                                 {Object.entries(baseData.archetypes).map(([id, arch]) => (
                                     <MenuItem key={id} value={id}>{arch.name}</MenuItem>
                                 ))}

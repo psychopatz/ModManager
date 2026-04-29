@@ -197,7 +197,7 @@ const UpdateVersionEditorPage = () => {
 	const [latestCommitHash, setLatestCommitHash] = useState('');
 	const [targets, setTargets] = useState([]);
 	const [modules, setModules] = useState([]);
-	const [selectedTarget, setSelectedTarget] = useState('dynamictrading');
+	const [selectedTarget, setSelectedTarget] = useState('');
 	const [selectedModule, setSelectedModule] = useState('');
 
 	const moduleOptions = useMemo(() => {

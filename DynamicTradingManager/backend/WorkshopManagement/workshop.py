@@ -18,7 +18,7 @@ def resolve_workshop_id(mod_root: Path) -> str:
     workshop_txt = mod_root / "workshop.txt"
     if workshop_txt.exists():
         try:
-            with open(workshop_txt, "r", encoding="utf-8") as handle:
+            with open(workshop_txt, "r", encoding="utf-8", errors="replace") as handle:
                 for raw_line in handle:
                     line = raw_line.strip()
                     if line.startswith("id="):
@@ -151,7 +151,7 @@ def parse_workshop_txt(workshop_txt_path: Path):
         return metadata
         
     try:
-        with open(workshop_txt_path, "r", encoding="utf-8") as f:
+        with open(workshop_txt_path, "r", encoding="utf-8", errors="replace") as f:
             for line in f:
                 line = line.strip()
                 if not line: continue
@@ -175,11 +175,6 @@ def parse_workshop_txt(workshop_txt_path: Path):
         return metadata
     except Exception as e:
         logger.error(f"Error parsing workshop.txt at {workshop_txt_path}: {e}")
-        # In case of 500, we want to know what exactly happened
-        raise e # Re-raise to let FastAPI catch it or for closer inspection if needed, 
-                 # but based on the code it was returning metadata before. 
-                 # Actually, let's keep it returning metadata but LOG IT CLEARLY.
-                 # Actually, if it's 500, then it's NOT this block (since it has a try/except).
         return metadata
 
 
@@ -190,7 +185,7 @@ def _read_mod_info_fields(mod_info_path: Path) -> dict:
         "version": "",
     }
     try:
-        with open(mod_info_path, "r", encoding="utf-8") as handle:
+        with open(mod_info_path, "r", encoding="utf-8", errors="replace") as handle:
             for raw_line in handle:
                 line = raw_line.strip()
                 if not line or "=" not in line:

@@ -5,6 +5,7 @@ const LLMContext = createContext(null);
 
 export const LLMProvider = ({ children }) => {
   const [config, setConfigState] = useState(loadLLMConfig);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const setConfig = useCallback((updater) => {
     setConfigState((prev) => {
@@ -30,7 +31,7 @@ export const LLMProvider = ({ children }) => {
   }, []);
 
   return (
-    <LLMContext.Provider value={{ config, setConfig }}>
+    <LLMContext.Provider value={{ config, setConfig, settingsOpen, setSettingsOpen }}>
       {children}
     </LLMContext.Provider>
   );

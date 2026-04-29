@@ -1,70 +1,77 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
-  Fab,
-  Paper,
   Typography,
-  TextField,
-  IconButton,
-  Stack,
-  Avatar,
+  Fab,
   Tooltip,
+  IconButton,
+  TextField,
+  Avatar,
+  Stack,
+  Paper,
+  Divider,
+  Collapse,
+  Button,
+  Zoom,
+  Fade,
+  Dialog,
+  DialogContent,
+  DialogTitle,
   Accordion,
   AccordionSummary,
   AccordionDetails,
   CircularProgress,
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  Button,
-  Zoom,
-  Fade,
+  FormControlLabel,
+  Checkbox,
+  Grid,
+  Select,
+  MenuItem,
+  InputLabel,
+  FormControl
 } from '@mui/material';
 import {
   SmartToy as AiIcon,
   Close as CloseIcon,
-  Send as SendIcon,
   DeleteOutline as ClearIcon,
-  ExpandMore as ExpandMoreIcon,
+  Send as SendIcon,
+  AutoAwesome as MagicIcon,
+  Tune as SystemPromptIcon,
+  ExpandMore as ExpandIcon,
   Edit as EditIcon,
   Refresh as RerunIcon,
+  Check as SaveIcon,
   Person as UserIcon,
+  Settings as SettingsIcon,
 } from '@mui/icons-material';
 import { useLLM } from '../../hooks/useLLM';
+import { useLLMInternal } from '../../context/LLMContext';
+import * as api from '../../services/api';
 
-/**
- * TypingIndicator
- * Signature bouncing dots animation.
- */
-const TypingIndicator = () => (
-  <Box sx={{ display: 'flex', gap: 0.5, p: 1, alignItems: 'center' }}>
+const SYSTEM_PROMPT_KEY = 'dt_chat_system_prompt';
+const DEFAULT_SYSTEM_PROMPT = "You are a professional AI Assistant for Project Zomboid Mod Management. Help the user with modding, code analysis, and configuration.";
+
+const TypingAnimation = () => (
+  <Box sx={{ display: 'flex', gap: 0.5, p: 1, alignItems: 'center', height: 20 }}>
     {[0, 1, 2].map((i) => (
       <Box
         key={i}
         sx={{
           width: 6,
           height: 6,
+          bgcolor: 'primary.main',
           borderRadius: '50%',
-          bgcolor: 'text.secondary',
-          opacity: 0.6,
-          animation: `bounce 1.4s infinite ease-in-out both`,
+          animation: 'bounce 1.4s infinite ease-in-out both',
           animationDelay: `${i * 0.16}s`,
+          '@keyframes bounce': {
+            '0%, 80%, 100%': { transform: 'scale(0)' },
+            '40%': { transform: 'scale(1)' },
+          },
         }}
       />
     ))}
-    <style>{`
-      @keyframes bounce {
-        0%, 80%, 100% { transform: scale(0); }
-        40% { transform: scale(1); }
-      }
-    `}</style>
   </Box>
 );
 
-/**
- * LLMChatFloating
- * A premium, streaming-enabled chatbot.
- */
 const LLMChatFloating = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([]);
@@ -72,17 +79,31 @@ const LLMChatFloating = () => {
   const [isTyping, setIsTyping] = useState(false);
   const [editingIndex, setEditingIndex] = useState(null);
   const [editInput, setEditInput] = useState('');
+  const [showSystemPrompt, setShowSystemPrompt] = useState(false);
+  const [isThinking, setIsThinking] = useState(false);
+  const [systemPrompt, setSystemPrompt] = useState(() => {
+    return localStorage.getItem(SYSTEM_PROMPT_KEY) || DEFAULT_SYSTEM_PROMPT;
+  });
   
   const { streamChat, config } = useLLM();
+  const { setConfig, setSettingsOpen } = useLLMInternal();
   const scrollRef = useRef(null);
-  const activeProvider = config.providers[config.activeProvider] || {};
+  const activeProviderId = config.activeProvider;
+  const activeProvider = config.providers[activeProviderId] || {};
 
-  // Auto-scroll to bottom
+  useEffect(() => {
+    localStorage.setItem(SYSTEM_PROMPT_KEY, systemPrompt);
+  }, [systemPrompt]);
+
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, isTyping]);
+
+  const handleModelChange = (modelId) => {
+    setSettingsOpen(true);
+  };
 
   const parseThinking = (text) => {
     if (!text) return [ '', null ];
@@ -102,6 +123,8 @@ const LLMChatFloating = () => {
 
     try {
       await streamChat(history, {
+        systemPrompt,
+        thinking: isThinking,
         onChunk: (chunk) => {
           setMessages((prev) => {
             const next = [...prev];
@@ -167,16 +190,20 @@ const LLMChatFloating = () => {
     setEditingIndex(null);
   };
 
+  const handleResetSystemPrompt = () => {
+    setSystemPrompt(DEFAULT_SYSTEM_PROMPT);
+  };
+
   if (!isOpen) {
     return (
-      <Box sx={{ pointerEvents: 'auto', mb: 2 }}>
+      <Box sx={{ position: 'fixed', bottom: 100, right: 32, zIndex: 9999, pointerEvents: 'auto' }}>
         <Zoom in={!isOpen}>
           <Tooltip title={`AI Chat (${activeProvider.label || activeProvider.id})`} placement="left">
             <Fab 
               color="primary" 
               onClick={() => setIsOpen(true)} 
               size="medium"
-              sx={{ boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }}
+              sx={{ boxShadow: '0 8px 32px rgba(0,0,0,0.4)', pointerEvents: 'auto' }}
             >
               <AiIcon />
             </Fab>
@@ -198,13 +225,14 @@ const LLMChatFloating = () => {
                 height: '80vh',
                 borderRadius: 5,
                 overflow: 'hidden',
-                bgcolor: '#09090b', // Modern Deep Dark
+                bgcolor: '#09090b', 
                 border: '1px solid rgba(255,255,255,0.1)',
                 boxShadow: '0 24px 48px rgba(0,0,0,0.5)',
             }
         }}
     >
       <DialogTitle
+        component="div"
         sx={{
           p: 2.5,
           bgcolor: 'rgba(255,255,255,0.03)',
@@ -222,15 +250,24 @@ const LLMChatFloating = () => {
             <AiIcon sx={{ fontSize: 20 }} />
           </Avatar>
           <Box>
-            <Typography variant="subtitle1" sx={{ fontWeight: 800, color: 'white', lineHeight: 1.2 }}>
+            <Typography component="div" sx={{ fontSize: '1rem', fontWeight: 800, color: 'white', lineHeight: 1.2 }}>
               AI Assistant
             </Typography>
-            <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500 }}>
-              {activeProvider.label} • <span style={{ opacity: 0.7 }}>{activeProvider.model || 'Auto'}</span>
+            <Typography component="div" variant="caption" sx={{ color: 'text.secondary', fontWeight: 500 }}>
+              {activeProvider.label} • {activeProvider.model || 'Auto'}
             </Typography>
           </Box>
         </Stack>
         <Stack direction="row" spacing={0.5}>
+          <Tooltip title="Configure System Prompt & Mode">
+            <IconButton 
+              size="small" 
+              sx={{ color: showSystemPrompt ? 'primary.main' : 'text.secondary' }} 
+              onClick={() => setShowSystemPrompt(!showSystemPrompt)}
+            >
+              <SystemPromptIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
           <Tooltip title="Clear chat history">
             <IconButton size="small" sx={{ color: 'text.secondary' }} onClick={handleClear}>
               <ClearIcon fontSize="small" />
@@ -243,6 +280,79 @@ const LLMChatFloating = () => {
       </DialogTitle>
 
       <DialogContent sx={{ p: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        {/* System Prompt & Mode Editor */}
+        <Collapse in={showSystemPrompt}>
+          <Box sx={{ p: 2.5, bgcolor: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+            <Stack spacing={2.5}>
+              <Stack direction="row" justifyContent="space-between" alignItems="center">
+                <Typography variant="caption" fontWeight={700} color="primary" sx={{ textTransform: 'uppercase', letterSpacing: 1 }}>
+                  Configuration & Personality
+                </Typography>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      size="small"
+                      checked={isThinking}
+                      onChange={(e) => setIsThinking(e.target.checked)}
+                      sx={{ color: 'primary.main', '&.Mui-checked': { color: 'primary.main' } }}
+                    />
+                  }
+                  label={
+                    <Typography variant="caption" sx={{ color: 'text.primary', fontWeight: 600 }}>
+                      Thinking Mode
+                    </Typography>
+                  }
+                />
+              </Stack>
+
+              <Box sx={{ p: 2, borderRadius: 2, bgcolor: 'rgba(25, 118, 210, 0.05)', border: '1px dashed rgba(25, 118, 210, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 700, color: 'text.primary' }}>
+                        {activeProvider.model || 'No model selected'}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                        Active Provider: {activeProvider.label || activeProvider.id}
+                    </Typography>
+                </Box>
+                <Button 
+                    size="small" 
+                    variant="contained" 
+                    startIcon={<SettingsIcon />} 
+                    onClick={() => setSettingsOpen(true)}
+                    sx={{ textTransform: 'none', borderRadius: 2 }}
+                >
+                    Change Model
+                </Button>
+              </Box>
+
+              <Box>
+                <Typography variant="caption" display="block" gutterBottom sx={{ fontWeight: 600, color: 'text.secondary' }}>
+                  System Prompt (AI Identity)
+                </Typography>
+                <TextField
+                  fullWidth
+                  multiline
+                  maxRows={4}
+                  size="small"
+                  value={systemPrompt}
+                  onChange={(e) => setSystemPrompt(e.target.value)}
+                  sx={{ 
+                    '& .MuiInputBase-root': { 
+                      fontSize: '0.8rem', 
+                      color: 'text.secondary',
+                      bgcolor: 'rgba(0,0,0,0.2)' 
+                    } 
+                  }}
+                />
+              </Box>
+
+              <Stack direction="row" spacing={1} justifyContent="flex-end">
+                <Button size="small" variant="text" sx={{ color: 'text.secondary' }} onClick={handleResetSystemPrompt}>Reset to Default</Button>
+                <Button size="small" variant="outlined" onClick={() => setShowSystemPrompt(false)}>Close Editor</Button>
+              </Stack>
+            </Stack>
+          </Box>
+        </Collapse>
         {/* Messages Container */}
         <Box
           ref={scrollRef}
@@ -343,15 +453,15 @@ const LLMChatFloating = () => {
                             </Box>
                         ) : (
                             <>
-                                <Typography variant="body2" sx={{ 
+                                <Box sx={{ 
                                     whiteSpace: 'pre-wrap', 
                                     wordBreak: 'break-word', 
                                     lineHeight: 1.8, 
                                     fontWeight: 400,
                                     fontSize: '0.925rem'
                                 }}>
-                                    {cleanContent || (!msg.thinking && msg.isStreaming && <TypingIndicator />)}
-                                </Typography>
+                                    {cleanContent || (!msg.thinking && msg.isStreaming && <TypingAnimation />)}
+                                </Box>
                                 
                                 {/* Floating Actions */}
                                 <Box 
@@ -396,14 +506,14 @@ const LLMChatFloating = () => {
                             }}
                         >
                             <AccordionSummary
-                            expandIcon={<ExpandMoreIcon sx={{ fontSize: 14, color: 'text.secondary' }} />}
+                            expandIcon={<ExpandIcon sx={{ fontSize: 14, color: 'text.secondary' }} />}
                             sx={{ 
                                 minHeight: 0, 
                                 '& .MuiAccordionSummary-content': { my: 1, display: 'flex', alignItems: 'center', gap: 1 } 
                             }}
                             >
                             {msg.isStreaming && !cleanContent && <CircularProgress size={10} thickness={6} color="primary" />}
-                            <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: 0.5, fontSize: '0.65rem' }}>
+                            <Typography component="div" variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: 0.5, fontSize: '0.65rem' }}>
                                 {msg.isStreaming && !cleanContent ? 'Analyzing Request...' : 'Reasoning Process'}
                             </Typography>
                             </AccordionSummary>

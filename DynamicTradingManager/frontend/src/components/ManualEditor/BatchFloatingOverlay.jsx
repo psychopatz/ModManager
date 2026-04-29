@@ -15,7 +15,7 @@ import LLMChatFloating from '../LLM/LLMChatFloating';
 
 const BatchWidget = ({ batch }) => {
   const [expanded, setExpanded] = useState(false);
-  const { removeBatch, openFullView } = useBatchSystem();
+  const { dismissBatch, openFullView } = useBatchSystem();
 
   const isError = batch.status === 'error';
   const isSuccess = batch.status === 'success';
@@ -55,6 +55,9 @@ const BatchWidget = ({ batch }) => {
         </IconButton>
         <IconButton size="small" onClick={() => openFullView(batch.id)}>
           <MaximizeIcon fontSize="inherit" />
+        </IconButton>
+        <IconButton size="small" onClick={() => dismissBatch(batch.id)}>
+          <CloseIcon fontSize="inherit" />
         </IconButton>
       </Box>
 
@@ -136,8 +139,8 @@ const BatchFloatingOverlay = () => {
     >
       <Box sx={{ pointerEvents: 'auto' }}> 
         {batches.map(batch => (
-          // Hide from floating overlay if full monitor is open for this batch
-          openBatchId !== batch.id && <BatchWidget key={batch.id} batch={batch} />
+          // Hide from floating overlay if full monitor is open for this batch, or if it is manually dismissed
+          (openBatchId !== batch.id && !batch.dismissed) && <BatchWidget key={batch.id} batch={batch} />
         ))}
       </Box>
     </Box>

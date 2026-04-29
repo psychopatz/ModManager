@@ -31,6 +31,7 @@ import { ManualDetailsForm } from './ManualDetailsForm';
 import { ChaptersEditor } from './ChaptersEditor';
 import { PagesEditor } from './PagesEditor';
 import BatchUpdateGenerator from './BatchUpdateGenerator';
+import BatchHistoryModal from './BatchHistoryModal';
 import { useBatchSystem } from '../../context/BatchContext';
 import { Badge, Menu } from '@mui/material';
 import AssignmentIcon from '@mui/icons-material/Assignment';
@@ -154,7 +155,7 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
   const uploadTargetRef = useRef(null);
   const [batchGeneratorOpen, setBatchGeneratorOpen] = useState(false);
   const [batchMonitorId, setBatchMonitorId] = useState(null);
-  const [batchMenuAnchor, setBatchMenuAnchor] = useState(null);
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
   const { batches } = useBatchSystem();
 
   // Per-module branch memory
@@ -671,36 +672,11 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
                                 variant="outlined" 
                                 color="info"
                                 startIcon={<AssignmentIcon />}
-                                onClick={(e) => setBatchMenuAnchor(e.currentTarget)}
+                                onClick={() => setHistoryModalOpen(true)}
                             >
-                                Batch Activity
+                                Batch History
                             </Button>
                         </Badge>
-                        <Menu
-                            anchorEl={batchMenuAnchor}
-                            open={Boolean(batchMenuAnchor)}
-                            onClose={() => setBatchMenuAnchor(null)}
-                        >
-                            <Box sx={{ p: 1, minWidth: 200 }}>
-                                <Typography variant="caption" sx={{ fontWeight: 800, px: 2, pb: 1, display: 'block' }}>ACTIVE BATCHES</Typography>
-                                {batches.map(b => (
-                                    <MenuItem key={b.id} onClick={() => { setBatchMonitorId(b.id); setBatchMenuAnchor(null); }}>
-                                        <Stack direction="row" spacing={2} alignItems="center" sx={{ width: '100%' }}>
-                                            <Box sx={{ flexGrow: 1 }}>
-                                                <Typography variant="body2">{b.modName}</Typography>
-                                                <Typography variant="caption" color="text.secondary">{b.currentStep}</Typography>
-                                            </Box>
-                                            <Chip 
-                                                label={`${b.progress}%`} 
-                                                size="small" 
-                                                color={b.status === 'success' ? 'success' : b.status === 'error' ? 'error' : 'primary'}
-                                                sx={{ height: 16, fontSize: '0.6rem' }}
-                                            />
-                                        </Stack>
-                                    </MenuItem>
-                                ))}
-                            </Box>
-                        </Menu>
                     </>
                 )}
                 <Button
@@ -828,6 +804,12 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
           attachedBatchId={batchMonitorId}
         />
       )}
+
+      <BatchHistoryModal
+        open={historyModalOpen}
+        onClose={() => setHistoryModalOpen(false)}
+        onOpenBatch={setBatchMonitorId}
+      />
 
       <Fab
         color={isDrafty ? 'warning' : 'primary'}

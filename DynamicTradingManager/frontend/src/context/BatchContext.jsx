@@ -152,8 +152,37 @@ export const BatchProvider = ({ children }) => {
         try {
             if (provider.is_browser_only) {
                 if (!window.puter) throw new Error('Puter.js not available.');
+                
+                // Show "Thinking" state for browser-only mode since it doesn't stream
+                setBatches(prev => prev.map(b => {
+                    if (b.id === batchId) {
+                        return {
+                            ...b,
+                            streamingData: {
+                                ...(b.streamingData || {}),
+                                [date]: { content: '', thinking: 'AI is analyzing commits via Puter...', status: 'streaming' }
+                            }
+                        };
+                    }
+                    return b;
+                }));
+
                 const response = await window.puter.ai.chat(prompt);
                 refinedText = response?.toString() || '';
+                
+                // Final update
+                setBatches(prev => prev.map(b => {
+                    if (b.id === batchId) {
+                        return {
+                            ...b,
+                            streamingData: {
+                                ...(b.streamingData || {}),
+                                [date]: { content: refinedText, thinking: '', status: 'completed' }
+                            }
+                        };
+                    }
+                    return b;
+                }));
             } else {
                 const streamResponse = await llmChatStream({
                     base_url: provider.base_url,
@@ -385,8 +414,10 @@ export const BatchProvider = ({ children }) => {
     }
   };
 
+  const dismissBatch = useCallback((id) => updateBatch(id, { dismissed: true }), [updateBatch]);
+
   return (
-    <BatchContext.Provider value={{ batches, spawnBatch, removeBatch, skipBatchItem, pauseBatch, resumeBatch, restartBatch, retryDay, openBatchId, openFullView, closeFullView }}>
+    <BatchContext.Provider value={{ batches, spawnBatch, removeBatch, skipBatchItem, pauseBatch, resumeBatch, restartBatch, retryDay, openBatchId, openFullView, closeFullView, dismissBatch }}>
       {children}
     </BatchContext.Provider>
   );

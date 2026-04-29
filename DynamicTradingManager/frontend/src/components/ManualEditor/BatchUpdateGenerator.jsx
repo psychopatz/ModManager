@@ -62,6 +62,7 @@ const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop', m
   const [showConsole, setShowConsole] = useState(false);
   const [confirmData, setConfirmData] = useState(null); // { title, message, onConfirm }
   const [autoScroll, setAutoScroll] = useState(true);
+  const [manuallyExpanded, setManuallyExpanded] = useState({});
   
   const logEndRef = useRef(null);
   const listScrollRef = useRef(null);
@@ -144,6 +145,24 @@ Return ONLY the Markdown content or the %ContextNotFound% signal.`,
   };
 
   useEffect(() => {
+      // Auto-fetch history for attached batches to support raw commit viewing
+      if (isAttached && attachedBatch?.config?.since && attachedBatch?.config?.branch && !history && !loading) {
+          const fetchBg = async () => {
+              setLoading(true);
+              try {
+                  const res = await getBatchedGitHistory(attachedBatch.config.since, attachedBatch.config.branch);
+                  setHistory(res.data.history || {});
+              } catch (e) {
+                  console.error('Background history fetch failed:', e);
+              } finally {
+                  setLoading(false);
+              }
+          };
+          fetchBg();
+      }
+  }, [isAttached, attachedBatch?.config, history]);
+
+  useEffect(() => {
     if (autoScroll && attachedBatch?.currentStep && listScrollRef.current) {
         // Find the processing item
         const processingEl = listScrollRef.current.querySelector('.batch-item-processing');
@@ -167,6 +186,13 @@ Return ONLY the Markdown content or the %ContextNotFound% signal.`,
   const startBatch = async () => {
     if (!history || !module) return;
     
+    const commitCounts = {};
+    for (const [d, repos] of Object.entries(history)) {
+        let num = 0;
+        for (const commits of Object.values(repos)) num += commits.length;
+        commitCounts[d] = num;
+    }
+
     spawnBatch({
         since,
         until,
@@ -175,7 +201,8 @@ Return ONLY the Markdown content or the %ContextNotFound% signal.`,
         branch,
         improveWithAI,
         typeFilters,
-        systemPrompt
+        systemPrompt,
+        commitCounts
     });
 
     onClose?.();
@@ -183,11 +210,8 @@ Return ONLY the Markdown content or the %ContextNotFound% signal.`,
   };
 
   const handleClose = () => {
-    if (isAttached) {
-        closeFullView();
-    } else {
-        onClose?.();
-    }
+    closeFullView?.();
+    onClose?.();
   };
 
 
@@ -372,11 +396,17 @@ Return ONLY the Markdown content or the %ContextNotFound% signal.`,
                             const stream = attachedBatch.streamingData?.[date];
                             const isProcessing = attachedBatch.currentStep.includes(date) || (stream?.status === 'streaming');
                             const isCompleted = !!page || stream?.status === 'completed';
+                            const isExpanded = isProcessing || !!manuallyExpanded[date];
                             
                             return (
                                 <Accordion 
                                     key={date}
                                     className={isProcessing ? 'batch-item-processing' : ''}
+                                    TransitionProps={{ unmountOnExit: true }}
+                                    expanded={isExpanded}
+                                    onChange={(e, expanded) => {
+                                        setManuallyExpanded(prev => ({ ...prev, [date]: expanded }));
+                                    }}
                                     sx={{ 
                                         bgcolor: isProcessing ? 'rgba(30, 41, 59, 1)' : 'rgba(255,255,255,0.02)',
                                         border: '1px solid',
@@ -388,14 +418,23 @@ Return ONLY the Markdown content or the %ContextNotFound% signal.`,
                                         zIndex: isProcessing ? 10 : 1,
                                         '&:before': { display: 'none' }
                                     }}
-                                    defaultExpanded={isProcessing}
                                 >
-                                    <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ fontSize: 16 }} />}>
+                                    <AccordionSummary 
+                                        expandIcon={<ExpandMoreIcon sx={{ fontSize: 16 }} />}
+                                        component="div"
+                                    >
                                         <Stack direction="row" spacing={2} alignItems="center" sx={{ width: '100%', pr: 2 }}>
                                             {isCompleted ? <SuccessIcon sx={{ color: 'success.main', fontSize: 16 }} /> : 
                                              isProcessing ? <CircularProgress size={14} thickness={6} /> : 
                                              <PendingIcon sx={{ color: 'text.disabled', fontSize: 16 }} />}
-                                            <Typography variant="body2" sx={{ fontWeight: 800, flexGrow: 1 }}>{date}</Typography>
+                                            <Typography variant="body2" sx={{ fontWeight: 800, flexGrow: 1 }}>
+                                                {date}
+                                                {attachedBatch.config?.commitCounts?.[date] !== undefined && (
+                                                    <Typography component="span" variant="caption" sx={{ ml: 1, color: 'text.secondary', fontWeight: 'normal' }}>
+                                                        ({attachedBatch.config.commitCounts[date]} commits)
+                                                    </Typography>
+                                                )}
+                                            </Typography>
                                             {isProcessing && (
                                                 <Stack direction="row" alignItems="center" spacing={0.5}>
                                                     <Chip label="PROCESSING" color="primary" size="small" sx={{ height: 16, fontSize: '0.6rem' }} />
@@ -419,15 +458,15 @@ Return ONLY the Markdown content or the %ContextNotFound% signal.`,
                                                     </IconButton>
                                                 </Stack>
                                             )}
-                                            {isCompleted && (
-                                                <Stack direction="row" spacing={1}>
-                                                    <Chip label="READY" variant="outlined" color="success" size="small" sx={{ height: 16, fontSize: '0.6rem' }} />
+                                            {!isProcessing && (
+                                                <Stack direction="row" spacing={1} alignItems="center">
+                                                    {isCompleted && <Chip label="READY" variant="outlined" color="success" size="small" sx={{ height: 16, fontSize: '0.6rem' }} />}
                                                     <IconButton 
                                                         size="small" 
                                                         color="primary" 
                                                         title="Retry AI Refinement"
                                                         onClick={(e) => { e.stopPropagation(); retryDay(attachedBatch.id, date); }}
-                                                        sx={{ p: 0.5, bgcolor: 'rgba(59, 130, 246, 0.1)', '&:hover': { bgcolor: 'rgba(59, 130, 246, 0.2)' } }}
+                                                        sx={{ p: 0.5, height: 24, width: 24, bgcolor: 'rgba(59, 130, 246, 0.1)', '&:hover': { bgcolor: 'rgba(59, 130, 246, 0.2)' } }}
                                                     >
                                                         <RefreshIcon sx={{ fontSize: '1rem' }} />
                                                     </IconButton>
@@ -475,10 +514,29 @@ Return ONLY the Markdown content or the %ContextNotFound% signal.`,
                                                 </Stack>
                                             ) : (
                                                 <Typography variant="body2" sx={{ opacity: 0.5, fontStyle: 'italic' }}>
-                                                    {isProcessing ? 'Streaming AI refinement...' : 'Waiting to process...'}
+                                                    {isProcessing ? (attachedBatch.config?.improveWithAI && !stream?.content ? 'AI is thinking/refining... (takes 10-30s)' : 'Streaming AI refinement...') : 'Waiting to process...'}
                                                 </Typography>
                                             )}
                                         </Box>
+                                        
+                                        {history && history[date] && (
+                                            <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                                                <Typography variant="caption" sx={{ fontWeight: 800, color: 'text.secondary', mb: 1, display: 'block' }}>RAW COMMITS</Typography>
+                                                <Stack spacing={1}>
+                                                    {Object.entries(history[date]).map(([repo, commits]) => (
+                                                        <Box key={repo}>
+                                                            <Typography variant="caption" sx={{ fontWeight: 800, color: 'primary.main' }}>{repo}</Typography>
+                                                            <ul style={{ margin: 0, paddingLeft: 16, fontSize: '0.75rem', opacity: 0.8 }}>
+                                                                {commits.map((c, i) => (
+                                                                    <li key={i}><Typography variant="body2" sx={{ opacity: 0.8 }}>{c.subject}</Typography></li>
+                                                                ))}
+                                                            </ul>
+                                                        </Box>
+                                                    ))}
+                                                </Stack>
+                                            </Box>
+                                        )}
+
                                     </AccordionDetails>
                                 </Accordion>
                             );

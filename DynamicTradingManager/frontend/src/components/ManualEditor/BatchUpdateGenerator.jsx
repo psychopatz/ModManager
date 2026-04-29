@@ -1,721 +1,270 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Alert,
   Box,
   Button,
-  Checkbox,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-  FormControlLabel,
   Stack,
-  TextField,
   Typography,
-  Collapse,
-  Chip,
-  LinearProgress,
   IconButton,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-  CircularProgress
+  Chip
 } from '@mui/material';
 import { 
-  ExpandMore as ExpandMoreIcon, 
-  ExpandLess as ExpandLessIcon, 
-  RestartAlt as ResetIcon,
   Close as CloseIcon,
-  CheckCircle as SuccessIcon,
-  Error as ErrorIcon,
-  AutoAwesome as AiStatusIcon,
-  HourglassEmpty as PendingIcon,
-  Terminal as ConsoleIcon,
-  SkipNext as SkipNextIcon,
-  PauseCircle as PauseIcon,
-  PlayCircle as PlayIcon,
-  Refresh as RefreshIcon,
-  DeleteForever as DiscardIcon
+  RestartAlt as RefreshIcon,
+  ContentCopy as CopyIcon
 } from '@mui/icons-material';
-import { getBatchedGitHistory } from '../../services/api';
-import { useGitAi } from '../../hooks/useGitAi';
+import { getBatchedGitHistory, getSuiteBranches } from '../../services/api';
 import { useBatchSystem } from '../../context/BatchContext';
 import { useLLM } from '../../hooks/useLLM';
 
-const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop', module = '', targets = [], modules = [], attachedBatchId = null }) => {
-  const { batches, spawnBatch, openBatchId, closeFullView, removeBatch, skipBatchItem, pauseBatch, resumeBatch, restartBatch, retryDay } = useBatchSystem();
-  const { activeProvider } = useLLM();
-  
-  // Detached mode detection
-  const activeBatchId = attachedBatchId || openBatchId;
-  const attachedBatch = useMemo(() => batches.find(b => b.id === activeBatchId), [batches, activeBatchId]);
-  const isAttached = !!attachedBatch;
+// New Modular Sub-components
+import BatchConfigForm from './BatchGenerator/BatchConfigForm';
+import BatchProcessMonitor from './BatchGenerator/BatchProcessMonitor';
 
-  const [status, setStatus] = useState({ type: '', message: '' });
-  const [showPrompt, setShowPrompt] = useState(false);
-  const [since, setSince] = useState(() => localStorage.getItem('git_batch_since') || '2026-03-27');
-  const [until, setUntil] = useState(new Date().toISOString().split('T')[0]);
+const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop', module = '', targets = [], modules = [], attachedBatchId = null }) => {
+  const { batches, spawnBatch, openBatchId, closeFullView, retryDay, consolidateBatch, saveBatchVolume } = useBatchSystem();
+  
+  // State for Configuration
+  const [since, setSince] = useState(localStorage.getItem('git_batch_since') || new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0]);
+  const [until, setUntil] = useState(localStorage.getItem('git_batch_until') || new Date().toISOString().split('T')[0]);
+  const [branchName, setBranchName] = useState(branch || localStorage.getItem('git_batch_branch') || 'develop');
   const [history, setHistory] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [improveWithAI, setImproveWithAI] = useState(() => localStorage.getItem('git_batch_improve_ai') === 'true');
+  const [status, setStatus] = useState({ type: '', message: '' });
   
-  const [showConsole, setShowConsole] = useState(false);
-  const [confirmData, setConfirmData] = useState(null); // { title, message, onConfirm }
-  const [autoScroll, setAutoScroll] = useState(true);
-  const [manuallyExpanded, setManuallyExpanded] = useState({});
-  
-  const logEndRef = useRef(null);
-  const listScrollRef = useRef(null);
+  const initialFilters = useMemo(() => {
+    try {
+        const saved = localStorage.getItem('git_batch_type_filters');
+        return saved ? JSON.parse(saved) : ['feat', 'fix', 'refactor', 'perf'];
+    } catch (e) {
+        return ['feat', 'fix', 'refactor', 'perf'];
+    }
+  }, []);
+  const [typeFilters, setTypeFilters] = useState(initialFilters);
+  const [improveWithAI, setImproveWithAI] = useState(localStorage.getItem('git_batch_improve_ai') === 'true');
+  const [systemPrompt, setSystemPrompt] = useState(localStorage.getItem('git_batch_system_prompt') || "");
+  const [consolidationPrompt, setConsolidationPrompt] = useState(localStorage.getItem('git_batch_consolidation_prompt') || "");
+  const [showPrompt, setShowPrompt] = useState(false);
+  const [showConsolidationSettings, setShowConsolidationSettings] = useState(false);
+  const [sectionsExpanded, setSectionsExpanded] = useState({ daily: true, consolidation: false, workshop: false });
+  const [availableBranches, setAvailableBranches] = useState([]);
+
+  // Persistent state updates
+  useEffect(() => {
+    localStorage.setItem('git_batch_since', since);
+    localStorage.setItem('git_batch_until', until);
+    localStorage.setItem('git_batch_branch', branchName);
+    localStorage.setItem('git_batch_improve_ai', improveWithAI);
+    localStorage.setItem('git_batch_type_filters', JSON.stringify(typeFilters));
+    if (systemPrompt) localStorage.setItem('git_batch_system_prompt', systemPrompt);
+    if (consolidationPrompt) localStorage.setItem('git_batch_consolidation_prompt', consolidationPrompt);
+  }, [since, until, branchName, improveWithAI, typeFilters, systemPrompt, consolidationPrompt]);
+
+  // Sync with prop when it changes
+  useEffect(() => {
+    if (branch) setBranchName(branch);
+  }, [branch]);
+
+  // Fetch available branches
+  useEffect(() => {
+    const loadBranches = async () => {
+        try {
+            const res = await getSuiteBranches();
+            if (Array.isArray(res.data)) {
+                setAvailableBranches(res.data);
+            }
+        } catch (e) {
+            console.error("Failed to load suite branches:", e);
+        }
+    };
+    loadBranches();
+  }, []);
+
+  // Detached mode detection
+  const activeBatchId = attachedBatchId || openBatchId;
+  const attachedBatch = batches.find(b => b.id === activeBatchId);
+  const isAttached = !!attachedBatch;
+
+  // Sync prompts from localStorage or defaults
+  const resetPrompt = () => setSystemPrompt("");
+  const resetConsolidationPrompt = () => setConsolidationPrompt("");
 
   useEffect(() => {
-    if (logEndRef.current) {
-        logEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [attachedBatch?.logs]);
-
-  const moduleOptions = useMemo(() => {
-    return modules.map(m => ({ value: m.id, label: m.name, repo: m.project_key }));
-  }, [modules]);
-
-  const activeModuleLabel = useMemo(() => {
-    if (isAttached) return attachedBatch.modName;
-    return moduleOptions.find(o => o.value === module)?.label || module;
-  }, [moduleOptions, module, isAttached, attachedBatch]);
-
-  const [typeFilters, setTypeFilters] = useState(() => {
-    const saved = localStorage.getItem('git_ai_assistant_type_filters');
-    return saved ? JSON.parse(saved) : ['feat', 'fix', 'refactor', 'perf', 'docs', 'chore', 'other'];
-  });
-
-  const getTypeColor = (type) => {
-    switch (type) {
-      case 'feat': return '#3b82f6';
-      case 'fix': return '#ef4444';
-      case 'refactor': return '#f59e0b';
-      case 'perf': return '#8b5cf6';
-      case 'docs': return '#10b981';
-      case 'chore': return '#6b7280';
-      case 'style': return '#ec4899';
-      case 'test': return '#6366f1';
-      default: return '#9ca3af';
-    }
-  };
-
-  const toggleTypeFilter = (type) => {
-    setTypeFilters(prev => {
-        const next = prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type];
-        localStorage.setItem('git_ai_assistant_type_filters', JSON.stringify(next));
-        return next;
-    });
-  };
-
-  const { systemPrompt, setSystemPrompt, resetPrompt } = useGitAi({
-    storageKey: 'batch_update_system_prompt',
-    defaultPrompt: `You are a professional Project Zomboid mod developer.
-Transform the following daily git commits into polished, feature-grouped patch notes.
-
-FORMAT RULES:
-1. Use '### Heading' for feature names (Keep headings concise but descriptive).
-2. Use '- Bullet' for changes (Gameplay impact focused).
-3. Use '> [!tone] Title | Body' for Callouts. Tones: info, success, warning, danger.
-4. Use '![Caption](path)' for images if applicable.
-5. CONTEXT GUARD: If the commits are trivial (merge commits, bumps), return exactly: %ContextNotFound%
-
-Return ONLY the Markdown content or the %ContextNotFound% signal.`,
-  });
+    if (systemPrompt) localStorage.setItem('git_batch_system_prompt', systemPrompt);
+    if (consolidationPrompt) localStorage.setItem('git_batch_consolidation_prompt', consolidationPrompt);
+  }, [systemPrompt, consolidationPrompt]);
 
   const fetchHistory = async () => {
     setLoading(true);
-    setStatus({ type: '', message: '' });
+    setStatus({ type: 'info', message: 'Fetching git history...' });
     try {
-      const response = await getBatchedGitHistory(since, branch);
-      const allHistory = response.data.history || {};
-      const rangeDays = Object.keys(allHistory).filter(d => d >= since && d <= until);
-      setHistory(allHistory);
-      const dayCount = rangeDays.length;
-      setStatus({ 
-        type: 'info', 
-        message: `Found ${dayCount} days with updates between ${since} and ${until}.` 
-      });
-    } catch (error) {
-      setStatus({ type: 'error', message: 'Failed to fetch git history.' });
+      const res = await getBatchedGitHistory(since, until, branchName, module || targets[0]);
+      const historyData = res.data.history || {};
+      setHistory(historyData);
+      
+      const totalDays = Object.keys(historyData).length;
+      const totalCommits = Object.values(historyData).reduce((acc, reposMap) => {
+        // reposMap is { "RepoName": [commits], ... }
+        return acc + Object.values(reposMap).reduce((dayAcc, commits) => dayAcc + (commits?.length || 0), 0);
+      }, 0);
+      
+      setStatus({ type: 'success', message: '' });
+    } catch (e) {
+      setStatus({ type: 'error', message: e.message });
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-      // Auto-fetch history for attached batches to support raw commit viewing
-      if (isAttached && attachedBatch?.config?.since && attachedBatch?.config?.branch && !history && !loading) {
-          const fetchBg = async () => {
-              setLoading(true);
-              try {
-                  const res = await getBatchedGitHistory(attachedBatch.config.since, attachedBatch.config.branch);
-                  setHistory(res.data.history || {});
-              } catch (e) {
-                  console.error('Background history fetch failed:', e);
-              } finally {
-                  setLoading(false);
-              }
-          };
-          fetchBg();
-      }
-  }, [isAttached, attachedBatch?.config, history]);
-
-  useEffect(() => {
-    if (autoScroll && attachedBatch?.currentStep && listScrollRef.current) {
-        // Find the processing item
-        const processingEl = listScrollRef.current.querySelector('.batch-item-processing');
-        if (processingEl) {
-            processingEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }
-    }
-  }, [attachedBatch?.currentStep, attachedBatch?.streamingData, autoScroll]);
-
-  const getDayList = (s, u) => {
-    const dates = [];
-    let curr = new Date(s);
-    const end = new Date(u);
-    while (curr <= end) {
-      dates.push(curr.toISOString().split('T')[0]);
-      curr.setDate(curr.getDate() + 1);
-    }
-    return dates.sort().reverse();
+  const startBatch = () => {
+    if (!history) return;
+    spawnBatch({
+        since, 
+        until, 
+        module: module || targets[0] || 'DynamicTrading', 
+        branch: branchName,
+        history,
+        typeFilters,
+        improveWithAI,
+        systemPrompt,
+        consolidationPrompt
+    });
+    setSectionsExpanded({ daily: true, consolidation: false, workshop: false });
   };
 
-  const startBatch = async () => {
-    if (!history || !module) return;
-    
-    const commitCounts = {};
-    for (const [d, repos] of Object.entries(history)) {
-        let num = 0;
-        for (const commits of Object.values(repos)) num += commits.length;
-        commitCounts[d] = num;
+  const getDayList = (s, u) => {
+    const start = new Date(s);
+    const end = new Date(u);
+    const days = [];
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      days.unshift(new Date(d).toISOString().split('T')[0]);
     }
+    return days;
+  };
 
-    spawnBatch({
-        since,
-        until,
-        module,
-        moduleLabel: activeModuleLabel,
-        branch,
-        improveWithAI,
-        typeFilters,
-        systemPrompt,
-        commitCounts
-    });
+  const getTypeColor = (type) => {
+    const colors = {
+      feat: '#10b981', fix: '#ef4444', refactor: '#f59e0b',
+      perf: '#3b82f6', docs: '#8b5cf6', chore: '#6b7280',
+      style: '#ec4899', test: '#06b6d4', other: '#9ca3af'
+    };
+    return colors[type] || colors.other;
+  };
 
-    onClose?.();
-    onComplete?.();
+  const toggleTypeFilter = (tag) => {
+    setTypeFilters(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]);
   };
 
   const handleClose = () => {
-    closeFullView?.();
-    onClose?.();
+    if (isAttached) closeFullView();
+    onClose();
   };
-
-
-  const confirm = (title, message, onConfirm) => {
-    setConfirmData({ title, message, onConfirm });
-  };
-
-  const handleDiscard = () => {
-    confirm(
-        "Discard Batch Task?",
-        "This will permanently stop the process and remove all current progress data. You cannot undo this.",
-        () => {
-            removeBatch(attachedBatch.id);
-            if (isAttached) closeFullView();
-            else onClose?.();
-        }
-    );
-  };
-
-  const handleRestart = () => {
-    confirm(
-        "Restart Batch?",
-        "This will clear all currently generated pages and logs for this batch and start over. Are you sure?",
-        () => restartBatch(attachedBatch.id)
-    );
-  };
-
-  const isDialogOpen = isAttached ? !!activeBatchId : open;
 
   return (
-    <Dialog open={isDialogOpen} onClose={handleClose} maxWidth="md" fullWidth>
-      <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <Dialog open={open} onClose={handleClose} maxWidth="lg" fullWidth sx={{ '& .MuiDialog-paper': { borderRadius: 3, bgcolor: '#0d1117', backgroundImage: 'none', border: '1px solid rgba(255,255,255,0.05)' } }}>
+      <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 2, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
         <Stack direction="row" spacing={1} alignItems="center">
-            <span>{isAttached ? 'Batch Status' : 'Batch Generate Updates'}</span>
-            {isAttached && (
-                <Chip 
-                    label={attachedBatch.status.toUpperCase()} 
-                    color={attachedBatch.status === 'success' ? 'success' : attachedBatch.status === 'error' ? 'error' : 'primary'}
-                    size="small"
-                    sx={{ height: 20, fontSize: '0.65rem', fontWeight: 800 }}
-                />
-            )}
-        </Stack>
-        <Stack direction="row" spacing={1} alignItems="center">
-            {isAttached && (
-                <>
-                    {attachedBatch.status === 'processing' && (
-                        <Button 
-                            size="small" 
-                            color={attachedBatch.paused ? "success" : "warning"}
-                            variant="outlined"
-                            startIcon={attachedBatch.paused ? <PlayIcon /> : <PauseIcon />}
-                            onClick={() => attachedBatch.paused ? resumeBatch(attachedBatch.id) : pauseBatch(attachedBatch.id)}
-                            sx={{ fontSize: '0.65rem', height: 24 }}
-                        >
-                            {attachedBatch.paused ? 'Resume' : 'Pause'}
-                        </Button>
-                    )}
-                    <Button 
-                        size="small" 
-                        color="inherit"
-                        variant="outlined"
-                        startIcon={<RefreshIcon />}
-                        onClick={handleRestart}
-                        sx={{ fontSize: '0.65rem', height: 24, opacity: 0.7 }}
-                    >
-                        Restart
-                    </Button>
-                    <Button 
-                        size="small" 
-                        color="error"
-                        variant="outlined"
-                        startIcon={<DiscardIcon />}
-                        onClick={handleDiscard}
-                        sx={{ fontSize: '0.65rem', height: 24 }}
-                    >
-                        Discard
-                    </Button>
-                </>
-            )}
-            <IconButton onClick={handleClose} size="small" sx={{ ml: 1 }}>
-                <CloseIcon />
-            </IconButton>
-        </Stack>
-      </DialogTitle>
-      <DialogContent>
-        <Stack spacing={3} sx={{ mt: 1 }}>
-          <Box>
-            <Typography variant="body2" color="text.secondary">
-              {isAttached ? 'Monitoring background update for:' : 'Generating daily manuals for:'} <strong style={{ color: '#3b82f6' }}>{activeModuleLabel}</strong>
+            <Typography variant="h6" sx={{ fontWeight: 900, letterSpacing: '-0.02em', color: '#fff' }}>
+                BATCH UPDATE GENERATOR
             </Typography>
-          </Box>
-
-          {isAttached ? (
-            <Stack spacing={2}>
-                 <Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                        <Typography variant="caption" sx={{ fontWeight: 800 }}>{attachedBatch.currentStep}</Typography>
-                        <Typography variant="caption">{attachedBatch.progress}%</Typography>
-                    </Box>
-                    <LinearProgress 
-                        variant="determinate" 
-                        value={attachedBatch.progress} 
-                        sx={{ height: 8, borderRadius: 4 }}
-                        color={attachedBatch.status === 'success' ? 'success' : attachedBatch.status === 'error' ? 'error' : 'primary'}
-                    />
-                </Box>
-
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Stack direction="row" spacing={1} alignItems="center">
-                        <Typography variant="subtitle2" sx={{ fontWeight: 800, color: 'primary.main', display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <AiStatusIcon sx={{ fontSize: 18 }} /> AI GENERATIONS
-                        </Typography>
-                        <FormControlLabel
-                            control={<Checkbox size="small" checked={autoScroll} onChange={(e) => setAutoScroll(e.target.checked)} />}
-                            label={<Typography variant="caption">Auto-scroll</Typography>}
-                            sx={{ ml: 1 }}
-                        />
-                    </Stack>
-                    <Button 
-                        size="small" 
-                        startIcon={<ConsoleIcon />} 
-                        onClick={() => setShowConsole(!showConsole)}
-                        sx={{ fontSize: '0.65rem', textTransform: 'none' }}
-                    >
-                        {showConsole ? 'Hide Console' : 'Show Console'}
-                    </Button>
-                </Box>
-
-                <Collapse in={showConsole}>
-                    <Box sx={{ 
-                        bgcolor: '#0d1117', 
-                        borderRadius: 2, 
-                        p: 2, 
-                        height: 200, 
-                        overflowY: 'auto',
-                        border: '1px solid rgba(255,255,255,0.1)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        mb: 2
-                    }}>
-                        <Stack spacing={0.5}>
-                            {attachedBatch.logs.map((log, i) => {
-                                const type = log[1];
-                                let color = '#c9d1d9';
-                                const typeMap = {
-                                    'success': '#3fb950', 'error': '#f85149', 'warning': '#d29922', 'system': '#58a6ff',
-                                    'feat': '#3b82f6', 'fix': '#ef4444', 'refactor': '#f59e0b', 'perf': '#8b5cf6',
-                                    'docs': '#10b981', 'chore': '#6b7280', 'style': '#ec4899', 'test': '#6366f1'
-                                };
-                                if (typeMap[type]) color = typeMap[type];
-                                return (
-                                    <Typography key={i} variant="caption" sx={{ fontFamily: 'monospace', color, fontSize: '0.7rem' }}>
-                                        <span style={{ opacity: 0.4, marginRight: 8 }}>[{log[0]}]</span>
-                                        {log[2]}
-                                    </Typography>
-                                );
-                            })}
-                            <div ref={logEndRef} />
-                        </Stack>
-                    </Box>
-                </Collapse>
-
-                <Box 
-                    ref={listScrollRef}
-                    sx={{ 
-                        flexGrow: 1, 
-                        overflowY: 'auto', 
-                        maxHeight: showConsole ? 300 : 500,
-                        pr: 1,
-                        position: 'relative',
-                        '&::-webkit-scrollbar': { width: '4px' },
-                        '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(255,255,255,0.1)', borderRadius: '10px' }
-                    }}
-                >
-                    <Stack spacing={1}>
-                        {(attachedBatch.config?.since ? 
-                            getDayList(attachedBatch.config.since, attachedBatch.config.until)
-                            : attachedBatch.pages.map(p => p.title).reverse()
-                        ).map(date => {
-                            const page = attachedBatch.pages.find(p => p.title === date);
-                            const stream = attachedBatch.streamingData?.[date];
-                            const isProcessing = attachedBatch.currentStep.includes(date) || (stream?.status === 'streaming');
-                            const isCompleted = !!page || stream?.status === 'completed';
-                            const isExpanded = isProcessing || !!manuallyExpanded[date];
-                            
-                            return (
-                                <Accordion 
-                                    key={date}
-                                    className={isProcessing ? 'batch-item-processing' : ''}
-                                    TransitionProps={{ unmountOnExit: true }}
-                                    expanded={isExpanded}
-                                    onChange={(e, expanded) => {
-                                        setManuallyExpanded(prev => ({ ...prev, [date]: expanded }));
-                                    }}
-                                    sx={{ 
-                                        bgcolor: isProcessing ? 'rgba(30, 41, 59, 1)' : 'rgba(255,255,255,0.02)',
-                                        border: '1px solid',
-                                        borderColor: isProcessing ? 'primary.main' : 'rgba(255,255,255,0.05)',
-                                        borderRadius: '8px !important',
-                                        mb: 1,
-                                        position: isProcessing ? 'sticky' : 'relative',
-                                        top: isProcessing ? 0 : 'auto',
-                                        zIndex: isProcessing ? 10 : 1,
-                                        '&:before': { display: 'none' }
-                                    }}
-                                >
-                                    <AccordionSummary 
-                                        expandIcon={<ExpandMoreIcon sx={{ fontSize: 16 }} />}
-                                        component="div"
-                                    >
-                                        <Stack direction="row" spacing={2} alignItems="center" sx={{ width: '100%', pr: 2 }}>
-                                            {isCompleted ? <SuccessIcon sx={{ color: 'success.main', fontSize: 16 }} /> : 
-                                             isProcessing ? <CircularProgress size={14} thickness={6} /> : 
-                                             <PendingIcon sx={{ color: 'text.disabled', fontSize: 16 }} />}
-                                            <Typography variant="body2" sx={{ fontWeight: 800, flexGrow: 1 }}>
-                                                {date}
-                                                {attachedBatch.config?.commitCounts?.[date] !== undefined && (
-                                                    <Typography component="span" variant="caption" sx={{ ml: 1, color: 'text.secondary', fontWeight: 'normal' }}>
-                                                        ({attachedBatch.config.commitCounts[date]} commits)
-                                                    </Typography>
-                                                )}
-                                            </Typography>
-                                            {isProcessing && (
-                                                <Stack direction="row" alignItems="center" spacing={0.5}>
-                                                    <Chip label="PROCESSING" color="primary" size="small" sx={{ height: 16, fontSize: '0.6rem' }} />
-                                                    <IconButton 
-                                                        size="small" 
-                                                        color="primary" 
-                                                        title="Force Restart AI"
-                                                        onClick={(e) => { e.stopPropagation(); retryDay(attachedBatch.id, date); }}
-                                                        sx={{ p: 0.5, bgcolor: 'rgba(59, 130, 246, 0.1)', '&:hover': { bgcolor: 'rgba(59, 130, 246, 0.2)' } }}
-                                                    >
-                                                        <RefreshIcon sx={{ fontSize: '1rem' }} />
-                                                    </IconButton>
-                                                    <IconButton 
-                                                        size="small" 
-                                                        color="warning" 
-                                                        title="Skip AI & Use Raw Commits"
-                                                        onClick={(e) => { e.stopPropagation(); skipBatchItem(attachedBatch.id); }}
-                                                        sx={{ p: 0.5, bgcolor: 'rgba(237, 108, 2, 0.1)', '&:hover': { bgcolor: 'rgba(237, 108, 2, 0.2)' } }}
-                                                    >
-                                                        <SkipNextIcon sx={{ fontSize: '1rem' }} />
-                                                    </IconButton>
-                                                </Stack>
-                                            )}
-                                            {!isProcessing && (
-                                                <Stack direction="row" spacing={1} alignItems="center">
-                                                    {isCompleted && <Chip label="READY" variant="outlined" color="success" size="small" sx={{ height: 16, fontSize: '0.6rem' }} />}
-                                                    <IconButton 
-                                                        size="small" 
-                                                        color="primary" 
-                                                        title="Retry AI Refinement"
-                                                        onClick={(e) => { e.stopPropagation(); retryDay(attachedBatch.id, date); }}
-                                                        sx={{ p: 0.5, height: 24, width: 24, bgcolor: 'rgba(59, 130, 246, 0.1)', '&:hover': { bgcolor: 'rgba(59, 130, 246, 0.2)' } }}
-                                                    >
-                                                        <RefreshIcon sx={{ fontSize: '1rem' }} />
-                                                    </IconButton>
-                                                </Stack>
-                                            )}
-                                        </Stack>
-                                    </AccordionSummary>
-                                    <AccordionDetails sx={{ pt: 0 }}>
-                                        {stream?.thinking && (
-                                            <Box sx={{ 
-                                                mb: 2, p: 1.5, borderRadius: 2, bgcolor: 'rgba(0,0,0,0.3)', 
-                                                borderLeft: '3px solid #666', fontSize: '0.75rem', color: 'text.secondary',
-                                                fontFamily: 'monospace', whiteSpace: 'pre-wrap'
-                                            }}>
-                                                <Typography variant="caption" sx={{ fontWeight: 800, display: 'block', mb: 0.5, color: '#aaa' }}>REASONING</Typography>
-                                                {stream.thinking}
-                                            </Box>
-                                        )}
-                                        <Box sx={{ 
-                                            p: 2, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.03)',
-                                            fontSize: '0.8rem', lineHeight: 1.6, color: 'text.primary',
-                                            maxHeight: 400, overflowY: 'auto'
-                                        }}>
-                                            {stream?.content ? (
-                                                <Typography variant="body2" sx={{ fontFamily: 'serif', whiteSpace: 'pre-wrap' }}>
-                                                    {stream.content}
-                                                </Typography>
-                                            ) : page ? (
-                                                <Stack spacing={1.5}>
-                                                    {page.blocks.map((block, bi) => {
-                                                        if (block.type === 'heading') return <Typography key={bi} variant={block.level === 1 ? 'h6' : 'subtitle2'} sx={{ fontWeight: 800, mt: 1 }}>{block.text}</Typography>;
-                                                        if (block.type === 'bullet_list') return (
-                                                            <ul key={bi} style={{ margin: 0, paddingLeft: 20 }}>
-                                                                {block.items.map((it, ii) => <li key={ii}><Typography variant="body2">{it}</Typography></li>)}
-                                                            </ul>
-                                                        );
-                                                        if (block.type === 'callout') return (
-                                                            <Box key={bi} sx={{ p: 1, borderRadius: 1, bgcolor: 'rgba(255,255,255,0.05)', borderLeft: '3px solid', borderColor: 'primary.main' }}>
-                                                                <Typography variant="caption" sx={{ fontWeight: 800, display: 'block' }}>{block.title}</Typography>
-                                                                <Typography variant="body2" sx={{ opacity: 0.8 }}>{block.text}</Typography>
-                                                            </Box>
-                                                        );
-                                                        return <Typography key={bi} variant="body2">{block.text}</Typography>;
-                                                    })}
-                                                </Stack>
-                                            ) : (
-                                                <Typography variant="body2" sx={{ opacity: 0.5, fontStyle: 'italic' }}>
-                                                    {isProcessing ? (attachedBatch.config?.improveWithAI && !stream?.content ? 'AI is thinking/refining... (takes 10-30s)' : 'Streaming AI refinement...') : 'Waiting to process...'}
-                                                </Typography>
-                                            )}
-                                        </Box>
-                                        
-                                        {history && history[date] && (
-                                            <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-                                                <Typography variant="caption" sx={{ fontWeight: 800, color: 'text.secondary', mb: 1, display: 'block' }}>RAW COMMITS</Typography>
-                                                <Stack spacing={1}>
-                                                    {Object.entries(history[date]).map(([repo, commits]) => (
-                                                        <Box key={repo}>
-                                                            <Typography variant="caption" sx={{ fontWeight: 800, color: 'primary.main' }}>{repo}</Typography>
-                                                            <ul style={{ margin: 0, paddingLeft: 16, fontSize: '0.75rem', opacity: 0.8 }}>
-                                                                {commits.map((c, i) => (
-                                                                    <li key={i}><Typography variant="body2" sx={{ opacity: 0.8 }}>{c.subject}</Typography></li>
-                                                                ))}
-                                                            </ul>
-                                                        </Box>
-                                                    ))}
-                                                </Stack>
-                                            </Box>
-                                        )}
-
-                                    </AccordionDetails>
-                                </Accordion>
-                            );
-                        })}
-                    </Stack>
-                </Box>
-
-                {attachedBatch.status === 'success' && (
-                    <Alert severity="success" icon={<SuccessIcon />}>
-                        Update successfully generated and saved to the backend. You can now close this monitor.
-                    </Alert>
-                )}
-
-                {attachedBatch.status === 'error' && (
-                    <Alert severity="error" icon={<ErrorIcon />}>
-                        {attachedBatch.error}
-                    </Alert>
-                )}
-            </Stack>
-          ) : (
-            <>
-                {status.message && <Alert severity={status.type || 'info'}>{status.message}</Alert>}
-
-                <Stack direction="row" spacing={2} alignItems="center">
-                    <TextField
-                    label="Since Date"
-                    type="date"
-                    size="small"
-                    value={since}
-                    onChange={(e) => {
-                        setSince(e.target.value);
-                        localStorage.setItem('git_batch_since', e.target.value);
-                    }}
-                    InputLabelProps={{ shrink: true }}
-                    sx={{ flex: 1 }}
-                    />
-                    <TextField
-                    label="Until Date"
-                    type="date"
-                    size="small"
-                    value={until}
-                    onChange={(e) => setUntil(e.target.value)}
-                    InputLabelProps={{ shrink: true }}
-                    sx={{ flex: 1 }}
-                    />
-                    <Button variant="outlined" onClick={fetchHistory} disabled={loading}>
-                    {loading ? 'Fetching...' : 'Check History'}
-                    </Button>
-                </Stack>
-
-                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                    {['feat', 'fix', 'refactor', 'perf', 'docs', 'chore', 'style', 'test', 'other'].map(type => (
-                    <Chip
-                        key={type}
-                        label={type.toUpperCase()}
-                        size="small"
-                        clickable
-                        onClick={() => toggleTypeFilter(type)}
-                        sx={{ 
-                            fontSize: '0.65rem', 
-                            height: 20, 
-                            fontWeight: 800,
-                            bgcolor: typeFilters.includes(type) ? getTypeColor(type) : 'transparent',
-                            color: typeFilters.includes(type) ? '#fff' : 'text.secondary',
-                            border: '1px solid',
-                            borderColor: typeFilters.includes(type) ? getTypeColor(type) : 'divider',
-                            '&:hover': {
-                                bgcolor: typeFilters.includes(type) ? getTypeColor(type) : 'rgba(0,0,0,0.04)',
-                                opacity: 0.9
-                            }
-                        }}
-                    />
-                    ))}
-                </Box>
-
-                <Stack spacing={1}>
-                    <FormControlLabel
-                        control={<Checkbox checked={improveWithAI} onChange={(e) => {
-                            setImproveWithAI(e.target.checked);
-                            localStorage.setItem('git_batch_improve_ai', e.target.checked);
-                        }} />}
-                        label="Batch improve commits using AI"
-                    />
-                    
-                    {improveWithAI && (
-                        <Box sx={{ ml: 4, mt: -1, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Typography variant="caption" color="text.secondary">using</Typography>
-                            <Chip 
-                                label={activeProvider.label || activeProvider.id} 
-                                size="small" 
-                                color="primary" 
-                                variant="outlined"
-                                sx={{ height: 20, fontSize: '0.7rem', fontWeight: 800 }}
-                            />
-                            {activeProvider.model && (
-                                <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
-                                    ({activeProvider.model})
-                                </Typography>
-                            )}
-                        </Box>
-                    )}
-                    
-                    {improveWithAI && (
-                    <Box>
-                        <Button 
-                        size="small" 
-                        onClick={() => setShowPrompt(!showPrompt)}
-                        startIcon={showPrompt ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                        >
-                        Edit Batch System Prompt
-                        </Button>
-                        <Collapse in={showPrompt}>
-                        <Stack spacing={1} sx={{ mt: 1, p: 2, bgcolor: 'rgba(0,0,0,0.03)', borderRadius: 2 }}>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Typography variant="caption" fontWeight={800}>SYSTEM PROMPT</Typography>
-                            <Button size="small" startIcon={<ResetIcon />} onClick={resetPrompt} sx={{ fontSize: '0.65rem' }}>Reset</Button>
-                            </Box>
-                            <TextField
-                            fullWidth
-                            multiline
-                            rows={4}
-                            variant="filled"
-                            value={systemPrompt}
-                            onChange={(e) => setSystemPrompt(e.target.value)}
-                            sx={{ '& .MuiInputBase-input': { fontSize: '0.8rem' } }}
-                            />
-                        </Stack>
-                        </Collapse>
-                    </Box>
-                    )}
-                </Stack>
-            </>
-          )}
+            {isAttached && <Chip label={attachedBatch.id} size="small" sx={{ fontSize: '0.6rem', height: 18, bgcolor: 'rgba(255,255,255,0.05)', color: 'text.secondary' }} />}
         </Stack>
+        <IconButton onClick={handleClose} size="small" sx={{ color: 'text.secondary' }}><CloseIcon /></IconButton>
+      </DialogTitle>
+
+      <DialogContent sx={{ p: 3 }}>
+          {isAttached ? (
+              <BatchProcessMonitor 
+                attachedBatch={attachedBatch}
+                sectionsExpanded={sectionsExpanded}
+                setSectionsExpanded={setSectionsExpanded}
+                getDayList={getDayList}
+                history={history || attachedBatch.history}
+                loading={loading}
+                getTypeColor={getTypeColor}
+                retryDay={retryDay}
+                showConsolidationSettings={showConsolidationSettings}
+                setShowConsolidationSettings={setShowConsolidationSettings}
+                consolidationPrompt={consolidationPrompt}
+                setConsolidationPrompt={setConsolidationPrompt}
+                resetConsolidationPrompt={resetConsolidationPrompt}
+                consolidateBatch={consolidateBatch}
+                saveBatchVolume={saveBatchVolume}
+                setStatus={setStatus}
+                handleClose={handleClose}
+              />
+          ) : (
+              <BatchConfigForm 
+                status={status}
+                module={module || targets[0] || 'DynamicTrading'}
+                since={since} setSince={setSince}
+                until={until} setUntil={setUntil}
+                branchName={branchName} setBranchName={setBranchName}
+                availableBranches={availableBranches}
+                loading={loading} fetchHistory={fetchHistory}
+                history={history}
+                typeFilters={typeFilters} toggleTypeFilter={toggleTypeFilter} 
+                getTypeColor={getTypeColor}
+                improveWithAI={improveWithAI} setImproveWithAI={setImproveWithAI}
+                showPrompt={showPrompt} setShowPrompt={setShowPrompt}
+                systemPrompt={systemPrompt} setSystemPrompt={setSystemPrompt} 
+                resetPrompt={resetPrompt}
+              />
+          )}
       </DialogContent>
-      <DialogActions>
+
+      <DialogActions sx={{ p: 2, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
         {isAttached ? (
             <>
-                <Typography variant="caption" sx={{ flexGrow: 1, ml: 2, opacity: 0.5 }}>
-                    ID: {attachedBatch.id}
+                <Typography variant="caption" sx={{ flexGrow: 1, ml: 1, opacity: 0.3, letterSpacing: '0.1em' }}>
+                    {attachedBatch.status.toUpperCase()}
                 </Typography>
+                {attachedBatch.workshopMetadata && (
+                    <Button 
+                        size="small" 
+                        variant="outlined"
+                        startIcon={<RefreshIcon />} 
+                        onClick={() => consolidateBatch(attachedBatch.id, consolidationPrompt)}
+                        sx={{ mr: 1 }}
+                    >
+                        Rerun Consolidation
+                    </Button>
+                )}
+                {attachedBatch.workshopMetadata && (
+                    <Button 
+                        size="small" 
+                        variant="contained"
+                        startIcon={<CopyIcon />} 
+                        onClick={() => {
+                            navigator.clipboard.writeText(attachedBatch.workshopMetadata);
+                            setStatus({ type: 'success', message: 'Workshop BBCode copied!' });
+                        }}
+                    >
+                        Copy Workshop Update
+                    </Button>
+                )}
                 {attachedBatch.status === 'success' && (
-                    <Button onClick={handleClose} variant="contained" color="success">Finish & Close</Button>
+                    <Button onClick={handleClose} variant="contained" color="success" sx={{ px: 4 }}>Close</Button>
                 )}
             </>
         ) : (
             <>
-                <Button onClick={onClose}>Cancel</Button>
+                <Button onClick={onClose} sx={{ color: 'text.secondary' }}>Cancel</Button>
                 <Button 
-                variant="contained" 
-                onClick={startBatch} 
-                disabled={!history || loading || !module}
+                    variant="contained" 
+                    onClick={startBatch} 
+                    disabled={!history || loading || !module}
+                    sx={{ px: 4 }}
                 >
-                Spawn Background Batch
+                    Start Processing
                 </Button>
             </>
         )}
       </DialogActions>
-
-      {/* Confirmation Modal */}
-      <Dialog open={!!confirmData} onClose={() => setConfirmData(null)} maxWidth="xs" fullWidth>
-        <DialogTitle>{confirmData?.title}</DialogTitle>
-        <DialogContent>
-            <Typography variant="body2">{confirmData?.message}</Typography>
-        </DialogContent>
-        <DialogActions>
-            <Button onClick={() => setConfirmData(null)}>Cancel</Button>
-            <Button 
-                variant="contained" 
-                color={confirmData?.title?.includes('Discard') ? "error" : "primary"}
-                onClick={() => {
-                    confirmData?.onConfirm();
-                    setConfirmData(null);
-                }}
-            >
-                Confirm
-            </Button>
-        </DialogActions>
-      </Dialog>
     </Dialog>
   );
 };

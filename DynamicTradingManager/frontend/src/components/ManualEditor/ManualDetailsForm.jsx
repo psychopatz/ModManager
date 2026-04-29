@@ -27,6 +27,7 @@ const audienceOptions = [
   { value: 'DynamicTradingV2', label: 'Dynamic Trading V2' },
   { value: 'DynamicColonies', label: 'Dynamic Colonies' },
   { value: 'CurrencyExpanded', label: 'Currency Expanded' },
+  { value: 'DynamicObjectives', label: 'Dynamic Objectives' },
 ];
 
 const getDefaultSourceFolder = (module, editorScope = 'manuals') => {
@@ -234,8 +235,8 @@ export const ManualDetailsForm = ({
             <Select
               labelId="manual-source-folder-label"
               label="Definition Folder"
-              value={sourceFolderOptions.some(o => o.value === (draft.source_folder || getDefaultSourceFolder(getPrimaryAudience(draft), editorScope))) 
-                ? (draft.source_folder || getDefaultSourceFolder(getPrimaryAudience(draft), editorScope)) 
+              value={sourceFolderOptions.some(o => o.value === (draft.source_folder || getDefaultSourceFolder(getPrimaryAudience(draft), editorScope)))
+                ? (draft.source_folder || getDefaultSourceFolder(getPrimaryAudience(draft), editorScope))
                 : ""}
               onChange={(e) => handleSourceFolderChange(e.target.value)}
             >

@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { getBatchedGitHistory, getDonatorsDefinition, createManualDefinition, llmChat, llmChatStream } from '../services/api';
 import { loadLLMConfig } from '../utils/llmUtils';
 
+const slugify = (str) => str.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+
 const BatchContext = createContext();
 
 export const useBatchSystem = () => {
@@ -37,6 +39,21 @@ export const BatchProvider = ({ children }) => {
 
   const pauseBatch = useCallback((id) => updateBatch(id, { paused: true }), [updateBatch]);
   const resumeBatch = useCallback((id) => updateBatch(id, { paused: false }), [updateBatch]);
+
+  const updateStreamingData = useCallback((batchId, key, data) => {
+    setBatches(prev => prev.map(b => {
+      if (b.id === batchId) {
+        return {
+          ...b,
+          streamingData: {
+            ...(b.streamingData || {}),
+            [key]: { ...(b.streamingData?.[key] || {}), ...data }
+          }
+        };
+      }
+      return b;
+    }));
+  }, []);
 
   const restartBatch = useCallback((id) => {
      setBatches(prev => prev.map(b => {
@@ -110,7 +127,6 @@ export const BatchProvider = ({ children }) => {
   const processDay = async (batchId, date, dayRepos, config) => {
     const { improveWithAI, typeFilters, systemPrompt } = config;
     const log = (type, msg) => addLog(batchId, type, msg);
-    const slugify = (v) => String(v || '').trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '');
     const parseCommitType = (s) => (s && typeof s === 'string') ? (s.match(/^(\w+)(\(.*\))?:/)?.[1].toLowerCase() || 'other') : 'other';
 
     const filteredDayData = {};
@@ -132,18 +148,22 @@ export const BatchProvider = ({ children }) => {
     const pageId = date.replace(/-/g, '_');
     const page = {
         id: pageId,
+        date: date, // Stable date reference
         chapter_id: "release_notes",
-        title: date,
+        title: date, // Default title
         keywords: ["update", "release", date],
-        blocks: [{ type: "heading", id: `heading_${pageId}`, level: 1, text: `Updates for ${date}` }]
+        blocks: []
     };
+    
+    // Add default header block (can be replaced by AI title later)
+    page.blocks.push({ type: "heading", id: `heading_${pageId}`, level: 1, text: `Updates for ${date}` });
             
     let refinedText = '';
     let aiAttempted = false;
 
     if (improveWithAI) {
         aiAttempted = true;
-        const prompt = `${systemPrompt}\n\nCommits for ${date}:\n${JSON.stringify(filteredDayData, null, 2)}`;
+        const prompt = `${systemPrompt}\n\nIMPORTANT: Start your response with [TITLE: Your Thematic Title] on the very first line.\n\nCommits for ${date}:\n${JSON.stringify(filteredDayData, null, 2)}`;
         const llmConfig = loadLLMConfig();
         const provider = llmConfig.providers[llmConfig.activeProvider] || {};
         const ctrl = new AbortController();
@@ -270,12 +290,37 @@ export const BatchProvider = ({ children }) => {
         }
     } else {
         const lines = refinedText.split('\n');
+        
+        // Extract Title: Look for [TITLE: ...] or a leading # Header
+        let foundTitle = '';
+        for (let i = 0; i < Math.min(lines.length, 5); i++) {
+            const line = lines[i].trim();
+            const tagMatch = line.match(/^\[TITLE:\s*(.*?)\]/i);
+            const h1Match = line.match(/^#\s*(.*)/);
+            if (tagMatch) {
+                foundTitle = tagMatch[1].trim();
+                lines.splice(i, 1);
+                break;
+            } else if (h1Match) {
+                foundTitle = h1Match[1].trim();
+                lines.splice(i, 1);
+                break;
+            }
+        }
+
+        if (foundTitle) {
+            page.title = foundTitle;
+            // Update the automatic heading block to match the thematic title
+            const hBlock = page.blocks.find(b => b.type === 'heading' && b.level === 1);
+            if (hBlock) hBlock.text = foundTitle;
+        }
+
         let curBlocks = [];
         const flush = () => { if (curBlocks.length > 0) { page.blocks.push({ type: "bullet_list", items: curBlocks }); curBlocks = []; } };
         for (const line of lines) {
             const trimmed = line.trim();
             if (!trimmed) continue;
-            const hMatch = trimmed.match(/^###\s*(.*)/);
+            const hMatch = trimmed.match(/^###\s*(.*)/) || trimmed.match(/^##\s*(.*)/);
             if (hMatch) { flush(); page.blocks.push({ type: "heading", id: `ai_h_${pageId}_${slugify(hMatch[1])}`, level: 2, text: hMatch[1].trim() }); continue; }
             const cMatch = trimmed.match(/^>\s*\[!(info|success|warning|danger)\]\s*(.*?)\s*\|\s*(.*)/i);
             if (cMatch) { flush(); page.blocks.push({ type: "callout", tone: cMatch[1].toLowerCase(), title: cMatch[2].trim(), text: cMatch[3] }); continue; }
@@ -289,11 +334,11 @@ export const BatchProvider = ({ children }) => {
         flush();
     }
     
-    // Update pages in batch
+    // Update pages in batch (preserving date order)
     setBatches(prev => prev.map(b => {
         if (b.id === batchId) {
-            const otherPages = b.pages.filter(p => p.title !== date);
-            return { ...b, pages: [...otherPages, page].sort((a,b) => b.title.localeCompare(a.title)) };
+            const otherPages = b.pages.filter(p => p.date !== date);
+            return { ...b, pages: [...otherPages, page].sort((a,b) => b.date.localeCompare(a.date)) };
         }
         return b;
     }));
@@ -319,6 +364,120 @@ export const BatchProvider = ({ children }) => {
       await processDay(id, date, dayRepos, config);
   }, [addLog]);
 
+  const consolidateBatch = async (batchId, customPrompt = null) => {
+    const b = batchesRef.current.find(x => x.id === batchId);
+    if (!b || b.pages.length === 0) return;
+
+    const log = (type, msg) => addLog(batchId, type, msg);
+    log('system', 'Starting agentic consolidation pass...');
+    updateBatch(batchId, { currentStep: 'Consolidating pages...' });
+
+    const pageSummaries = b.pages.map(p => ({
+        id: p.id,
+        title: p.title,
+        summary: p.blocks.map(bl => bl.text || bl.items?.join(', ') || '').join(' ').slice(0, 500)
+    }));
+
+    const defaultConsolidationPrompt = `You are a professional release notes editor. Below is a list of update pages generated from git history.
+Some pages might overlap in theme (e.g., several days of "UI Improvements"). 
+Your goal: Group these into 3-5 high-level thematic pages.
+Output your decision as a JSON object: 
+{
+  "pages": [
+    { "title": "New Thematic Title", "source_page_ids": ["page_id_1", "page_id_2"] }
+  ],
+  "workshop_bbcode": "[B]Steam Workshop BBCode Summary Here[/B]"
+}
+
+Input:
+${JSON.stringify(pageSummaries, null, 2)}`;
+
+    const finalPrompt = customPrompt || defaultConsolidationPrompt;
+
+    updateStreamingData(batchId, "_consolidation", { status: 'streaming', thinking: '', content: '' });
+
+    try {
+        const stream = await llmChatStream({
+            messages: [{ role: 'system', content: 'You are a JSON-only response agent.' }, { role: 'user', content: finalPrompt }]
+        });
+
+        const reader = stream.getReader();
+        const decoder = new TextDecoder();
+        let streamContent = '';
+        let streamThinking = '';
+        let buffer = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || ''; 
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed) continue;
+                try {
+                    const part = JSON.parse(trimmed);
+                    if (part.content) streamContent += part.content;
+                    if (part.thinking) streamThinking += part.thinking;
+                    updateStreamingData(batchId, "_consolidation", { 
+                        content: streamContent, 
+                        thinking: streamThinking, 
+                        status: 'streaming' 
+                    });
+                } catch (e) { }
+            }
+        }
+
+        let decision;
+        try {
+            const jsonText = streamContent.replace(/```json|```/g, '').trim();
+            decision = JSON.parse(jsonText);
+        } catch (e) {
+            log('error', `Consolidation response was not valid JSON: ${e.message}`);
+            updateBatch(batchId, { 
+                status: 'error', 
+                error: `Consolidation failed: AI response was not valid JSON. You can retry.`, 
+                currentStep: 'Consolidation ERROR' 
+            });
+            return;
+        }
+
+        updateStreamingData(batchId, "_consolidation", { status: 'completed' });
+
+        const newPages = decision.pages.map((group, idx) => {
+            const sourcePages = b.pages.filter(p => group.source_page_ids.includes(p.id));
+            const blocks = [];
+            sourcePages.forEach(p => {
+                blocks.push({ type: 'heading', level: 2, text: p.title });
+                blocks.push(...p.blocks.filter(bl => bl.level !== 1)); // Skip redundant H1s
+            });
+
+            return {
+                id: `consolidated_${idx}`,
+                chapter_id: "release_notes",
+                title: group.title,
+                blocks
+            };
+        });
+
+        updateBatch(batchId, { 
+            consolidatedPages: newPages, 
+            workshopMetadata: decision.workshop_bbcode,
+            currentStep: 'Consolidation complete',
+            consolidationError: null
+        });
+        updateStreamingData(batchId, "_consolidation", { status: 'completed' }); // Ensure it marks as done
+        log('success', 'Batch consolidated into thematic pages!');
+
+    } catch (e) {
+        log('error', `Consolidation failed: ${e.message}`);
+        updateBatch(batchId, { consolidationError: e.message });
+        updateStreamingData(batchId, "_consolidation", { status: 'error', error: e.message });
+    }
+  };
+
   const processBatch = async (id, config) => {
     const { since, until, module, branch } = config;
     const log = (type, msg) => addLog(id, type, msg);
@@ -338,8 +497,14 @@ export const BatchProvider = ({ children }) => {
         }
 
         setStep('Fetching git history...');
-        const historyRes = await getBatchedGitHistory(since, branch);
-        const history = historyRes.data.history || {};
+        let history = config.history;
+        if (!history) {
+            const historyRes = await getBatchedGitHistory(since, until, branch, module);
+            if (historyRes.status !== 200 || !historyRes.data.history) {
+                 throw new Error(historyRes.data?.error || `Git history fetch failed for branch '${branch}'`);
+            }
+            history = historyRes.data.history;
+        }
         
         const allDates = Object.keys(history).sort();
         const rangeDates = allDates.filter(d => d >= since && d <= until);
@@ -365,6 +530,9 @@ export const BatchProvider = ({ children }) => {
             setProg(Math.round(((i + 1) / total) * 100));
         }
 
+        updateBatch(id, { progress: 100 });
+        await consolidateBatch(id);
+
         const finalBatch = batchesRef.current.find(b => b.id === id);
         const pages = [...(finalBatch?.pages || [])];
 
@@ -387,26 +555,8 @@ export const BatchProvider = ({ children }) => {
             });
         }
 
-        setStep('Saving manual...');
-        const capitals = module.replace(/[^A-Z]/g, '') || 'Upd';
-        const volId = `${capitals}_Upd_${until.replace(/-/g, '_')}`;
-        const payload = {
-            manual_id: volId,
-            module: module,
-            title: `Update: ${since.slice(5).replace(/-/g, '/')} - ${until.slice(5).replace(/-/g, '/')}`,
-            description: `Consolidated updates from ${since} to ${until}`,
-            start_page_id: pages[0].id,
-            audiences: [module],
-            is_whats_new: true,
-            manual_type: "whats_new",
-            source_folder: "WhatsNew", 
-            chapters: [{ id: "release_notes", title: "Release Notes" }],
-            pages
-        };
-
-        await createManualDefinition(payload, 'updates', module);
-        log('success', `VOLUME SAVED: ${volId} (${pages.length} pages)`);
-        updateBatch(id, { status: 'success', currentStep: 'Completed' });
+        log('success', 'Batch daily refinement complete. You can now run thematic consolidation.');
+        updateBatch(id, { status: 'refining_done', currentStep: 'Daily Refinement Complete' });
 
     } catch (error) {
         log('error', `Batch Failed: ${error.message}`);
@@ -414,10 +564,46 @@ export const BatchProvider = ({ children }) => {
     }
   };
 
+  const saveBatchVolume = async (batchId) => {
+      const batch = batchesRef.current.find(b => b.id === batchId);
+      if (!batch) return;
+
+      try {
+          updateBatch(batchId, { currentStep: 'Finalizing Save...', status: 'saving' });
+          
+          const { since, until, module } = batch.config;
+          const pages = batch.consolidatedPages || batch.pages; // Use consolidated if available
+          
+          const capitals = module.replace(/[^A-Z]/g, '') || 'Upd';
+          const volId = `${capitals}_Upd_${until.replace(/-/g, '_')}`;
+          
+          const payload = {
+              manual_id: volId,
+              module: module,
+              title: `Update: ${since.slice(5).replace(/-/g, '/')} - ${until.slice(5).replace(/-/g, '/')}`,
+              description: `Consolidated updates from ${since} to ${until}`,
+              start_page_id: pages[0]?.id || "index",
+              audiences: [module],
+              is_whats_new: true,
+              manual_type: "whats_new",
+              source_folder: "WhatsNew", 
+              chapters: [{ id: "release_notes", title: "Release Notes" }],
+              pages
+          };
+
+          await createManualDefinition(payload, 'updates', module);
+          addLog(batchId, 'success', `VOLUME SAVED: ${volId} (${pages.length} pages)`);
+          updateBatch(batchId, { status: 'success', currentStep: 'Completed' });
+      } catch (error) {
+          addLog(batchId, 'error', `Final Save Failed: ${error.message}`);
+          updateBatch(batchId, { status: 'error', error: error.message, currentStep: 'Save ERROR' });
+      }
+  };
+
   const dismissBatch = useCallback((id) => updateBatch(id, { dismissed: true }), [updateBatch]);
 
   return (
-    <BatchContext.Provider value={{ batches, spawnBatch, removeBatch, skipBatchItem, pauseBatch, resumeBatch, restartBatch, retryDay, openBatchId, openFullView, closeFullView, dismissBatch }}>
+    <BatchContext.Provider value={{ batches, spawnBatch, removeBatch, skipBatchItem, pauseBatch, resumeBatch, restartBatch, retryDay, openBatchId, openFullView, closeFullView, dismissBatch, consolidateBatch, saveBatchVolume }}>
       {children}
     </BatchContext.Provider>
   );

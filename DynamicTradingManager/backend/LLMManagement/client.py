@@ -38,13 +38,36 @@ def _build_client(base_url: str, api_key: str) -> AsyncOpenAI:
 def _is_reasoning_effort_supported(model: str, base_url: str) -> bool:
     """Determine if a model or provider supports the reasoning_effort parameter."""
     m_lower = model.lower()
-    if "o1" in m_lower or "o3" in m_lower or "deepseek-reasoner" in m_lower:
+    # OpenAI native reasoning models
+    if "o1" in m_lower or "o3" in m_lower:
         return True
+    # Groq's reasoning-capable models (Qwen 3, DeepSeek R1)
     if "api.groq.com" in base_url.lower():
+        if "qwen" in m_lower or "deepseek" in m_lower or "r1" in m_lower:
+            return True
+    # General deepseek reasoner
+    if "deepseek-reasoner" in m_lower:
         return True
     if "reasoner" in m_lower:
         return True
     return False
+
+
+def _map_reasoning_effort(model: str, base_url: str, effort: str | None) -> str:
+    """Map standard effort levels (low, medium, high) to provider-specific values."""
+    if not effort:
+        effort = "medium"
+    
+    effort = effort.lower()
+    
+    # Groq specific mapping: only supports 'none' or 'default'
+    if "api.groq.com" in base_url.lower():
+        if effort in ["low", "medium", "high"]:
+            return "default"
+        return effort if effort in ["none", "default"] else "default"
+        
+    # OpenAI and others usually support low/medium/high
+    return effort
 
 
 async def chat_completion(
@@ -83,7 +106,7 @@ async def chat_completion(
 
     # Thinking mode / Reasoning parameters
     if thinking and _is_reasoning_effort_supported(model, base_url):
-        kwargs["reasoning_effort"] = reasoning_effort or "medium"
+        kwargs["reasoning_effort"] = _map_reasoning_effort(model, base_url, reasoning_effort)
 
     logger.info(
         "LLM async chat request: model=%s base_url=%s thinking=%s stream=%s",
@@ -181,7 +204,7 @@ async def stream_completion(
             kwargs["max_tokens"] = max_tokens
 
     if thinking and _is_reasoning_effort_supported(model, base_url):
-        kwargs["reasoning_effort"] = reasoning_effort or "medium"
+        kwargs["reasoning_effort"] = _map_reasoning_effort(model, base_url, reasoning_effort)
 
     logger.info("Starting LLM stream: model=%s base_url=%s thinking=%s", model, base_url, thinking)
 

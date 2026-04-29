@@ -24,6 +24,7 @@ const blockTypeOptions = [
   { value: 'bullet_list', label: 'Bullet List' },
   { value: 'image', label: 'Image' },
   { value: 'callout', label: 'Callout' },
+  { value: 'supporter_carousel', label: 'Hall of Fame' },
 ];
 
 const toneOptions = ['info', 'warn', 'success'];

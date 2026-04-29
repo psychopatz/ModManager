@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { 
-    Box, Typography, Stack, Collapse, Accordion, AccordionSummary, AccordionDetails, 
-    IconButton, CircularProgress, Chip
+    Box, Typography, Stack, Collapse, Accordion, AccordionSummary, AccordionDetails,
+    CircularProgress, Chip
 } from '@mui/material';
 import {
     RestartAlt as RefreshIcon,
@@ -22,7 +22,61 @@ const StageDailyRefinement = ({
     getTypeColor,
     retryDay,
 }) => {
-    const days = getDayList(attachedBatch.config.since, attachedBatch.config.until);
+    const [expandedDays, setExpandedDays] = useState({});
+
+    const parseCommitType = (subject) => {
+        if (!subject || typeof subject !== 'string') return 'other';
+        const match = subject.match(/^(\w+)(\(.*\))?:/);
+        return match ? match[1].toLowerCase() : 'other';
+    };
+
+    const includedTypes = attachedBatch.config?.typeFilters || [];
+
+    const days = useMemo(() => {
+        const historyDates = Object.entries(history || {})
+            .filter(([, reposMap]) =>
+                Object.values(reposMap || {}).some((commits) =>
+                    (commits || []).some((commit) => {
+                        const type = parseCommitType(commit.subject || commit.message || '');
+                        const isOther = !['feat', 'fix', 'refactor', 'perf', 'docs', 'chore', 'style', 'test'].includes(type);
+                        return includedTypes.includes(type) || (includedTypes.includes('other') && isOther);
+                    })
+                )
+            )
+            .map(([date]) => date);
+
+        const derivedDates = [
+            ...(attachedBatch.pages || []).map((page) => page.date),
+            ...(attachedBatch.stage1Items || []).map((item) => item.date),
+            ...Object.keys(attachedBatch.streamingData || {}).filter((key) => key !== '_consolidation'),
+        ];
+
+        const activeStepDate = attachedBatch.currentStep.match(/\d{4}-\d{2}-\d{2}/)?.[0];
+        if (activeStepDate) derivedDates.push(activeStepDate);
+
+        return Array.from(new Set([...historyDates, ...derivedDates])).sort((a, b) => b.localeCompare(a));
+    }, [attachedBatch.currentStep, attachedBatch.pages, attachedBatch.stage1Items, attachedBatch.streamingData, history, includedTypes]);
+
+    const pagesByDate = useMemo(
+        () => new Map((attachedBatch.pages || []).map((page) => [page.date, page])),
+        [attachedBatch.pages]
+    );
+
+    const stage1ItemsByDate = useMemo(
+        () => new Map((attachedBatch.stage1Items || []).map((item) => [item.date, item])),
+        [attachedBatch.stage1Items]
+    );
+
+    useEffect(() => {
+        const activeDate = days.find((date) => attachedBatch.currentStep.includes(date) || attachedBatch.streamingData?.[date]?.status === 'streaming');
+        if (!activeDate) return;
+
+        setExpandedDays((prev) => (prev[activeDate] ? prev : { ...prev, [activeDate]: true }));
+    }, [attachedBatch.currentStep, attachedBatch.streamingData, days]);
+
+    const toggleDay = (date) => {
+        setExpandedDays((prev) => ({ ...prev, [date]: !prev[date] }));
+    };
     
     return (
         <Box sx={{ bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 1.5, mb: 1, border: '1px solid rgba(255,255,255,0.05)' }}>
@@ -44,13 +98,14 @@ const StageDailyRefinement = ({
                 <Box sx={{ pl: 2, pb: 1, pr: 1 }}>
                     <Stack spacing={0.5}>
                         {days.map(date => {
-                            const page = attachedBatch.pages.find(p => p.date === date);
-                            const stage1Item = (attachedBatch.stage1Items || []).find(i => i.date === date);
+                            const page = pagesByDate.get(date);
+                            const stage1Item = stage1ItemsByDate.get(date);
                             const stream = attachedBatch.streamingData?.[date];
                             const isProcessing = attachedBatch.currentStep.includes(date) || (stream?.status === 'streaming');
+                            const isExpanded = !!expandedDays[date] || isProcessing;
                             
                             return (
-                                <Accordion key={date} expanded={true} sx={{ bgcolor: 'transparent', boxShadow: 'none', border: '1px solid rgba(255,255,255,0.03)' }}>
+                                <Accordion key={date} expanded={isExpanded} onChange={() => toggleDay(date)} sx={{ bgcolor: 'transparent', boxShadow: 'none', border: '1px solid rgba(255,255,255,0.03)' }}>
                                     <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                                         <Stack direction="row" spacing={1} alignItems="center" sx={{ width: '100%' }}>
                                             {page ? <SuccessIcon sx={{ fontSize: 14, color: 'success.main' }} /> : isProcessing ? <CircularProgress size={12} /> : <Box sx={{ width: 14 }} />}
@@ -61,9 +116,25 @@ const StageDailyRefinement = ({
                                             {stage1Item?.parseWarnings?.length > 0 && (
                                                 <Chip label="WARN" size="small" color="warning" sx={{ height: 14, fontSize: '0.55rem' }} />
                                             )}
-                                            <IconButton size="small" onClick={(e) => { e.stopPropagation(); retryDay(attachedBatch.id, date); }}>
+                                            <Box
+                                                component="span"
+                                                role="button"
+                                                tabIndex={0}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    retryDay(attachedBatch.id, date);
+                                                }}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter' || e.key === ' ') {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        retryDay(attachedBatch.id, date);
+                                                    }
+                                                }}
+                                                sx={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', p: 0.25, borderRadius: 0.5, cursor: 'pointer', color: 'text.secondary', '&:hover': { color: 'text.primary', bgcolor: 'rgba(255,255,255,0.04)' } }}
+                                            >
                                                 <RefreshIcon sx={{ fontSize: 12 }} />
-                                            </IconButton>
+                                            </Box>
                                         </Stack>
                                     </AccordionSummary>
                                     <AccordionDetails>

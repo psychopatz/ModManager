@@ -8,7 +8,9 @@ import {
     AutoFixHigh as ConsolidationIcon,
     AutoAwesome as AiStatusIcon,
     RestartAlt as ResetIcon,
-    Psychology as ThinkingIcon
+    Psychology as ThinkingIcon,
+    Save as SaveIcon,
+    Refresh as ForceRecreateIcon
 } from '@mui/icons-material';
 
 const StageThematicConsolidation = ({
@@ -19,6 +21,7 @@ const StageThematicConsolidation = ({
     setConsolidationPrompt,
     resetConsolidationPrompt,
     consolidateBatch,
+    saveBatchVolume,
 }) => {
     const [showPromptEditor, setShowPromptEditor] = useState(false);
     const isLocked = attachedBatch.status !== 'success' && attachedBatch.progress < 100;
@@ -149,6 +152,34 @@ const StageThematicConsolidation = ({
                                 </Button>
                             </Stack>
                         </Collapse>
+
+                        {/* SAVE TO MANUALS — shown once consolidation has produced pages */}
+                        {(attachedBatch.consolidatedPages?.length > 0 || attachedBatch.generatedUpdateTitle) && (
+                            <Stack spacing={1} sx={{ pt: 1 }}>
+                                <Button
+                                    fullWidth
+                                    variant="contained"
+                                    color="success"
+                                    startIcon={<SaveIcon />}
+                                    onClick={() => saveBatchVolume(attachedBatch.id)}
+                                    disabled={attachedBatch.status === 'saving'}
+                                    sx={{ fontWeight: 800 }}
+                                >
+                                    {attachedBatch.status === 'saving' ? 'Saving...' : 'COMMIT BATCH TO MANUALS'}
+                                </Button>
+                                <Button
+                                    fullWidth
+                                    variant="outlined"
+                                    color="warning"
+                                    startIcon={<ForceRecreateIcon />}
+                                    onClick={() => saveBatchVolume(attachedBatch.id, { forceRecreate: true })}
+                                    disabled={attachedBatch.status === 'saving'}
+                                    sx={{ fontWeight: 800, fontSize: '0.7rem' }}
+                                >
+                                    FORCE RECREATE LUA FILES
+                                </Button>
+                            </Stack>
+                        )}
                     </Stack>
                 </Box>
             </Collapse>

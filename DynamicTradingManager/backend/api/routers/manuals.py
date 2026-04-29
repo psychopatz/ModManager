@@ -5,6 +5,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 
 from api.routers.common import get_mod_roots, normalize_manual_module
 from api.schemas import ManualSaveRequest
@@ -143,9 +144,14 @@ async def upload_manual_image(
 
 
 @router.get("/api/manuals/batch/git-history")
-async def get_batch_git_history(since: str = "2026-03-27", branch: str = "develop"):
+async def get_batch_git_history(
+    since: str = "2026-03-27",
+    until: str | None = None,
+    branch: str = "develop",
+    module: str | None = None,
+):
     try:
-        data = get_batched_git_log(since, branch)
+        data = get_batched_git_log(since, branch, until, module)
         return {
             "success": True,
             "history": data

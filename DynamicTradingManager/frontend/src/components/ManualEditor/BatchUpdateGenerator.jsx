@@ -58,6 +58,7 @@ const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop', m
   const [resumeFromStage, setResumeFromStage] = useState(2);
   const [cachedRuns, setCachedRuns] = useState([]);
   const [autoSaveAfterConsolidation, setAutoSaveAfterConsolidation] = useState(localStorage.getItem('git_batch_auto_save') !== 'false');
+  const [startingBatch, setStartingBatch] = useState(false);
 
   // Persistent state updates
   useEffect(() => {
@@ -135,9 +136,15 @@ const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop', m
     }
   };
 
-  const startBatch = () => {
+  const startBatch = async () => {
     if (!history) return;
-    spawnBatch({
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+    setStartingBatch(true);
+    setStatus({ type: 'info', message: 'Starting batch...' });
+    try {
+      await spawnBatch({
         since, 
         until, 
         module: module || targets[0] || 'DynamicTrading', 
@@ -151,9 +158,20 @@ const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop', m
       cacheOutputs,
       resumeCacheId: resumeCacheId || null,
       resumeFromStage: resumeCacheId ? resumeFromStage : 1,
-    });
-    setSectionsExpanded({ daily: true, consolidation: true, workshop: true });
+      });
+      setStatus({ type: 'success', message: '' });
+      setSectionsExpanded({ daily: true, consolidation: true, workshop: true });
+    } catch (e) {
+      setStatus({ type: 'error', message: e.message || 'Failed to start batch.' });
+      setStartingBatch(false);
+    }
   };
+
+  useEffect(() => {
+    if (isAttached) {
+      setStartingBatch(false);
+    }
+  }, [isAttached]);
 
   const getDayList = (s, u) => {
     const start = new Date(s);
@@ -289,10 +307,10 @@ const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop', m
                 <Button 
                     variant="contained" 
                     onClick={startBatch} 
-                    disabled={!history || loading || !module}
+                  disabled={!history || loading || startingBatch || !module}
                     sx={{ px: 4 }}
                 >
-                    Start Processing
+                  {startingBatch ? 'Starting...' : 'Start Processing'}
                 </Button>
             </>
         )}

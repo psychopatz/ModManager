@@ -7,8 +7,7 @@ import {
     ExpandLess as ExpandLessIcon,
     ContentCopy as CopyIcon,
     AutoFixHigh as AutoFixIcon,
-    Terminal as WorkshopIcon,
-    Refresh as ForceRecreateIcon
+    Terminal as WorkshopIcon
 } from '@mui/icons-material';
 
 const LOG_COLORS = { success: '#10b981', error: '#ef4444', warning: '#f59e0b', system: '#60a5fa', info: '#9ca3af' };
@@ -19,7 +18,6 @@ const StageWorkshopBBCode = ({
     setSectionsExpanded,
     consolidateBatch,
     consolidationPrompt,
-    saveBatchVolume,
     setStatus,
 }) => {
     const isLocked = !attachedBatch.workshopMetadata && attachedBatch.progress < 100;
@@ -93,30 +91,19 @@ const StageWorkshopBBCode = ({
                     )}
 
                     {attachedBatch.workshopMetadata && (
-                        <Stack spacing={1} sx={{ mt: 2 }}>
-                            <Button
-                                fullWidth
-                                variant="contained"
-                                color="success"
-                                startIcon={<AutoFixIcon />}
-                                onClick={() => saveBatchVolume(attachedBatch.id)}
-                                disabled={attachedBatch.status === 'saving'}
-                                sx={{ fontWeight: 800 }}
-                            >
-                                {attachedBatch.status === 'saving' ? 'Saving...' : 'COMMIT BATCH TO MANUALS'}
-                            </Button>
-                            <Button
-                                fullWidth
-                                variant="outlined"
-                                color="warning"
-                                startIcon={<ForceRecreateIcon />}
-                                onClick={() => saveBatchVolume(attachedBatch.id, { forceRecreate: true })}
-                                disabled={attachedBatch.status === 'saving'}
-                                sx={{ fontWeight: 800, fontSize: '0.7rem' }}
-                            >
-                                FORCE RECREATE LUA FILES
-                            </Button>
-                        </Stack>
+                        <Button
+                            fullWidth
+                            variant="contained"
+                            color="info"
+                            startIcon={<CopyIcon />}
+                            onClick={() => {
+                                navigator.clipboard.writeText(attachedBatch.workshopMetadata);
+                                setStatus({ type: 'success', message: 'Workshop update BBCode copied!' });
+                            }}
+                            sx={{ mt: 2, fontWeight: 800 }}
+                        >
+                            COPY WORKSHOP UPDATE
+                        </Button>
                     )}
                 </Box>
             </Collapse>

@@ -37,6 +37,20 @@ const BatchConfigForm = ({
         return match ? match[1].toLowerCase() : 'other';
     };
 
+    const rawCommits = React.useMemo(() => {
+        if (!history) return [];
+        const flatList = [];
+        Object.entries(history).forEach(([date, reposMap]) => {
+            Object.entries(reposMap).forEach(([repo, commits]) => {
+                commits.forEach(c => {
+                    const type = parseCommitType(c.subject || c.message || '');
+                    flatList.push({ ...c, date, repo, type });
+                });
+            });
+        });
+        return flatList.sort((a, b) => new Date(b.date) - new Date(a.date));
+    }, [history]);
+
     const allCommits = React.useMemo(() => {
         if (!history) return [];
         const flatList = [];
@@ -55,6 +69,9 @@ const BatchConfigForm = ({
         return flatList.sort((a, b) => new Date(b.date) - new Date(a.date));
     }, [history, typeFilters]);
 
+    const rawDayCount = React.useMemo(() => new Set(rawCommits.map((c) => c.date)).size, [rawCommits]);
+    const filteredDayCount = React.useMemo(() => new Set(allCommits.map((c) => c.date)).size, [allCommits]);
+
     return (
         <Stack spacing={3}>
             {/* Context Header */}
@@ -71,14 +88,16 @@ const BatchConfigForm = ({
 
             {status.message && status.type !== 'success' && <Alert severity={status.type || 'info'}>{status.message}</Alert>}
 
-            {allCommits.length > 0 && (
+            {rawCommits.length > 0 && (
                 <Alert severity="success" icon={false} sx={{ '& .MuiAlert-message': { width: '100%' }, py: 0.5 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Stack spacing={0.25}>
                         <Typography variant="body2" fontWeight={800}>
-                            {new Set(allCommits.map(c => c.date)).size} days of activity found ({allCommits.length} total commits).
+                            Raw git history: {rawDayCount} active days, {rawCommits.length} commits.
                         </Typography>
-                        <Typography variant="caption" sx={{ opacity: 0.7 }}>(Filtered results)</Typography>
-                    </Box>
+                        <Typography variant="caption" sx={{ opacity: 0.7 }}>
+                            Current preview after filters: {filteredDayCount} days, {allCommits.length} commits.
+                        </Typography>
+                    </Stack>
                 </Alert>
             )}
 
@@ -207,7 +226,7 @@ const BatchConfigForm = ({
                             <MenuItem value="">None</MenuItem>
                             {(cachedRuns || []).map((entry) => (
                                 <MenuItem key={entry.batchId} value={entry.batchId}>
-                                    {`${entry.module || 'Module'} | ${entry.since || '?'} -> ${entry.until || '?'} | S1:${entry.stage1Count}`}
+                                    {`${entry.module || 'Module'} | ${entry.branch || 'branch?'} | ${entry.since || '?'} -> ${entry.until || '?'} | S1:${entry.stage1Count}`}
                                 </MenuItem>
                             ))}
                         </Select>

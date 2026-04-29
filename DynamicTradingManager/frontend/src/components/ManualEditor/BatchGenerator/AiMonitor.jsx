@@ -5,8 +5,6 @@ import {
 import MarkdownRenderer from './MarkdownRenderer';
 
 const AiMonitor = ({ title, thinking, content, status, isAnyStreaming }) => {
-    if (!isAnyStreaming && !thinking && !content) return null;
-
     return (
         <Box sx={{ 
             border: '1px solid rgba(59, 130, 246, 0.3)', 
@@ -54,7 +52,9 @@ const AiMonitor = ({ title, thinking, content, status, isAnyStreaming }) => {
                             <MarkdownRenderer content={content} />
                         ) : (
                             <Typography variant="caption" sx={{ fontFamily: 'monospace', fontSize: '0.75rem', opacity: 0.5 }}>
-                                {isAnyStreaming ? "Initializing neural patterns..." : "Standby..."}
+                                {status === 'pending'
+                                    ? 'Waiting for first AI response...'
+                                    : (isAnyStreaming ? 'Initializing neural patterns...' : 'Standby...')}
                             </Typography>
                         )}
                         {status === 'streaming' && <span className="streaming-cursor">|</span>}

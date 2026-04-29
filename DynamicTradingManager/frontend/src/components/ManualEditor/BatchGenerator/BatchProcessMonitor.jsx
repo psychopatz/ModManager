@@ -25,10 +25,23 @@ const BatchProcessMonitor = ({
 
     const streamingDay = Object.keys(attachedBatch.streamingData || {}).find(k => attachedBatch.streamingData[k].status === 'streaming');
     const isConsolidating = attachedBatch.streamingData?._consolidation?.status === 'streaming';
+    const currentStepDate = attachedBatch.currentStep.match(/\d{4}-\d{2}-\d{2}/)?.[0] || null;
     
     // Active streaming state for AiMonitor
-    const activeStreamingData = isConsolidating ? attachedBatch.streamingData._consolidation : (streamingDay ? attachedBatch.streamingData[streamingDay] : null);
-    const activeStreamingTitle = isConsolidating ? "Thematic Consolidation" : (streamingDay ? `Refining ${streamingDay}` : "AI Monitor");
+    const activeStreamingData = isConsolidating
+        ? attachedBatch.streamingData._consolidation
+        : (streamingDay
+            ? attachedBatch.streamingData[streamingDay]
+            : (attachedBatch.config?.improveWithAI && (currentStepDate || attachedBatch.currentStep.includes('Preparing Stage 1'))
+                ? { status: 'pending', thinking: '', content: '' }
+                : null));
+    const activeStreamingTitle = isConsolidating
+        ? 'Thematic Consolidation'
+        : (streamingDay
+            ? `Refining ${streamingDay}`
+            : (currentStepDate
+                ? `Queued ${currentStepDate}`
+                : (attachedBatch.currentStep.includes('Preparing Stage 1') ? 'Preparing First AI Pass' : 'AI Monitor')));
 
     return (
         <Stack spacing={2} sx={{ mt: 1 }}>
@@ -77,6 +90,7 @@ const BatchProcessMonitor = ({
                         setConsolidationPrompt={setConsolidationPrompt}
                         resetConsolidationPrompt={resetConsolidationPrompt}
                         consolidateBatch={consolidateBatch}
+                        saveBatchVolume={saveBatchVolume}
                     />
 
                     <StageWorkshopBBCode 
@@ -85,7 +99,6 @@ const BatchProcessMonitor = ({
                         setSectionsExpanded={setSectionsExpanded}
                         consolidateBatch={consolidateBatch}
                         consolidationPrompt={consolidationPrompt}
-                        saveBatchVolume={saveBatchVolume}
                         setStatus={setStatus}
                     />
                 </Stack>

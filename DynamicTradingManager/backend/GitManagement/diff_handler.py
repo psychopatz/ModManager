@@ -114,20 +114,47 @@ def format_for_ai(changes: dict):
     prompt += "Code Diffs (Partial):\n" + changes["detail"]
     return prompt
 
-def get_batched_git_log(since_date: str, branch: str = "develop"):
-    """
-    Fetches and groups commits by date across all mod repositories.
-    """
-    from config.server_settings import get_server_settings
+def _resolve_batched_repo_paths(module: str | None = None) -> dict[str, Path]:
     settings = get_server_settings()
-    
-    # We should detect all repos, but for now we follow the confirmed list
     repos = {
         "DynamicTrading": settings.dynamic_trading_path,
         "DynamicColonies": settings.dynamic_colonies_path,
         "CurrencyExpanded": settings.dynamic_currency_path,
-        "DynamicObjectives": settings.dynamic_trading_path.parent / "DynamicObjectives" 
+        "DynamicObjectives": settings.dynamic_trading_path.parent / "DynamicObjectives",
     }
+
+    if not module:
+        return repos
+
+    normalized_module = str(module).strip().lower()
+    for repo_name, path in repos.items():
+        if repo_name.lower() == normalized_module:
+            return {repo_name: path}
+
+    try:
+        from ProjectManagement.projects import list_workshop_projects
+
+        for project in list_workshop_projects():
+            project_name = str(project.get("name") or "").strip().lower()
+            project_key = str(project.get("key") or "").strip().lower()
+            if normalized_module in {project_name, project_key}:
+                return {project.get("name") or project.get("key"): Path(project["path"])}
+
+            for sub_mod in project.get("sub_mods", []):
+                sub_mod_id = str(sub_mod.get("id") or "").strip().lower()
+                if sub_mod_id == normalized_module:
+                    return {project.get("name") or project.get("key"): Path(project["path"])}
+    except Exception as exc:
+        logger.warning("Unable to resolve batched git repo for module %s: %s", module, exc)
+
+    return repos
+
+
+def get_batched_git_log(since_date: str, branch: str = "develop", until_date: str | None = None, module: str | None = None):
+    """
+    Fetches and groups commits by date, optionally scoped to a single selected module/project.
+    """
+    repos = _resolve_batched_repo_paths(module)
     
     batched = {} # date -> repo -> [commits]
     
@@ -139,10 +166,12 @@ def get_batched_git_log(since_date: str, branch: str = "develop"):
             # Format: DATE|SUBJECT|BODY (with markers to avoid parsing issues)
             # We use %as for author date (YYYY-MM-DD), %s subject, %b body
             log_cmd = [
-                "git", "log", branch, 
+                "git", "log", branch,
                 f"--since={since_date} 00:00:00", 
                 "--format=COMMIT_START%as|%s|%b|COMMIT_END"
             ]
+            if until_date:
+                log_cmd.insert(3, f"--until={until_date} 23:59:59")
             
             output = subprocess.check_output(log_cmd, cwd=path, encoding="utf-8")
             parts = output.split("COMMIT_START")

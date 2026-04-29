@@ -6,8 +6,8 @@ from pathlib import Path
 from .constants import DEFAULT_AUDIENCE, DEFAULT_MODULE, DEFAULT_SCOPE, VALID_SOURCE_FOLDERS
 
 
-TITLE_MAX_LENGTH = 22
-DESCRIPTION_MAX_LENGTH = 69
+TITLE_MAX_LENGTH = 500
+DESCRIPTION_MAX_LENGTH = 500
 
 
 def _normalize_bool(value) -> bool:

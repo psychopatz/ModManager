@@ -95,9 +95,9 @@ const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop', m
 Transform the following daily git commits into polished, feature-grouped patch notes.
 
 FORMAT RULES:
-1. Use '### Heading' for feature names (Keep headings concise, max 25 chars).
+1. Use '### Heading' for feature names (Keep headings concise but descriptive).
 2. Use '- Bullet' for changes (Gameplay impact focused).
-3. Use '> [!tone] Title | Body' for Callouts. Tones: info, success, warning, danger. (Title max 25 chars).
+3. Use '> [!tone] Title | Body' for Callouts. Tones: info, success, warning, danger.
 4. Use '![Caption](path)' for images if applicable.
 5. CONTEXT GUARD: If the commits are trivial (merge commits, bumps), return exactly: %ContextNotFound%
 

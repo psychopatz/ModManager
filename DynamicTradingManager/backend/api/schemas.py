@@ -78,7 +78,7 @@ class ArchetypeSaveRequest(BaseModel):
 class ManualSaveRequest(BaseModel):
     manual_id: str
     title: str
-    description: Optional[str] = Field(default="", max_length=69)
+    description: Optional[str] = Field(default="", max_length=500)
     start_page_id: Optional[str] = ""
     audiences: List[str] = ["DynamicTradingCommon"]
     sort_order: Optional[int] = None

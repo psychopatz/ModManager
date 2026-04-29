@@ -152,9 +152,9 @@ export const BatchProvider = ({ children }) => {
                     const trimmed = line.trim();
                     if (!trimmed) continue;
                     const hMatch = trimmed.match(/^###\s*(.*)/);
-                    if (hMatch) { flush(); page.blocks.push({ type: "heading", id: `ai_h_${pageId}_${slugify(hMatch[1])}`, level: 2, text: hMatch[1].slice(0, 25) }); continue; }
+                    if (hMatch) { flush(); page.blocks.push({ type: "heading", id: `ai_h_${pageId}_${slugify(hMatch[1])}`, level: 2, text: hMatch[1].trim() }); continue; }
                     const cMatch = trimmed.match(/^>\s*\[!(info|success|warning|danger)\]\s*(.*?)\s*\|\s*(.*)/i);
-                    if (cMatch) { flush(); page.blocks.push({ type: "callout", tone: cMatch[1].toLowerCase(), title: cMatch[2].slice(0, 25), text: cMatch[3] }); continue; }
+                    if (cMatch) { flush(); page.blocks.push({ type: "callout", tone: cMatch[1].toLowerCase(), title: cMatch[2].trim(), text: cMatch[3] }); continue; }
                     const iMatch = trimmed.match(/^!\[(.*?)\]\((.*?)\)/);
                     if (iMatch) { flush(); page.blocks.push({ type: "image", caption: iMatch[1], path: iMatch[2] }); continue; }
                     const bMatch = trimmed.match(/^[*-]\s*(.*)/);
@@ -170,7 +170,7 @@ export const BatchProvider = ({ children }) => {
                         const type = parseCommitType(c.subject || c.message);
                         log(type, `    - ${c.subject}`);
                     });
-                    page.blocks.push({ type: "heading", id: `repo_${repo.toLowerCase()}_${pageId}`, level: 2, text: repo.slice(0, 25) });
+                    page.blocks.push({ type: "heading", id: `repo_${repo.toLowerCase()}_${pageId}`, level: 2, text: repo.trim() });
                     page.blocks.push({ type: "bullet_list", items: commits.map(c => c.subject) });
                 }
             }

@@ -121,11 +121,23 @@ const normalizeBlock = (block, index) => {
 	};
 };
 
-const buildManualPayload = (input, targetModule = 'common') => {
+const LEGACY_MAPPING = {
+	'common': 'DynamicTradingCommon',
+	'v1': 'DynamicTrading',
+	'v2': 'DynamicTradingV2',
+	'colony': 'DynamicColonies',
+	'currency': 'CurrencyExpanded'
+};
+
+const buildManualPayload = (input, targetModule = '') => {
 	const payload = input?.manual ? input.manual : input;
-	const module = ['common', 'v1', 'v2', 'colony', 'currency'].includes(payload.module)
-		? payload.module
-		: targetModule;
+	
+	// Map legacy module strings to the new Mod IDs if needed
+	let module = payload.module || targetModule;
+	if (LEGACY_MAPPING[module]) {
+		module = LEGACY_MAPPING[module];
+	}
+
 	const manualId = slugify(payload.manual_id || getTodayUpdateId());
 
 	const chapters = Array.isArray(payload.chapters) && payload.chapters.length > 0

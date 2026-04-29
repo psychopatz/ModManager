@@ -137,7 +137,7 @@ const getAudienceLabel = (manual) => audienceOptions.find((option) => option.val
 const ManualEditorPage = ({ editorScope = 'manuals' }) => {
   const isUpdateEditor = editorScope === 'updates';
   const [data, setData] = useState({ manuals: [], assets_base_url: '/static/manuals' });
-  const [selectedModule, setSelectedModule] = useState('');
+  const [selectedModule, setSelectedModule] = useState(() => localStorage.getItem('mod_manager_last_module') || '');
   const [selectedManualKey, setSelectedManualKey] = useState('');
   const [selectedPageId, setSelectedPageId] = useState('');
   const [loading, setLoading] = useState(true);
@@ -147,9 +147,45 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
   const fileInputRef = useRef(null);
   const uploadTargetRef = useRef(null);
   const [batchGeneratorOpen, setBatchGeneratorOpen] = useState(false);
-  const [selectedBranch, setSelectedBranch] = useState('develop');
+
+  // Per-module branch memory
+  const [selectedBranch, setSelectedBranch] = useState(() => {
+    const saved = localStorage.getItem('mod_manager_branches');
+    if (saved && selectedModule) {
+      const map = JSON.parse(saved);
+      return map[selectedModule] || 'main';
+    }
+    return 'main';
+  });
+
   const [modules, setModules] = useState([]);
   const [targets, setTargets] = useState([]);
+
+  // Sync selection to localStorage
+  useEffect(() => {
+    if (selectedModule) {
+      localStorage.setItem('mod_manager_last_module', selectedModule);
+
+      // Restore branch for this specific module
+      const saved = localStorage.getItem('mod_manager_branches');
+      const map = saved ? JSON.parse(saved) : {};
+      if (map[selectedModule]) {
+        setSelectedBranch(map[selectedModule]);
+      } else {
+        setSelectedBranch('develop');
+      }
+    }
+  }, [selectedModule]);
+
+  const handleBranchChange = (newBranch) => {
+    setSelectedBranch(newBranch);
+    if (selectedModule) {
+      const saved = localStorage.getItem('mod_manager_branches');
+      const map = saved ? JSON.parse(saved) : {};
+      map[selectedModule] = newBranch;
+      localStorage.setItem('mod_manager_branches', JSON.stringify(map));
+    }
+  };
 
   const moduleOptions = useMemo(() => {
     return modules.map(m => ({ value: m.id, label: m.name, repo: m.project_key }));
@@ -162,12 +198,12 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
       if (res.data?.default_module) {
         setSelectedModule(res.data.default_module);
       }
-    }).catch(() => {});
+    }).catch(() => { });
   }, []);
 
   useEffect(() => {
     if (moduleOptions.length > 0 && !moduleOptions.some(o => o.value === selectedModule)) {
-       setSelectedModule(moduleOptions[0].value);
+      setSelectedModule(moduleOptions[0].value);
     }
   }, [moduleOptions, selectedModule]);
 
@@ -215,10 +251,10 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
     try {
       const response = await getManualEditorData(editorScope, module);
       const filteredManuals = response.data?.manuals || [];
-      const manuals = isUpdateEditor 
+      const manuals = isUpdateEditor
         ? [...filteredManuals].sort((a, b) => b.manual_id.localeCompare(a.manual_id))
         : filteredManuals;
-      
+
       setData({ ...response.data, manuals });
       const nextManual = manuals.find((manual) => manual.manual_id === preferredKey) || manuals[0] || null;
 
@@ -250,8 +286,8 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
     if (selectedModule) {
       loadEditor('', selectedModule);
       if (isUpdateEditor) {
-          const repo = moduleOptions.find(o => o.value === selectedModule)?.repo || 'dynamictrading';
-          getGitBranches(repo).then(res => setBranches(res.data)).catch(() => {});
+        const repo = moduleOptions.find(o => o.value === selectedModule)?.repo || 'dynamictrading';
+        getGitBranches(repo).then(res => setBranches(res.data)).catch(() => { });
       }
     }
   }, [editorScope, selectedModule]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -333,7 +369,7 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
       if (error?.response?.data) {
         try {
           message += ' | ' + JSON.stringify(error.response.data);
-        } catch {}
+        } catch { }
       }
       setStatus({ type: 'error', message });
     } finally {
@@ -576,7 +612,7 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
                 labelId="manual-branch-label"
                 label="Branch"
                 value={selectedBranch}
-                onChange={(e) => setSelectedBranch(e.target.value)}
+                onChange={(e) => handleBranchChange(e.target.value)}
               >
                 {branches.map((b) => (
                   <MenuItem key={b} value={b}>
@@ -675,11 +711,9 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
                       )}
                     </Box>
                   )}
-                  secondary={`${manual.manual_id} • ${getAudienceLabel(manual)}${
-                    manual.release_version ? ` • ${manual.release_version}` : ''
-                  }${manual.pages?.length ? ` • ${manual.pages.length} pages` : ''}${
-                    manual.sort_order != null ? ` • #${manual.sort_order}` : ''
-                  }`}
+                  secondary={`${manual.manual_id} • ${getAudienceLabel(manual)}${manual.release_version ? ` • ${manual.release_version}` : ''
+                    }${manual.pages?.length ? ` • ${manual.pages.length} pages` : ''}${manual.sort_order != null ? ` • #${manual.sort_order}` : ''
+                    }`}
                 />
               </ListItemButton>
             ))}
@@ -736,6 +770,7 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
           onClose={() => setBatchGeneratorOpen(false)}
           onComplete={() => loadEditor(selectedManualKey)}
           branch={selectedBranch}
+          module={selectedModule}
           targets={targets}
           modules={modules}
         />

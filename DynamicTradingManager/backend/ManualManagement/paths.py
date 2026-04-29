@@ -49,18 +49,21 @@ def _get_manual_asset_base_url(module: str | None, manual_id: str) -> str:
 
 
 def _get_manual_prefix(mod_id: str) -> str:
-    """Extracts a prefix like DT_Manual_ or DC_Manual_ based on the Mod ID."""
+    """Extracts a prefix like DTC_ based on the Mod ID."""
     # Try to find an existing manual file to steal the prefix from
     root = _get_manual_root_for_mod(mod_id)
     if root.exists():
         for f in root.glob("*Manual_*.lua"):
             if "_" in f.name:
                 return f.name.split("Manual_")[0] + "Manual_"
+        for f in root.glob("*_*.lua"):
+             if "_" in f.name:
+                 return f.name.split("_")[0] + "_"
     
     # Fallback: Generate from Mod ID (Capitals)
     capitals = "".join(c for c in mod_id if c.isupper())
     if capitals:
-         return f"{capitals}_Manual_"
+         return f"{capitals}_"
     return "Manual_"
 
 def _get_manual_file_path(
@@ -74,8 +77,13 @@ def _get_manual_file_path(
     
     root = _get_manual_root_for_mod(normalized_module)
     prefix = _get_manual_prefix(normalized_module)
+    
+    # Avoid duplicate prefixing (e.g., DTC_DTC_Upd -> DTC_Upd)
+    filename = manual_id
+    if not filename.lower().startswith(prefix.lower()):
+        filename = f"{prefix}{manual_id}"
         
-    return root / folder / f"{prefix}{manual_id}.lua"
+    return root / folder / f"{filename}.lua"
 
 
 def _find_existing_manual_file(manual_id: str, module: str | None = None) -> Path:

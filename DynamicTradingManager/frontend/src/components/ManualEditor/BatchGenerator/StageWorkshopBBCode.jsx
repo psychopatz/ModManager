@@ -7,8 +7,11 @@ import {
     ExpandLess as ExpandLessIcon,
     ContentCopy as CopyIcon,
     AutoFixHigh as AutoFixIcon,
-    Terminal as WorkshopIcon
+    Terminal as WorkshopIcon,
+    Refresh as ForceRecreateIcon
 } from '@mui/icons-material';
+
+const LOG_COLORS = { success: '#10b981', error: '#ef4444', warning: '#f59e0b', system: '#60a5fa', info: '#9ca3af' };
 
 const StageWorkshopBBCode = ({
     attachedBatch,
@@ -20,6 +23,7 @@ const StageWorkshopBBCode = ({
     setStatus,
 }) => {
     const isLocked = !attachedBatch.workshopMetadata && attachedBatch.progress < 100;
+    const logs = attachedBatch.logs || [];
 
     return (
         <Box sx={{ 
@@ -44,9 +48,21 @@ const StageWorkshopBBCode = ({
             <Collapse in={sectionsExpanded.workshop}>
                 <Box sx={{ pl: 2, pb: 2, pr: 1 }}>
                     {attachedBatch.generatedUpdateTitle && (
-                        <Typography variant="caption" sx={{ display: 'block', mb: 1, opacity: 0.8 }}>
-                            Final title: {attachedBatch.generatedUpdateTitle}
+                        <Typography variant="caption" sx={{ display: 'block', mb: 1.5, fontWeight: 700, color: 'success.main' }}>
+                            📌 {attachedBatch.generatedUpdateTitle}
                         </Typography>
+                    )}
+
+                    {/* LOGS */}
+                    {logs.length > 0 && (
+                        <Box sx={{ mb: 2, p: 1, bgcolor: 'rgba(0,0,0,0.3)', borderRadius: 1.5, border: '1px solid rgba(255,255,255,0.05)', maxHeight: 160, overflowY: 'auto' }}>
+                            <Typography variant="caption" sx={{ fontWeight: 800, opacity: 0.5, display: 'block', mb: 0.5, fontSize: '0.6rem' }}>BATCH LOGS</Typography>
+                            {logs.map(([ts, type, msg], i) => (
+                                <Typography key={i} variant="caption" sx={{ display: 'block', fontFamily: 'monospace', fontSize: '0.65rem', color: LOG_COLORS[type] || '#9ca3af' }}>
+                                    <span style={{ opacity: 0.5 }}>{ts}</span> {msg}
+                                </Typography>
+                            ))}
+                        </Box>
                     )}
 
                     {attachedBatch.workshopMetadata ? (
@@ -77,17 +93,30 @@ const StageWorkshopBBCode = ({
                     )}
 
                     {attachedBatch.workshopMetadata && (
-                        <Button
-                            fullWidth
-                            variant="contained"
-                            color="success"
-                            startIcon={<AutoFixIcon />}
-                            onClick={() => saveBatchVolume(attachedBatch.id)}
-                            disabled={attachedBatch.status === 'saving'}
-                            sx={{ mt: 2, fontWeight: 800 }}
-                        >
-                            {attachedBatch.status === 'saving' ? 'Saving Volume...' : 'COMMIT BATCH TO MANUALS'}
-                        </Button>
+                        <Stack spacing={1} sx={{ mt: 2 }}>
+                            <Button
+                                fullWidth
+                                variant="contained"
+                                color="success"
+                                startIcon={<AutoFixIcon />}
+                                onClick={() => saveBatchVolume(attachedBatch.id)}
+                                disabled={attachedBatch.status === 'saving'}
+                                sx={{ fontWeight: 800 }}
+                            >
+                                {attachedBatch.status === 'saving' ? 'Saving...' : 'COMMIT BATCH TO MANUALS'}
+                            </Button>
+                            <Button
+                                fullWidth
+                                variant="outlined"
+                                color="warning"
+                                startIcon={<ForceRecreateIcon />}
+                                onClick={() => saveBatchVolume(attachedBatch.id, { forceRecreate: true })}
+                                disabled={attachedBatch.status === 'saving'}
+                                sx={{ fontWeight: 800, fontSize: '0.7rem' }}
+                            >
+                                FORCE RECREATE LUA FILES
+                            </Button>
+                        </Stack>
                     )}
                 </Box>
             </Collapse>

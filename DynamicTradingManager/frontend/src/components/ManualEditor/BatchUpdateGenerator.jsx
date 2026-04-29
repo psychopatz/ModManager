@@ -47,11 +47,11 @@ const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop', m
   const [typeFilters, setTypeFilters] = useState(initialFilters);
   const [improveWithAI, setImproveWithAI] = useState(localStorage.getItem('git_batch_improve_ai') === 'true');
   const [systemPrompt, setSystemPrompt] = useState(localStorage.getItem('git_batch_system_prompt') || "");
-  const [consolidationPrompt, setConsolidationPrompt] = useState(localStorage.getItem('git_batch_consolidation_prompt') || "");
+  const [consolidationPrompt, setConsolidationPrompt] = useState(localStorage.getItem('git_batch_consolidation_prompt') || '');
   const [showPrompt, setShowPrompt] = useState(false);
   const [showConsolidationPrompt, setShowConsolidationPrompt] = useState(true);
   const [showConsolidationSettings, setShowConsolidationSettings] = useState(false);
-  const [sectionsExpanded, setSectionsExpanded] = useState({ daily: true, consolidation: false, workshop: false });
+  const [sectionsExpanded, setSectionsExpanded] = useState({ daily: true, consolidation: true, workshop: true });
   const [availableBranches, setAvailableBranches] = useState([]);
   const [cacheOutputs, setCacheOutputs] = useState(localStorage.getItem('git_batch_cache_outputs') !== 'false');
   const [resumeCacheId, setResumeCacheId] = useState('');
@@ -102,8 +102,11 @@ const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop', m
   const isAttached = !!attachedBatch;
 
   // Sync prompts from localStorage or defaults
-  const resetPrompt = () => setSystemPrompt("");
-  const resetConsolidationPrompt = () => setConsolidationPrompt("");
+  const resetPrompt = () => setSystemPrompt('');
+  const resetConsolidationPrompt = () => {
+    setConsolidationPrompt('');
+    localStorage.removeItem('git_batch_consolidation_prompt');
+  };
 
   useEffect(() => {
     if (systemPrompt) localStorage.setItem('git_batch_system_prompt', systemPrompt);
@@ -149,7 +152,7 @@ const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop', m
       resumeCacheId: resumeCacheId || null,
       resumeFromStage: resumeCacheId ? resumeFromStage : 1,
     });
-    setSectionsExpanded({ daily: true, consolidation: false, workshop: false });
+    setSectionsExpanded({ daily: true, consolidation: true, workshop: true });
   };
 
   const getDayList = (s, u) => {

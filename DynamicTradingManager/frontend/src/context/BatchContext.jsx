@@ -16,17 +16,30 @@ const safeJsonParse = (raw, fallback = null) => {
 };
 
 const extractSection = (text, header) => {
-    const pattern = new RegExp(`\\\\[${header}\\\\]([\\\\s\\\\S]*?)(?=\\\\n\\\\[[A-Z_]+\\\\]|$)`, 'i');
-    const match = text.match(pattern);
-    return match ? match[1].trim() : '';
+    if (!text) return '';
+    // Block format: [HEADER]\nContent...\n[NEXT_HEADER] or end-of-string
+    const blockRe = new RegExp(`\\[${header}\\][^\\S\\n]*\\n([\\s\\S]*?)(?=\\n\\[[A-Z_]+\\]|$)`, 'i');
+    const bm = text.match(blockRe);
+    if (bm) return bm[1].trim();
+    // Inline format: [HEADER]: value  or [HEADER] value on same line
+    const inlineRe = new RegExp(`\\[${header}\\][:\\s]+(.+)`, 'i');
+    const im = text.match(inlineRe);
+    return im ? im[1].trim() : '';
 };
+
+// Strip all [SECTION] markers from text so they never appear in-game
+const SECTION_TAG_RE = /\[(TITLE|IMPACT|TAGS|EXPLANATION|COMMIT_REFS)\][:\s]*/gi;
+const sanitizePageText = (text) =>
+    (text || '').replace(SECTION_TAG_RE, '').replace(/\n{3,}/g, '\n\n').trim();
 
 const parseStage1StructuredItem = (text, fallback) => {
     const clean = (text || '').replace(/```[\\s\\S]*?```/g, (m) => m.replace(/```/g, '')).trim();
     const titleFromTag = extractSection(clean, 'TITLE').split('\n')[0]?.trim() || '';
     const impactFromTag = extractSection(clean, 'IMPACT').split('\n')[0]?.trim() || '';
     const tagsRaw = extractSection(clean, 'TAGS').split('\n')[0] || '';
-    const explanation = extractSection(clean, 'EXPLANATION') || clean;
+    const explanationRaw = extractSection(clean, 'EXPLANATION');
+    // If no [EXPLANATION] marker found, fall back to the whole text but strip all markers so they never show in-game
+    const explanation = explanationRaw ? sanitizePageText(explanationRaw) : sanitizePageText(clean);
     const refsSection = extractSection(clean, 'COMMIT_REFS');
 
     const commitRefs = refsSection
@@ -139,6 +152,49 @@ const normalizeOverallTitle = (title, categorization, stage1Items) => {
     return `${categoryCounts[0].category} and ${categoryCounts[1].category} Update Roundup`;
 };
 
+// Build a richly-formatted Steam Workshop BBCode post
+const generateSteamBBCode = (title, categorization, pages) => {
+    const releaseDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    const lines = [];
+    lines.push(`[h1]${title}[/h1]`);
+    lines.push(`[i]Released ${releaseDate}[/i]`);
+    lines.push('[hr][/hr]');
+    lines.push('');
+    lines.push("Thank you for your continued support! Here's a full breakdown of what changed in this update:");
+    lines.push('');
+
+    STAGE2_CATEGORIES.forEach(cat => {
+        const catPage = pages.find(p => p.title === cat);
+        if (!catPage) return;
+        const summary = categorization.summaries?.[cat];
+        const headings = catPage.blocks.filter(b => b.type === 'heading' && b.level === 2);
+        if (headings.length === 0) return;
+
+        const icons = { Features: '🚀', Fixes: '🔧', QoL: '✨', Performance: '⚡', Balance: '⚖️', Misc: '📝' };
+        lines.push(`[h2]${icons[cat] || '▸'} ${cat}[/h2]`);
+        if (summary) lines.push(`[i]${summary}[/i]`);
+        lines.push('');
+        lines.push('[list]');
+        headings.forEach((h) => {
+            // Find the impact callout that follows this heading
+            const hIdx = catPage.blocks.indexOf(h);
+            const impact = catPage.blocks.slice(hIdx + 1, hIdx + 4).find(b => b.type === 'callout' && b.tone === 'success');
+            if (impact) {
+                lines.push(`[*][b]${h.text}[/b] — ${impact.text}`);
+            } else {
+                lines.push(`[*][b]${h.text}[/b]`);
+            }
+        });
+        lines.push('[/list]');
+        lines.push('');
+    });
+
+    lines.push('[hr][/hr]');
+    lines.push('[i]If you enjoy this mod, please consider leaving a rating and sharing it with your friends![/i]');
+
+    return lines.join('\n');
+};
+
 const assembleCategoryPages = (stage1Items, categorization) => {
     return STAGE2_CATEGORIES
         .map((category) => {
@@ -162,14 +218,14 @@ const assembleCategoryPages = (stage1Items, categorization) => {
                     level: 2,
                     text: item.title
                 });
-                blocks.push({ type: 'paragraph', text: item.explanation });
-                blocks.push({ type: 'callout', tone: 'success', title: 'Impact', text: item.impact || 'General improvements.' });
-                if ((item.tags || []).length) {
-                    blocks.push({ type: 'bullet_list', items: item.tags.map((t) => `Tag: ${t}`) });
+                const cleanExplanation = sanitizePageText(item.explanation);
+                if (cleanExplanation) {
+                    blocks.push({ type: 'paragraph', text: cleanExplanation });
                 }
-                if ((item.commitRefs || []).length) {
-                    blocks.push({ type: 'bullet_list', items: item.commitRefs.map((r) => `Ref: ${r}`) });
+                if (item.impact) {
+                    blocks.push({ type: 'callout', tone: 'success', title: 'Impact', text: sanitizePageText(item.impact) });
                 }
+                // Tags and commit refs are intentionally excluded from viewer-facing pages
             });
 
             return {
@@ -416,7 +472,30 @@ export const BatchProvider = ({ children }) => {
 
     if (improveWithAI) {
         aiAttempted = true;
-        const expansionPrompt = `${systemPrompt || 'You are an expert release notes writer.'}\n\nProduce markdown using this exact structure and markers:\n[TITLE]\nSingle concise title\n[IMPACT]\nOne sentence impact\n[TAGS]\ncomma,separated,tags\n[EXPLANATION]\n2-5 bullet points or short paragraphs explaining user-facing changes\n[COMMIT_REFS]\n- Repo: commit subject\n\nRules:\n- No JSON output\n- Keep grounded to provided commits\n- Do not invent features\n\nCommits for ${date}:\n${JSON.stringify(filteredDayData, null, 2)}`;
+        const stage1SystemMsg = systemPrompt || `You are a professional release notes writer for a Project Zomboid mod. You write concise, player-facing descriptions of changes. You NEVER reference git internals, commit hashes, or developer jargon. Your tone is clear, informative, and engaging.`;
+        const expansionPrompt = `Analyze the following git commits for ${date} and produce a structured release note entry.
+
+You MUST output EXACTLY this format with each section marker on its own line. DO NOT include section markers inside the section text:
+
+[TITLE]
+Write a descriptive, player-facing title for today's changes. Examples: "Radio Scanner UI & LotteryAgent Expansion" or "Companion Combat Improvements". NOT a date.
+
+[IMPACT]
+One sentence describing the most important player-facing benefit of these changes.
+
+[TAGS]
+feat, fix, refactor
+
+[EXPLANATION]
+Write 3-6 bullet points or short paragraphs. Use **Bold Topic**: description format. Focus on what PLAYERS experience, not technical details. Do NOT include the [EXPLANATION] tag in the text.
+
+[COMMIT_REFS]
+- RepoName: commit subject line
+
+CRITICAL: Section markers ([TITLE], [IMPACT], etc.) must appear ALONE on their own line. NEVER put a section marker inside the content of another section.
+
+Commits for ${date}:
+${Object.entries(filteredDayData).map(([repo, commits]) => `${repo}:\n${commits.map(c => `  - ${c.subject || c.message}`).join('\n')}`).join('\n\n')}`;
         const llmConfig = loadLLMConfig();
         const provider = llmConfig.providers[llmConfig.activeProvider] || {};
         const ctrl = new AbortController();
@@ -440,7 +519,7 @@ export const BatchProvider = ({ children }) => {
                     return b;
                 }));
 
-                const response = await window.puter.ai.chat(expansionPrompt);
+                const response = await window.puter.ai.chat(`${stage1SystemMsg}\n\n${expansionPrompt}`);
                 refinedText = response?.toString() || '';
                 
                 // Final update
@@ -462,7 +541,7 @@ export const BatchProvider = ({ children }) => {
                     api_key: provider.api_key,
                     model: provider.model,
                     messages: [
-                        { role: 'system', content: systemPrompt },
+                        { role: 'system', content: stage1SystemMsg },
                         { role: 'user', content: expansionPrompt },
                     ],
                     thinking: true
@@ -621,69 +700,55 @@ export const BatchProvider = ({ children }) => {
   const retryDay = useCallback(async (id, date) => {
       const b = batchesRef.current.find(x => x.id === id);
       if (!b) return;
-
-      // Abort active if any
       if (abortRefs.current[id]) {
           abortRefs.current[id].abort();
           addLog(id, 'warning', `Active process aborted for ${date} to force restart.`);
       }
-      
       const { config } = b;
-    const historyRes = await getBatchedGitHistory(config.since, config.until, config.branch, config.module);
+      const historyRes = await getBatchedGitHistory(config.since, config.until, config.branch, config.module);
       const history = historyRes.data.history || {};
       const dayRepos = history[date];
       if (!dayRepos) return;
-
       addLog(id, 'system', `Force restarting day refinement for ${date}...`);
       await processDay(id, date, dayRepos, config);
   }, [addLog]);
 
-    const consolidateBatch = async (batchId, customPrompt = null) => {
+  const consolidateBatch = async (batchId, customPrompt = null) => {
     const b = batchesRef.current.find(x => x.id === batchId);
-                if (!b || (b.stage1Items || []).length === 0) return null;
+    if (!b || (b.stage1Items || []).length === 0) return null;
 
     const log = (type, msg) => addLog(batchId, type, msg);
     log('system', 'Starting agentic consolidation pass...');
     updateBatch(batchId, { currentStep: 'Consolidating pages...' });
 
-        const stage1TitlePayload = b.stage1Items.map((item) => ({
-            id: item.id,
-            date: item.date,
-            title: item.title,
-        }));
+    const stage1TitlePayload = b.stage1Items.map((item) => ({
+        id: item.id,
+        date: item.date,
+        title: item.title,
+    }));
 
-        const defaultConsolidationPrompt = `You are categorizing update titles into fixed categories.
+    const defaultConsolidationPrompt = `You are a professional release notes curator for a Project Zomboid mod called Dynamic Trading. Your job is to categorize structured update items into thematic pages and write an engaging overall update title.
 
-    Before writing your answer, ask yourself this internal question and answer it silently:
-    "What headline would make players immediately understand the value of this update without relying on dates?"
+IMPORTANT RULES:
+- Do NOT use date ranges in the OVERALL_TITLE. Use a creative, player-facing title that captures the spirit of the changes.
+- OVERALL_TITLE must be 3-8 words. Examples: "The April Sprint: New Tools & Refinements", "Companion Overhaul and Balance Pass"
+- Every item_id must appear in CATEGORY_MAP exactly once.
+- Category summaries should be 1-2 sentences each describing what changed, written for players, not developers.
+- Use only these exact categories: Features, Fixes, QoL, Performance, Balance, Misc
 
-Allowed categories only:
-- Features
-- Fixes
-- QoL
-- Performance
-- Balance
-- Misc
-
-Output markdown only in this exact format:
-OVERALL_TITLE: creative, player-facing title (not date-only)
+Output ONLY in this exact format (no extra text, no JSON, no markdown code blocks):
+OVERALL_TITLE: your creative player-facing title here
 CATEGORY_MAP:
-- item_id => Features|Fixes|QoL|Performance|Balance|Misc
+- item_id => Category
 CATEGORY_SUMMARIES:
-Features: one short line
-Fixes: one short line
-QoL: one short line
-Performance: one short line
-Balance: one short line
-Misc: one short line
+Features: what new features were added this cycle
+Fixes: what bugs or issues were resolved
+QoL: what quality-of-life improvements were made
+Performance: what performance improvements were made
+Balance: what balance changes were made
+Misc: any other changes
 
-Rules:
-- Use only item ids provided
-- Every item id must be assigned exactly once
-- Do not output JSON
-- Do not use titles like "Daily Update Log (date range)" or date-only names
-
-Input items:
+Input items (id | date | title):
 ${stage1TitlePayload.map((item) => `- ${item.id} | ${item.date} | ${item.title}`).join('\n')}`;
 
     const finalPrompt = customPrompt || defaultConsolidationPrompt;
@@ -708,11 +773,7 @@ ${stage1TitlePayload.map((item) => `- ${item.id} | ${item.date} | ${item.title}`
             const categorization = parseStage2Categorization(streamContent, b.stage1Items || []);
             categorization.overallTitle = normalizeOverallTitle(categorization.overallTitle, categorization, b.stage1Items || []);
             const newPages = assembleCategoryPages(b.stage1Items || [], categorization);
-            const workshopLines = STAGE2_CATEGORIES
-              .filter((cat) => newPages.find((p) => p.title === cat))
-              .map((cat) => `• ${cat}: ${categorization.summaries?.[cat] || 'Updates available.'}`)
-              .join('\n');
-            const workshopMetadata = `[B]${categorization.overallTitle || 'Update Summary'}[/B]\n${workshopLines}`;
+            const workshopMetadata = generateSteamBBCode(categorization.overallTitle || 'Update Summary', categorization, newPages);
 
             updateBatch(batchId, {
                 consolidatedPages: newPages,
@@ -725,20 +786,20 @@ ${stage1TitlePayload.map((item) => `- ${item.id} | ${item.date} | ${item.title}`
             });
 
             if (b.config?.cacheOutputs) {
-              saveBatchCache(batchId, {
-                module: b.module,
-                since: b.config.since,
-                until: b.config.until,
-                stage1Items: b.stage1Items,
-                categorization,
-                generatedUpdateTitle: categorization.overallTitle,
-                finalPages: newPages,
-                workshopMetadata,
-                pages: b.pages,
-              });
+                saveBatchCache(batchId, {
+                    module: b.module,
+                    since: b.config.since,
+                    until: b.config.until,
+                    stage1Items: b.stage1Items,
+                    categorization,
+                    generatedUpdateTitle: categorization.overallTitle,
+                    finalPages: newPages,
+                    workshopMetadata,
+                    pages: b.pages,
+                });
             }
 
-            log('success', 'Batch consolidated into thematic pages!');
+            log('success', `Stage 2 complete. ${newPages.length} category pages assembled.`);
             return { newPages, workshopMetadata, categorization };
         }
 
@@ -766,10 +827,9 @@ ${stage1TitlePayload.map((item) => `- ${item.id} | ${item.date} | ${item.title}`
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
-            
             buffer += decoder.decode(value, { stream: true });
             const lines = buffer.split('\n');
-            buffer = lines.pop() || ''; 
+            buffer = lines.pop() || '';
             for (const line of lines) {
                 const trimmed = line.trim();
                 if (!trimmed) continue;
@@ -777,10 +837,10 @@ ${stage1TitlePayload.map((item) => `- ${item.id} | ${item.date} | ${item.title}`
                     const part = JSON.parse(trimmed);
                     if (part.content) streamContent += part.content;
                     if (part.thinking) streamThinking += part.thinking;
-                    updateStreamingData(batchId, "_consolidation", { 
-                        content: streamContent, 
-                        thinking: streamThinking, 
-                        status: 'streaming' 
+                    updateStreamingData(batchId, "_consolidation", {
+                        content: streamContent,
+                        thinking: streamThinking,
+                        status: 'streaming'
                     });
                 } catch (e) { }
             }
@@ -789,18 +849,13 @@ ${stage1TitlePayload.map((item) => `- ${item.id} | ${item.date} | ${item.title}`
         const categorization = parseStage2Categorization(streamContent, b.stage1Items || []);
         categorization.overallTitle = normalizeOverallTitle(categorization.overallTitle, categorization, b.stage1Items || []);
         const newPages = assembleCategoryPages(b.stage1Items || [], categorization);
-
-        const workshopLines = STAGE2_CATEGORIES
-          .filter((cat) => newPages.find((p) => p.title === cat))
-          .map((cat) => `• ${cat}: ${categorization.summaries?.[cat] || 'Updates available.'}`)
-          .join('\n');
-
-        const workshopMetadata = `[B]${categorization.overallTitle || 'Update Summary'}[/B]\n${workshopLines}`;
+        const workshopMetadata = generateSteamBBCode(categorization.overallTitle || 'Update Summary', categorization, newPages);
 
         updateStreamingData(batchId, "_consolidation", { status: 'completed' });
+        log('success', `Stage 2 complete. ${newPages.length} category pages assembled.`);
 
-        updateBatch(batchId, { 
-            consolidatedPages: newPages, 
+        updateBatch(batchId, {
+            consolidatedPages: newPages,
             categorization,
             generatedUpdateTitle: categorization.overallTitle,
             finalPages: newPages,
@@ -810,20 +865,18 @@ ${stage1TitlePayload.map((item) => `- ${item.id} | ${item.date} | ${item.title}`
         });
 
         if (b.config?.cacheOutputs) {
-          saveBatchCache(batchId, {
-            module: b.module,
-            since: b.config.since,
-            until: b.config.until,
-            stage1Items: b.stage1Items,
-            categorization,
-            generatedUpdateTitle: categorization.overallTitle,
-            finalPages: newPages,
-            workshopMetadata,
-            pages: b.pages,
-          });
+            saveBatchCache(batchId, {
+                module: b.module,
+                since: b.config.since,
+                until: b.config.until,
+                stage1Items: b.stage1Items,
+                categorization,
+                generatedUpdateTitle: categorization.overallTitle,
+                finalPages: newPages,
+                workshopMetadata,
+                pages: b.pages,
+            });
         }
-        updateStreamingData(batchId, "_consolidation", { status: 'completed' }); // Ensure it marks as done
-        log('success', 'Batch consolidated into thematic pages!');
         return { newPages, workshopMetadata, categorization };
 
     } catch (e) {
@@ -959,50 +1012,68 @@ ${stage1TitlePayload.map((item) => `- ${item.id} | ${item.date} | ${item.title}`
       if (!batch) return;
 
       try {
-          updateBatch(batchId, { currentStep: 'Finalizing Save...', status: 'saving' });
+          const forceRecreate = overrides.forceRecreate || false;
+          updateBatch(batchId, { currentStep: forceRecreate ? 'Force-recreating Lua files...' : 'Finalizing Save...', status: 'saving' });
           
           const { since, until, module } = batch.config;
-          const pages = overrides.pages || batch.finalPages || batch.consolidatedPages || batch.pages; // Use assembled pages when available
+          const pages = overrides.pages || batch.finalPages || batch.consolidatedPages || batch.pages;
           
           const capitals = module.replace(/[^A-Z]/g, '') || 'Upd';
           const volId = `${capitals}_Upd_${until.replace(/-/g, '_')}`;
-          
+
+          const cat = batch.categorization;
+          const activeCats = STAGE2_CATEGORIES.filter(c => cat?.summaries?.[c]);
+          const richDescription = activeCats.length > 0
+              ? activeCats.map(c => `${c}: ${cat.summaries[c]}`).join(' | ')
+              : `Consolidated updates from ${since} to ${until}`;
+          const chapterDesc = cat?.summaries?.Features || cat?.summaries?.Fixes || '';
+
           const payload = {
               manual_id: volId,
               module: module,
               title: overrides.title || batch.generatedUpdateTitle || `Update: ${since.slice(5).replace(/-/g, '/')} - ${until.slice(5).replace(/-/g, '/')}`,
-              description: `Consolidated updates from ${since} to ${until}`,
+              description: richDescription,
               start_page_id: pages[0]?.id || "index",
               audiences: [module],
               is_whats_new: true,
               manual_type: "whats_new",
               source_folder: "WhatsNew", 
-              chapters: [{ id: "release_notes", title: "Release Notes" }],
+              chapters: [{ id: "release_notes", title: "Release Notes", description: chapterDesc }],
               pages
           };
 
-                    try {
-                        await createManualDefinition(payload, 'updates', module);
-                    } catch (createErr) {
-                        const detail = String(createErr?.response?.data?.detail || createErr?.message || '');
-                        if (/already exists|duplicate|manual/i.test(detail)) {
-                            await saveManualDefinition(volId, payload, 'updates', module);
-                        } else {
-                            throw createErr;
-                        }
-                    }
+          addLog(batchId, 'system', `Writing manual: ${volId} → module: ${module} (${pages.length} pages)`);
+
+          if (forceRecreate) {
+              addLog(batchId, 'system', `Force-recreate: overwriting existing Lua for ${volId}`);
+              await saveManualDefinition(volId, payload, 'updates', module);
+          } else {
+              try {
+                  await createManualDefinition(payload, 'updates', module);
+                  addLog(batchId, 'system', `Created new manual: ${volId}`);
+              } catch (createErr) {
+                  const detail = String(createErr?.response?.data?.detail || createErr?.message || '');
+                  if (/already exists|duplicate|manual/i.test(detail)) {
+                      addLog(batchId, 'system', `Manual exists, updating: ${volId}`);
+                      await saveManualDefinition(volId, payload, 'updates', module);
+                  } else {
+                      throw createErr;
+                  }
+              }
+          }
+
           addLog(batchId, 'success', `VOLUME SAVED: ${volId} (${pages.length} pages)`);
           updateBatch(batchId, { status: 'success', currentStep: 'Completed' });
 
-                    if (batch.config?.cacheOutputs) {
-                        saveBatchCache(batchId, {
-                            module,
-                            since,
-                            until,
-                            finalPages: pages,
-                            generatedUpdateTitle: payload.title,
-                        });
-                    }
+          if (batch.config?.cacheOutputs) {
+              saveBatchCache(batchId, {
+                  module,
+                  since,
+                  until,
+                  finalPages: pages,
+                  generatedUpdateTitle: payload.title,
+              });
+          }
       } catch (error) {
           addLog(batchId, 'error', `Final Save Failed: ${error.message}`);
           updateBatch(batchId, { status: 'error', error: error.message, currentStep: 'Save ERROR' });

@@ -23,45 +23,66 @@ def get_mod_version_path(mod_id: str, version: str = ACTIVE_VERSION) -> Path:
     """Returns the path to a specific version directory for a mod."""
     return get_mod_root(mod_id) / version
 
-def get_manuals_root(mod_id: str, use_common: bool = True) -> Path:
-    """Returns the path to the manuals Lua directory for a mod."""
+def get_manuals_roots(mod_id: str) -> list[Path]:
+    """Returns a list of all valid manuals Lua directories for a mod (e.g. common and versioned)."""
     all_subs = get_all_sub_mods()
     target_id = mod_id.lower()
     candidate_roots = [Path(m["path"]) for m in all_subs if m["id"].lower() == target_id]
     
     initials = "".join(c for c in mod_id if c.isupper())
-    
+    found_roots = []
+    seen = set()
+
+    def add_if_unique(path: Path):
+        resolved = path.resolve()
+        if resolved not in seen:
+            found_roots.append(resolved)
+            seen.add(resolved)
+
     for root in candidate_roots:
-        # Search directly in mod root (e.g. 42.16/media)
+        # 1. Prefer 'common' sibling if it exists (highly likely in B42 structure)
+        parent = root.parent
+        if parent != root:
+            # Check for direct 'common/media/lua/shared/.../Manuals'
+            for candidate in parent.glob("common/media/lua/*/Manuals"):
+                 if candidate.is_dir():
+                     add_if_unique(candidate)
+            # Fallback sibling search
+            for candidate in parent.rglob("Manuals"):
+                if candidate.is_dir() and "media" in candidate.parts and "lua" in candidate.parts:
+                    add_if_unique(candidate)
+
+        # 2. Search directly in mod root (e.g. 42.16/media)
         media_root = root / "media"
         if media_root.exists():
             for candidate in media_root.rglob("Manuals"):
                 if candidate.is_dir() and "lua" in candidate.parts:
-                    # Prefer folders that match the mod's initials (e.g. DC, CE)
-                    if initials and initials in candidate.parts:
-                        return candidate
-                    return candidate
-        
-        # Search in parent directory (e.g. DynamicTradingCommon/) to find sibling folders
-        parent = root.parent
-        if parent != root:
-            candidates = []
-            for candidate in parent.rglob("Manuals"):
-                if candidate.is_dir() and "media" in candidate.parts and "lua" in candidate.parts:
-                    score = 0
-                    if initials and initials in candidate.parts:
-                        score += 10
-                    if initials != "DT" and "DT" in candidate.parts:
-                        score -= 5
-                    candidates.append((score, candidate))
-            if candidates:
-                candidates.sort(key=lambda x: x[0], reverse=True)
-                return candidates[0][1]
-        
+                    add_if_unique(candidate)
+    
+    if found_roots:
+        # Sort so that roots containing initials come first, and then prefer 'common' in the path
+        found_roots.sort(key=lambda p: (
+            (initials != "" and initials in p.parts),
+            ("common" in p.parts)
+        ), reverse=True)
+        return found_roots
+
     # Standard fallback - use mod initials for correct path structure
-    root = get_mod_common_path(mod_id) if use_common else get_mod_version_path(mod_id)
+    root = get_mod_common_path(mod_id)
     safe_initials = initials or "DT"
-    return root / "media" / "lua" / "shared" / safe_initials / "Common" / "Manuals"
+    fallback = root / "media" / "lua" / "shared" / safe_initials / "Common" / "Manuals"
+    return [fallback]
+
+def get_manuals_root(mod_id: str, use_common: bool = True) -> Path:
+    """Returns the primary manuals Lua directory for a mod."""
+    roots = get_manuals_roots(mod_id)
+    # If using versioned, try to find a root that contains ACTIVE_VERSION or isn't 'common'
+    if not use_common:
+        v_roots = [r for r in roots if ACTIVE_VERSION in str(r)]
+        if v_roots:
+            return v_roots[0]
+    
+    return roots[0]
 
 def get_manual_assets_root(mod_id: str) -> Path:
     """Returns the path to the manuals UI assets directory for a mod."""

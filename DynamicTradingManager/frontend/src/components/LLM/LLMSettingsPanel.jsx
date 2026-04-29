@@ -44,6 +44,15 @@ const LLMSettingsPanel = ({ open, onClose }) => {
     if (open) setLocalConfig(loadLLMConfig());
   }, [open]);
 
+  // Auto-fetch models when provider changes
+  useEffect(() => {
+    const provider = localConfig.providers[localConfig.activeProvider];
+    const isBrowserOnly = provider?.is_browser_only === true;
+    if (provider?.base_url && !isBrowserOnly && models.length === 0 && !loadingModels && open) {
+      handleFetchModels();
+    }
+  }, [localConfig.activeProvider, localConfig.providers[localConfig.activeProvider]?.base_url, open]);
+
   const providerIds = useMemo(() => Object.keys(localConfig.providers), [localConfig]);
   const activeProvider = localConfig.providers[localConfig.activeProvider] || {};
 
@@ -128,7 +137,7 @@ const LLMSettingsPanel = ({ open, onClose }) => {
   };
 
   const handleDeleteProvider = (providerId) => {
-    if (['puter', 'lmstudio', 'nvidia'].includes(providerId)) return;
+    if (['puter', 'lmstudio', 'nvidia', 'groq'].includes(providerId)) return;
     setLocalConfig(prev => {
       const next = { ...prev, providers: { ...prev.providers } };
       delete next.providers[providerId];
@@ -138,7 +147,7 @@ const LLMSettingsPanel = ({ open, onClose }) => {
   };
 
   const isBrowserOnly = activeProvider.is_browser_only === true;
-  const isBuiltIn = ['puter', 'lmstudio', 'nvidia'].includes(localConfig.activeProvider);
+  const isBuiltIn = ['puter', 'lmstudio', 'nvidia', 'groq'].includes(localConfig.activeProvider);
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>

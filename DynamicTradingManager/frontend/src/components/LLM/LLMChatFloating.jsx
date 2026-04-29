@@ -45,6 +45,7 @@ import {
 } from '@mui/icons-material';
 import { useLLM } from '../../hooks/useLLM';
 import { useLLMInternal } from '../../context/LLMContext';
+import { isReasoningEffortSupported } from '../../utils/llmUtils';
 import * as api from '../../services/api';
 
 const SYSTEM_PROMPT_KEY = 'dt_chat_system_prompt';
@@ -125,6 +126,7 @@ const LLMChatFloating = () => {
       await streamChat(history, {
         systemPrompt,
         thinking: isThinking,
+        reasoningEffort: config.reasoningEffort,
         onChunk: (chunk) => {
           setMessages((prev) => {
             const next = [...prev];
@@ -288,21 +290,39 @@ const LLMChatFloating = () => {
                 <Typography variant="caption" fontWeight={700} color="primary" sx={{ textTransform: 'uppercase', letterSpacing: 1 }}>
                   Configuration & Personality
                 </Typography>
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      size="small"
-                      checked={isThinking}
-                      onChange={(e) => setIsThinking(e.target.checked)}
-                      sx={{ color: 'primary.main', '&.Mui-checked': { color: 'primary.main' } }}
-                    />
-                  }
-                  label={
-                    <Typography variant="caption" sx={{ color: 'text.primary', fontWeight: 600 }}>
-                      Thinking Mode
-                    </Typography>
-                  }
-                />
+                <Stack direction="row" spacing={2} alignItems="center">
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        size="small"
+                        checked={isThinking}
+                        onChange={(e) => setIsThinking(e.target.checked)}
+                        sx={{ color: 'primary.main', '&.Mui-checked': { color: 'primary.main' } }}
+                      />
+                    }
+                    label={
+                      <Typography variant="caption" sx={{ color: 'text.primary', fontWeight: 600 }}>
+                        Thinking Mode
+                      </Typography>
+                    }
+                  />
+                  {isThinking && isReasoningEffortSupported(activeProvider.model, activeProvider.base_url) && (
+                    <FormControl size="small" sx={{ minWidth: 100 }}>
+                      <InputLabel id="reasoning-effort-label" sx={{ fontSize: '0.7rem' }}>Effort</InputLabel>
+                      <Select
+                        labelId="reasoning-effort-label"
+                        label="Effort"
+                        value={config.reasoningEffort || 'medium'}
+                        onChange={(e) => setConfig(prev => ({ ...prev, reasoningEffort: e.target.value }))}
+                        sx={{ height: 28, fontSize: '0.75rem' }}
+                      >
+                        <MenuItem value="low" sx={{ fontSize: '0.75rem' }}>Low</MenuItem>
+                        <MenuItem value="medium" sx={{ fontSize: '0.75rem' }}>Medium</MenuItem>
+                        <MenuItem value="high" sx={{ fontSize: '0.75rem' }}>High</MenuItem>
+                      </Select>
+                    </FormControl>
+                  )}
+                </Stack>
               </Stack>
 
               <Box sx={{ p: 2, borderRadius: 2, bgcolor: 'rgba(25, 118, 210, 0.05)', border: '1px dashed rgba(25, 118, 210, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

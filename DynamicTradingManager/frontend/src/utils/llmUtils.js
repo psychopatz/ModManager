@@ -3,6 +3,7 @@ export const STORAGE_KEY = 'llm_provider_config';
 export const DEFAULT_CONFIG = {
   activeProvider: 'puter',
   thinking: false,
+  reasoningEffort: 'medium',
   providers: {
     puter: {
       id: 'puter',
@@ -28,6 +29,15 @@ export const DEFAULT_CONFIG = {
       base_url: 'https://integrate.api.nvidia.com/v1',
       api_key: '',
       model: '', // Removed hardcoded default
+      supports_thinking: false,
+      is_browser_only: false,
+    },
+    groq: {
+      id: 'groq',
+      label: 'Groq Cloud',
+      base_url: 'https://api.groq.com/openai/v1',
+      api_key: '',
+      model: 'llama-3.3-70b-versatile',
       supports_thinking: false,
       is_browser_only: false,
     },
@@ -58,4 +68,25 @@ export const loadLLMConfig = () => {
  */
 export const saveLLMConfig = (config) => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+};
+
+/**
+ * Determine if a model or provider supports the reasoning_effort parameter.
+ * Synced with backend/LLMManagement/client.py
+ */
+export const isReasoningEffortSupported = (model = '', baseUrl = '') => {
+  const mLower = model?.toLowerCase() || '';
+  const bLower = baseUrl?.toLowerCase() || '';
+
+  if (mLower.includes('o1') || mLower.includes('o3') || mLower.includes('deepseek-reasoner')) {
+    return true;
+  }
+  if (bLower.includes('api.groq.com')) {
+    return true;
+  }
+  if (mLower.includes('reasoner')) {
+    return true;
+  }
+
+  return false;
 };

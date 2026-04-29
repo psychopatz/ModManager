@@ -24,7 +24,24 @@ from .render import _write_manual_file
 def load_manual_editor_data(scope: str = DEFAULT_SCOPE, module: str = DEFAULT_MODULE) -> dict:
     scope = _normalize_scope(scope)
     module = _normalize_module(module)
-    manuals_roots = _get_manuals_roots(module)
+    
+    # If we are looking for updates, we scan ALL roots because updates 
+    # might be located in a core mod but intended for this module.
+    if scope == "updates":
+        from ProjectManagement.projects import get_all_sub_mods
+        from config.paths import get_manuals_roots
+        all_mods = get_all_sub_mods()
+        manuals_roots = []
+        seen = set()
+        for m in all_mods:
+            for root in get_manuals_roots(m["id"]):
+                resolved = root.resolve()
+                if resolved not in seen:
+                    manuals_roots.append(resolved)
+                    seen.add(resolved)
+    else:
+        manuals_roots = _get_manuals_roots(module)
+        
     assets_root = _get_manual_assets_root(module)
     manuals = []
 

@@ -40,27 +40,8 @@ def create_app() -> FastAPI:
 
     if mod_root.exists():
         app.mount("/static/workshop", StaticFiles(directory=str(mod_root)), name="workshop-static")
-        manuals_static_root = get_manual_assets_root("DynamicTradingCommon")
-        manuals_static_root.mkdir(parents=True, exist_ok=True)
-        app.mount("/static/manuals", StaticFiles(directory=str(manuals_static_root)), name="manuals-static")
 
-    if colonies_root.exists():
-        manuals_colony_static_root = get_manual_assets_root("DynamicColonies")
-        manuals_colony_static_root.mkdir(parents=True, exist_ok=True)
-        app.mount(
-            "/static/manuals-colony",
-            StaticFiles(directory=str(manuals_colony_static_root)),
-            name="manuals-colony-static",
-        )
-
-    if currency_root.exists():
-        manuals_currency_static_root = get_manual_assets_root("CurrencyExpanded")
-        manuals_currency_static_root.mkdir(parents=True, exist_ok=True)
-        app.mount(
-            "/static/manuals-currency",
-            StaticFiles(directory=str(manuals_currency_static_root)),
-            name="manuals-currency-static",
-        )
+    # Manual assets are now served dynamically via /api/manuals/assets
 
     app.add_middleware(
         CORSMiddleware,

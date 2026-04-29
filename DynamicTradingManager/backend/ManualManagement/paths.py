@@ -17,7 +17,7 @@ from .normalize import (
 from .parser import _read_editor_payload
 
 
-from config.paths import get_manuals_root, get_manual_assets_root
+from config.paths import get_manuals_root, get_manual_assets_root, get_manuals_roots
 from ProjectManagement.projects import list_workshop_projects
 
 def _get_manual_root_for_mod(mod_id: str) -> Path:
@@ -26,7 +26,8 @@ def _get_manual_root_for_mod(mod_id: str) -> Path:
 
 def _get_manuals_roots(module: str = DEFAULT_MODULE) -> list[Path]:
     normalized = _normalize_module(module)
-    return [_get_manual_root_for_mod(normalized)]
+    from config.paths import get_manuals_roots
+    return get_manuals_roots(normalized)
 
 
 def _get_manual_assets_root(module: str = DEFAULT_MODULE) -> Path:
@@ -36,16 +37,14 @@ def _get_manual_assets_root(module: str = DEFAULT_MODULE) -> Path:
 
 def _get_manual_assets_root_url(module: str = DEFAULT_MODULE) -> str:
     normalized = _normalize_module(module)
-    # Map to static folders based on established naming conventions
-    if normalized.lower() == "dynamiccolonies":
-        return "/static/manuals-colony"
-    if normalized.lower() == "currencyexpanded":
-        return "/static/manuals-currency"
-    return "/static/manuals"
+    # Use the dynamic proxy endpoint instead of hardcoded static mounts
+    return f"/api/manuals/assets/{normalized}"
 
 
 def _get_manual_asset_base_url(module: str | None, manual_id: str) -> str:
-    return f'{_get_manual_assets_root_url(module or DEFAULT_MODULE)}/{manual_id}'
+    # Avoid double slashes and ensure clean path joining for the frontend
+    module_id = _normalize_module(module or DEFAULT_MODULE)
+    return f"/api/manuals/assets/{module_id}/{manual_id}"
 
 
 def _get_manual_prefix(mod_id: str) -> str:

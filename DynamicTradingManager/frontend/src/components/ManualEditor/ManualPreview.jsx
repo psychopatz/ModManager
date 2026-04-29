@@ -1,16 +1,20 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Chip,
   Paper,
   Stack,
   Typography,
+  ToggleButton,
+  ToggleButtonGroup,
 } from '@mui/material';
 
 /**
- * ManualPreview - Renders a live preview of a manual page
+ * ManualPreview - Renders a live preview of a manual page or its raw Lua
  */
 export const ManualPreview = ({ manual, selectedPage, backendOrigin }) => {
+  const [viewMode, setViewMode] = useState('preview');
+
   const resolveImageUrl = (path) => {
     if (!path) return '';
     const normalized = String(path);
@@ -22,11 +26,46 @@ export const ManualPreview = ({ manual, selectedPage, backendOrigin }) => {
   };
 
   return (
-    <Paper sx={{ p: 2, height: '100%', overflow: 'auto' }}>
-      <Typography variant="h6" gutterBottom>
-        Live Preview
-      </Typography>
-      {!selectedPage ? (
+    <Paper sx={{ p: 2, height: '100%', overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+        <Typography variant="h6">
+          Live Preview
+        </Typography>
+        {manual?.raw_lua && (
+          <ToggleButtonGroup
+            value={viewMode}
+            exclusive
+            onChange={(e, newMode) => newMode && setViewMode(newMode)}
+            size="small"
+          >
+            <ToggleButton value="preview">HTML Preview</ToggleButton>
+            <ToggleButton value="lua">Raw Lua</ToggleButton>
+          </ToggleButtonGroup>
+        )}
+      </Stack>
+
+      {viewMode === 'lua' ? (
+        <Box sx={{ flexGrow: 1, position: 'relative' }}>
+          <Box
+            component="pre"
+            sx={{
+              m: 0,
+              p: 2,
+              bgcolor: 'background.paper',
+              borderRadius: 1,
+              border: '1px solid',
+              borderColor: 'divider',
+              overflow: 'auto',
+              fontFamily: 'monospace',
+              fontSize: '0.8125rem',
+              color: 'text.secondary',
+              height: '100%',
+            }}
+          >
+            {manual.raw_lua}
+          </Box>
+        </Box>
+      ) : !selectedPage ? (
         <Typography variant="body2" color="text.secondary">
           Select a page to preview it.
         </Typography>

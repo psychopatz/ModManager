@@ -35,6 +35,18 @@ def _build_client(base_url: str, api_key: str) -> AsyncOpenAI:
     )
 
 
+def _is_reasoning_effort_supported(model: str, base_url: str) -> bool:
+    """Determine if a model or provider supports the reasoning_effort parameter."""
+    m_lower = model.lower()
+    if "o1" in m_lower or "o3" in m_lower or "deepseek-reasoner" in m_lower:
+        return True
+    if "api.groq.com" in base_url.lower():
+        return True
+    if "reasoner" in m_lower:
+        return True
+    return False
+
+
 async def chat_completion(
     *,
     base_url: str,
@@ -45,6 +57,7 @@ async def chat_completion(
     temperature: float | None = None,
     max_tokens: int | None = None,
     stream: bool = True,
+    reasoning_effort: str | None = None,
 ) -> ChatResult:
     """
     Send a chat completion request to any OpenAI-compatible endpoint.
@@ -60,13 +73,17 @@ async def chat_completion(
 
     if temperature is not None:
         kwargs["temperature"] = temperature
-    if max_tokens is not None:
-        kwargs["max_tokens"] = max_tokens
 
-    # Thinking mode: try provider-specific reasoning parameters
-    if thinking:
-        kwargs.setdefault("extra_body", {})
-        kwargs["extra_body"]["reasoning_effort"] = "high"
+    # Support modern token limit field for reasoning models
+    if max_tokens is not None:
+        if _is_reasoning_effort_supported(model, base_url) or "qwen" in model.lower():
+            kwargs["max_completion_tokens"] = max_tokens
+        else:
+            kwargs["max_tokens"] = max_tokens
+
+    # Thinking mode / Reasoning parameters
+    if thinking and _is_reasoning_effort_supported(model, base_url):
+        kwargs["reasoning_effort"] = reasoning_effort or "medium"
 
     logger.info(
         "LLM async chat request: model=%s base_url=%s thinking=%s stream=%s",
@@ -140,6 +157,7 @@ async def stream_completion(
     thinking: bool = False,
     temperature: float | None = None,
     max_tokens: int | None = None,
+    reasoning_effort: str | None = None,
 ) -> AsyncGenerator[str, None]:
     """
     Asynchronous generator that yields JSON chunks for a streaming chat completion.
@@ -155,12 +173,15 @@ async def stream_completion(
 
     if temperature is not None:
         kwargs["temperature"] = temperature
+    # Support modern token limit field for reasoning models
     if max_tokens is not None:
-        kwargs["max_tokens"] = max_tokens
+        if _is_reasoning_effort_supported(model, base_url) or "qwen" in model.lower():
+            kwargs["max_completion_tokens"] = max_tokens
+        else:
+            kwargs["max_tokens"] = max_tokens
 
-    if thinking and ("o1-" in model or "o3-" in model):
-        kwargs.setdefault("extra_body", {})
-        kwargs["extra_body"]["reasoning_effort"] = "high"
+    if thinking and _is_reasoning_effort_supported(model, base_url):
+        kwargs["reasoning_effort"] = reasoning_effort or "medium"
 
     logger.info("Starting LLM stream: model=%s base_url=%s thinking=%s", model, base_url, thinking)
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Alert, Box, Button, Chip, Paper, Stack, Typography } from '@mui/material';
-import ManualEditorPage from './ManualEditorPage';
+import { Alert, Box, Button, Chip, Paper, Stack, Typography, Accordion, AccordionSummary, AccordionDetails } from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ManualEditorPage from './ManualEditor/ManualEditorPage';
 import GitAiAssistant from './Common/GitAiAssistant';
 import { createManualDefinition, getManualEditorData, saveManualDefinition, getWorkshopTargets } from '../services/api';
 
@@ -251,49 +252,58 @@ const UpdateVersionEditorPage = () => {
 
 	return (
 		<Stack spacing={2}>
-			<GitAiAssistant
-				title="Update Helper (Git + AI)"
-				helperText="Generate strict JSON and auto-build a What's New page from the output."
-				outputValue={generatedText}
-				onOutputChange={setGeneratedText}
-				storageKey="dt_update_system_prompt"
-				defaultPrompt={defaultPrompt}
-				onLatestHash={setLatestCommitHash}
-				availableTargets={targets}
-				selectedTarget={selectedTarget}
-				onTargetChange={setSelectedTarget}
-				showSuiteToggle={true}
-			/>
+			<Accordion defaultExpanded={false} variant="outlined" sx={{ borderRadius: 2, '&:before': { display: 'none' } }}>
+				<AccordionSummary expandIcon={<ExpandMoreIcon />}>
+					<Typography variant="subtitle1" fontWeight={700}>Update Helper (Git + AI)</Typography>
+				</AccordionSummary>
+				<AccordionDetails>
+					<Stack spacing={2}>
+						<GitAiAssistant
+							title="Git + AI Assistant"
+							helperText="Generate strict JSON and auto-build a What's New page from the output."
+							outputValue={generatedText}
+							onOutputChange={setGeneratedText}
+							storageKey="dt_update_system_prompt"
+							defaultPrompt={defaultPrompt}
+							onLatestHash={setLatestCommitHash}
+							availableTargets={targets}
+							selectedTarget={selectedTarget}
+							onTargetChange={setSelectedTarget}
+							showSuiteToggle={true}
+						/>
 
-			<Paper sx={{ p: 2 }}>
-				<Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
-					<Typography variant="subtitle2">Save To Module:</Typography>
-					<Stack direction="row" spacing={1}>
-						{moduleOptions.map((opt) => (
-							<Chip
-								key={opt.value}
-								label={opt.label}
-								size="small"
-								clickable
-								color={selectedModule === opt.value ? 'primary' : 'default'}
-								onClick={() => setSelectedModule(opt.value)}
-							/>
-						))}
+						<Paper sx={{ p: 2, mt: 2 }}>
+							<Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
+								<Typography variant="subtitle2">Save To Module:</Typography>
+								<Stack direction="row" spacing={1}>
+									{moduleOptions.map((opt) => (
+										<Chip
+											key={opt.value}
+											label={opt.label}
+											size="small"
+											clickable
+											color={selectedModule === opt.value ? 'primary' : 'default'}
+											onClick={() => setSelectedModule(opt.value)}
+										/>
+									))}
+								</Stack>
+							</Stack>
+							<Stack spacing={1.5}>
+								<Typography variant="h6">JSON Import To What's New</Typography>
+								<Typography variant="body2" color="text.secondary">
+									Paste AI JSON output above, then click apply to auto-create or update the What's New manual entry.
+								</Typography>
+								<Stack direction="row" spacing={1}>
+									<Button variant="contained" onClick={applyJsonAsUpdatePage}>
+										Apply JSON To What's New
+									</Button>
+								</Stack>
+								{status.message && <Alert severity={status.type || 'info'}>{status.message}</Alert>}
+							</Stack>
+						</Paper>
 					</Stack>
-				</Stack>
-				<Stack spacing={1.5}>
-					<Typography variant="h6">JSON Import To What's New</Typography>
-					<Typography variant="body2" color="text.secondary">
-						Paste AI JSON output above, then click apply to auto-create or update the What's New manual entry.
-					</Typography>
-					<Stack direction="row" spacing={1}>
-						<Button variant="contained" onClick={applyJsonAsUpdatePage}>
-							Apply JSON To What's New
-						</Button>
-					</Stack>
-					{status.message && <Alert severity={status.type || 'info'}>{status.message}</Alert>}
-				</Stack>
-			</Paper>
+				</AccordionDetails>
+			</Accordion>
 
 			<Box>
 				<ManualEditorPage key={editorReloadToken} editorScope="updates" />

@@ -59,7 +59,23 @@ def _infer_module(module: str | None, payload: dict | None = None, file_path: Pa
 
 
 def _module_matches_payload(payload: dict, module: str) -> bool:
-    return _normalize_module(payload.get("module")) == _normalize_module(module)
+    normalized_module = _normalize_module(module).lower()
+    
+    # 1. Direct module match
+    if _normalize_module(payload.get("module")).lower() == normalized_module:
+        return True
+    
+    # 2. Audience match (if module is in audiences OR audience is "all")
+    audiences = payload.get("audiences") or []
+    if isinstance(audiences, str):
+        audiences = [audiences]
+    
+    for aud in audiences:
+        normalized_aud = _normalize_module(aud).lower()
+        if normalized_aud == normalized_module or normalized_aud == "all":
+            return True
+            
+    return False
 
 
 def _normalize_audiences(raw_audiences, manual_id: str, fallback_module: str = DEFAULT_MODULE) -> list[str]:
@@ -74,8 +90,6 @@ def _normalize_audiences(raw_audiences, manual_id: str, fallback_module: str = D
     if audiences:
         return audiences
 
-    # If no audiences specified, we just return the default. 
-    # We no longer infer based on manual_id prefixes (legacy dc_, v1, v2)
     return [DEFAULT_AUDIENCE]
 
 
@@ -88,8 +102,13 @@ def _normalize_scope(scope: str | None) -> str:
 
 def _payload_matches_scope(payload: dict, scope: str) -> bool:
     scope = _normalize_scope(scope)
-    source_folder = str(payload.get("source_folder") or "")
-    is_update = source_folder == "WhatsNew" or payload.get("is_whats_new") is True
+    source_folder = str(payload.get("source_folder") or "").lower()
+    manual_type = str(payload.get("manual_type") or "").lower()
+    is_update = (
+        source_folder == "whatsnew" or 
+        payload.get("is_whats_new") is True or 
+        manual_type == "whats_new"
+    )
     return is_update if scope == "updates" else not is_update
 
 
@@ -397,4 +416,5 @@ def _normalize_manual_payload(
         "source_folder": source_folder,
         "chapters": chapters,
         "pages": pages,
+        "raw_lua": payload.get("raw_lua"),
     }

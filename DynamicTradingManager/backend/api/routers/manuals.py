@@ -153,3 +153,18 @@ async def get_batch_git_history(since: str = "2026-03-27", branch: str = "develo
     except Exception as exc:
         logger.error("Error fetching batched git history: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
+@router.get("/assets/{module}/{manual_id}/{filename:path}")
+def proxy_manual_asset(module: str, manual_id: str, filename: str):
+    """Dynamically resolves and serves manual assets from the correct mod root."""
+    from ManualManagement.paths import _get_manual_assets_root
+    
+    root = _get_manual_assets_root(module)
+    asset_path = root / manual_id / filename
+    
+    if not asset_path.exists() or not asset_path.is_file():
+        # Fallback: check if it's directly in the root (legacy or non-namespaced)
+        asset_path = root / filename
+        if not asset_path.exists() or not asset_path.is_file():
+             raise HTTPException(status_code=404, detail=f"Asset {filename} not found for module {module}")
+    
+    return FileResponse(asset_path)

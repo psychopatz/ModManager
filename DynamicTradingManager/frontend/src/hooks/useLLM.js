@@ -51,6 +51,7 @@ export const useLLM = () => {
       thinking: opts.thinking ?? config.thinking, // Use provided opt or global config
       temperature: opts.temperature ?? undefined,
       max_tokens: opts.max_tokens ?? undefined,
+      reasoning_effort: opts.reasoningEffort ?? config.reasoningEffort,
     };
 
     const response = await llmChat(payload);
@@ -93,6 +94,7 @@ export const useLLM = () => {
       thinking: opts.thinking ?? config.thinking,
       temperature: opts.temperature ?? undefined,
       max_tokens: opts.max_tokens ?? undefined,
+      reasoning_effort: opts.reasoningEffort ?? config.reasoningEffort,
     };
 
     const stream = await import('../services/api').then(m => m.llmChatStream(payload));

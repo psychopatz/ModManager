@@ -42,6 +42,17 @@ KNOWN_PROVIDERS: dict[str, dict] = {
         "is_local": False,
         "is_browser_only": False,
     },
+    "groq": {
+        "id": "groq",
+        "label": "Groq Cloud",
+        "description": "Ultra-fast inference via Groq LPUs.",
+        "base_url": "https://api.groq.com/openai/v1",
+        "api_key": "",
+        "model": "llama-3.3-70b-versatile",
+        "supports_thinking": False,
+        "is_local": False,
+        "is_browser_only": False,
+    },
 }
 
 

@@ -56,9 +56,6 @@ const BatchWidget = ({ batch }) => {
         <IconButton size="small" onClick={() => openFullView(batch.id)}>
           <MaximizeIcon fontSize="inherit" />
         </IconButton>
-        <IconButton size="small" onClick={() => removeBatch(batch.id)}>
-          <CloseIcon fontSize="inherit" />
-        </IconButton>
       </Box>
 
       <LinearProgress 
@@ -120,7 +117,7 @@ const BatchWidget = ({ batch }) => {
 };
 
 const BatchFloatingOverlay = () => {
-  const { batches } = useBatchSystem();
+  const { batches, openBatchId } = useBatchSystem();
 
   if (!batches || batches.length === 0) return null;
 
@@ -139,7 +136,8 @@ const BatchFloatingOverlay = () => {
     >
       <Box sx={{ pointerEvents: 'auto' }}> 
         {batches.map(batch => (
-          <BatchWidget key={batch.id} batch={batch} />
+          // Hide from floating overlay if full monitor is open for this batch
+          openBatchId !== batch.id && <BatchWidget key={batch.id} batch={batch} />
         ))}
       </Box>
     </Box>

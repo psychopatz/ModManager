@@ -101,12 +101,13 @@ export const llmListModels = (payload) => api.post('/llm/models', payload);
  * Streaming chat completion. 
  * Uses native fetch because axios handles streams differently in browsers.
  */
-export const llmChatStream = async (payload) => {
+export const llmChatStream = async (payload, signal) => {
   const baseUrl = resolveApiBaseUrl();
   const response = await fetch(`${baseUrl}/llm/chat/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
+    signal,
   });
 
   if (!response.ok) {

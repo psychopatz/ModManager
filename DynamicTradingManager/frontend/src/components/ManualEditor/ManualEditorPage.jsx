@@ -15,6 +15,9 @@ import {
   Select,
   Stack,
   Typography,
+  LinearProgress,
+  Checkbox,
+  FormControlLabel
 } from '@mui/material';
 import RefreshIconMUI from '@mui/icons-material/Refresh';
 import DeleteOutlineIconMUI from '@mui/icons-material/DeleteOutline';
@@ -28,6 +31,9 @@ import { ManualDetailsForm } from './ManualDetailsForm';
 import { ChaptersEditor } from './ChaptersEditor';
 import { PagesEditor } from './PagesEditor';
 import BatchUpdateGenerator from './BatchUpdateGenerator';
+import { useBatchSystem } from '../../context/BatchContext';
+import { Badge, Menu } from '@mui/material';
+import AssignmentIcon from '@mui/icons-material/Assignment';
 
 const NEW_MANUAL_KEY = '__new_manual__';
 
@@ -147,6 +153,9 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
   const fileInputRef = useRef(null);
   const uploadTargetRef = useRef(null);
   const [batchGeneratorOpen, setBatchGeneratorOpen] = useState(false);
+  const [batchMonitorId, setBatchMonitorId] = useState(null);
+  const [batchMenuAnchor, setBatchMenuAnchor] = useState(null);
+  const { batches } = useBatchSystem();
 
   // Per-module branch memory
   const [selectedBranch, setSelectedBranch] = useState(() => {
@@ -654,14 +663,55 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
           </Button>
 
           {isUpdateEditor && (
-            <Button
-              variant="contained"
-              color="secondary"
-              onClick={() => setBatchGeneratorOpen(true)}
-              disabled={loading || saving}
-            >
-              Batch Generate Updates
-            </Button>
+            <Stack direction="row" spacing={1}>
+                {batches.length > 0 && (
+                    <>
+                        <Badge badgeContent={batches.filter(b => b.status === 'processing').length} color="primary">
+                            <Button 
+                                variant="outlined" 
+                                color="info"
+                                startIcon={<AssignmentIcon />}
+                                onClick={(e) => setBatchMenuAnchor(e.currentTarget)}
+                            >
+                                Batch Activity
+                            </Button>
+                        </Badge>
+                        <Menu
+                            anchorEl={batchMenuAnchor}
+                            open={Boolean(batchMenuAnchor)}
+                            onClose={() => setBatchMenuAnchor(null)}
+                        >
+                            <Box sx={{ p: 1, minWidth: 200 }}>
+                                <Typography variant="caption" sx={{ fontWeight: 800, px: 2, pb: 1, display: 'block' }}>ACTIVE BATCHES</Typography>
+                                {batches.map(b => (
+                                    <MenuItem key={b.id} onClick={() => { setBatchMonitorId(b.id); setBatchMenuAnchor(null); }}>
+                                        <Stack direction="row" spacing={2} alignItems="center" sx={{ width: '100%' }}>
+                                            <Box sx={{ flexGrow: 1 }}>
+                                                <Typography variant="body2">{b.modName}</Typography>
+                                                <Typography variant="caption" color="text.secondary">{b.currentStep}</Typography>
+                                            </Box>
+                                            <Chip 
+                                                label={`${b.progress}%`} 
+                                                size="small" 
+                                                color={b.status === 'success' ? 'success' : b.status === 'error' ? 'error' : 'primary'}
+                                                sx={{ height: 16, fontSize: '0.6rem' }}
+                                            />
+                                        </Stack>
+                                    </MenuItem>
+                                ))}
+                            </Box>
+                        </Menu>
+                    </>
+                )}
+                <Button
+                variant="contained"
+                color="secondary"
+                onClick={() => setBatchGeneratorOpen(true)}
+                disabled={loading || saving}
+                >
+                Batch Generate Updates
+                </Button>
+            </Stack>
           )}
 
         </Stack>
@@ -768,13 +818,14 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
 
       {isUpdateEditor && (
         <BatchUpdateGenerator
-          open={batchGeneratorOpen}
-          onClose={() => setBatchGeneratorOpen(false)}
+          open={batchGeneratorOpen || !!batchMonitorId}
+          onClose={() => { setBatchGeneratorOpen(false); setBatchMonitorId(null); }}
           onComplete={() => loadEditor(selectedManualKey)}
           branch={selectedBranch}
           module={selectedModule}
           targets={targets}
           modules={modules}
+          attachedBatchId={batchMonitorId}
         />
       )}
 
@@ -793,6 +844,7 @@ const ManualEditorPage = ({ editorScope = 'manuals' }) => {
         <SaveOutlinedIconMUI sx={{ mr: 1 }} />
         {saving ? 'Saving...' : isUpdateEditor ? 'Save Update' : 'Save Manual'}
       </Fab>
+
     </Stack>
   );
 };

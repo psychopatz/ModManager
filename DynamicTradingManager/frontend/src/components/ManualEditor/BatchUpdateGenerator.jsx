@@ -15,7 +15,11 @@ import {
   Collapse,
   Chip,
   LinearProgress,
-  IconButton
+  IconButton,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  CircularProgress
 } from '@mui/material';
 import { 
   ExpandMore as ExpandMoreIcon, 
@@ -23,7 +27,15 @@ import {
   RestartAlt as ResetIcon,
   Close as CloseIcon,
   CheckCircle as SuccessIcon,
-  Error as ErrorIcon
+  Error as ErrorIcon,
+  AutoAwesome as AiStatusIcon,
+  HourglassEmpty as PendingIcon,
+  Terminal as ConsoleIcon,
+  SkipNext as SkipNextIcon,
+  PauseCircle as PauseIcon,
+  PlayCircle as PlayIcon,
+  Refresh as RefreshIcon,
+  DeleteForever as DiscardIcon
 } from '@mui/icons-material';
 import { getBatchedGitHistory } from '../../services/api';
 import { useGitAi } from '../../hooks/useGitAi';
@@ -31,7 +43,7 @@ import { useBatchSystem } from '../../context/BatchContext';
 import { useLLM } from '../../hooks/useLLM';
 
 const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop', module = '', targets = [], modules = [], attachedBatchId = null }) => {
-  const { batches, spawnBatch, openBatchId, closeFullView, removeBatch } = useBatchSystem();
+  const { batches, spawnBatch, openBatchId, closeFullView, removeBatch, skipBatchItem, pauseBatch, resumeBatch, restartBatch, retryDay } = useBatchSystem();
   const { activeProvider } = useLLM();
   
   // Detached mode detection
@@ -47,7 +59,12 @@ const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop', m
   const [loading, setLoading] = useState(false);
   const [improveWithAI, setImproveWithAI] = useState(() => localStorage.getItem('git_batch_improve_ai') === 'true');
   
+  const [showConsole, setShowConsole] = useState(false);
+  const [confirmData, setConfirmData] = useState(null); // { title, message, onConfirm }
+  const [autoScroll, setAutoScroll] = useState(true);
+  
   const logEndRef = useRef(null);
+  const listScrollRef = useRef(null);
 
   useEffect(() => {
     if (logEndRef.current) {
@@ -126,6 +143,27 @@ Return ONLY the Markdown content or the %ContextNotFound% signal.`,
     }
   };
 
+  useEffect(() => {
+    if (autoScroll && attachedBatch?.currentStep && listScrollRef.current) {
+        // Find the processing item
+        const processingEl = listScrollRef.current.querySelector('.batch-item-processing');
+        if (processingEl) {
+            processingEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    }
+  }, [attachedBatch?.currentStep, attachedBatch?.streamingData, autoScroll]);
+
+  const getDayList = (s, u) => {
+    const dates = [];
+    let curr = new Date(s);
+    const end = new Date(u);
+    while (curr <= end) {
+      dates.push(curr.toISOString().split('T')[0]);
+      curr.setDate(curr.getDate() + 1);
+    }
+    return dates.sort().reverse();
+  };
+
   const startBatch = async () => {
     if (!history || !module) return;
     
@@ -152,6 +190,31 @@ Return ONLY the Markdown content or the %ContextNotFound% signal.`,
     }
   };
 
+
+  const confirm = (title, message, onConfirm) => {
+    setConfirmData({ title, message, onConfirm });
+  };
+
+  const handleDiscard = () => {
+    confirm(
+        "Discard Batch Task?",
+        "This will permanently stop the process and remove all current progress data. You cannot undo this.",
+        () => {
+            removeBatch(attachedBatch.id);
+            if (isAttached) closeFullView();
+            else onClose?.();
+        }
+    );
+  };
+
+  const handleRestart = () => {
+    confirm(
+        "Restart Batch?",
+        "This will clear all currently generated pages and logs for this batch and start over. Are you sure?",
+        () => restartBatch(attachedBatch.id)
+    );
+  };
+
   const isDialogOpen = isAttached ? !!activeBatchId : open;
 
   return (
@@ -168,9 +231,47 @@ Return ONLY the Markdown content or the %ContextNotFound% signal.`,
                 />
             )}
         </Stack>
-        <IconButton onClick={handleClose} size="small">
-            <CloseIcon />
-        </IconButton>
+        <Stack direction="row" spacing={1} alignItems="center">
+            {isAttached && (
+                <>
+                    {attachedBatch.status === 'processing' && (
+                        <Button 
+                            size="small" 
+                            color={attachedBatch.paused ? "success" : "warning"}
+                            variant="outlined"
+                            startIcon={attachedBatch.paused ? <PlayIcon /> : <PauseIcon />}
+                            onClick={() => attachedBatch.paused ? resumeBatch(attachedBatch.id) : pauseBatch(attachedBatch.id)}
+                            sx={{ fontSize: '0.65rem', height: 24 }}
+                        >
+                            {attachedBatch.paused ? 'Resume' : 'Pause'}
+                        </Button>
+                    )}
+                    <Button 
+                        size="small" 
+                        color="inherit"
+                        variant="outlined"
+                        startIcon={<RefreshIcon />}
+                        onClick={handleRestart}
+                        sx={{ fontSize: '0.65rem', height: 24, opacity: 0.7 }}
+                    >
+                        Restart
+                    </Button>
+                    <Button 
+                        size="small" 
+                        color="error"
+                        variant="outlined"
+                        startIcon={<DiscardIcon />}
+                        onClick={handleDiscard}
+                        sx={{ fontSize: '0.65rem', height: 24 }}
+                    >
+                        Discard
+                    </Button>
+                </>
+            )}
+            <IconButton onClick={handleClose} size="small" sx={{ ml: 1 }}>
+                <CloseIcon />
+            </IconButton>
+        </Stack>
       </DialogTitle>
       <DialogContent>
         <Stack spacing={3} sx={{ mt: 1 }}>
@@ -195,52 +296,193 @@ Return ONLY the Markdown content or the %ContextNotFound% signal.`,
                     />
                 </Box>
 
-                <Box sx={{ 
-                    bgcolor: '#0d1117', // GitHub dark console color
-                    borderRadius: 2, 
-                    p: 2, 
-                    height: 350, 
-                    overflowY: 'auto',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    boxShadow: 'inset 0 2px 10px rgba(0,0,0,0.5)'
-                }}>
-                    <Stack spacing={0.5}>
-                        {attachedBatch.logs.map((log, i) => {
-                            const type = log[1];
-                            let color = '#c9d1d9'; // Default GitHub text
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                        <Typography variant="subtitle2" sx={{ fontWeight: 800, color: 'primary.main', display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <AiStatusIcon sx={{ fontSize: 18 }} /> AI GENERATIONS
+                        </Typography>
+                        <FormControlLabel
+                            control={<Checkbox size="small" checked={autoScroll} onChange={(e) => setAutoScroll(e.target.checked)} />}
+                            label={<Typography variant="caption">Auto-scroll</Typography>}
+                            sx={{ ml: 1 }}
+                        />
+                    </Stack>
+                    <Button 
+                        size="small" 
+                        startIcon={<ConsoleIcon />} 
+                        onClick={() => setShowConsole(!showConsole)}
+                        sx={{ fontSize: '0.65rem', textTransform: 'none' }}
+                    >
+                        {showConsole ? 'Hide Console' : 'Show Console'}
+                    </Button>
+                </Box>
+
+                <Collapse in={showConsole}>
+                    <Box sx={{ 
+                        bgcolor: '#0d1117', 
+                        borderRadius: 2, 
+                        p: 2, 
+                        height: 200, 
+                        overflowY: 'auto',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        mb: 2
+                    }}>
+                        <Stack spacing={0.5}>
+                            {attachedBatch.logs.map((log, i) => {
+                                const type = log[1];
+                                let color = '#c9d1d9';
+                                const typeMap = {
+                                    'success': '#3fb950', 'error': '#f85149', 'warning': '#d29922', 'system': '#58a6ff',
+                                    'feat': '#3b82f6', 'fix': '#ef4444', 'refactor': '#f59e0b', 'perf': '#8b5cf6',
+                                    'docs': '#10b981', 'chore': '#6b7280', 'style': '#ec4899', 'test': '#6366f1'
+                                };
+                                if (typeMap[type]) color = typeMap[type];
+                                return (
+                                    <Typography key={i} variant="caption" sx={{ fontFamily: 'monospace', color, fontSize: '0.7rem' }}>
+                                        <span style={{ opacity: 0.4, marginRight: 8 }}>[{log[0]}]</span>
+                                        {log[2]}
+                                    </Typography>
+                                );
+                            })}
+                            <div ref={logEndRef} />
+                        </Stack>
+                    </Box>
+                </Collapse>
+
+                <Box 
+                    ref={listScrollRef}
+                    sx={{ 
+                        flexGrow: 1, 
+                        overflowY: 'auto', 
+                        maxHeight: showConsole ? 300 : 500,
+                        pr: 1,
+                        position: 'relative',
+                        '&::-webkit-scrollbar': { width: '4px' },
+                        '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(255,255,255,0.1)', borderRadius: '10px' }
+                    }}
+                >
+                    <Stack spacing={1}>
+                        {(attachedBatch.config?.since ? 
+                            getDayList(attachedBatch.config.since, attachedBatch.config.until)
+                            : attachedBatch.pages.map(p => p.title).reverse()
+                        ).map(date => {
+                            const page = attachedBatch.pages.find(p => p.title === date);
+                            const stream = attachedBatch.streamingData?.[date];
+                            const isProcessing = attachedBatch.currentStep.includes(date) || (stream?.status === 'streaming');
+                            const isCompleted = !!page || stream?.status === 'completed';
                             
-                            const typeMap = {
-                                'success': '#3fb950',
-                                'error': '#f85149',
-                                'warning': '#d29922',
-                                'system': '#58a6ff',
-                                'feat': '#3b82f6',
-                                'fix': '#ef4444',
-                                'refactor': '#f59e0b',
-                                'perf': '#8b5cf6',
-                                'docs': '#10b981',
-                                'chore': '#6b7280',
-                                'style': '#ec4899',
-                                'test': '#6366f1'
-                            };
-
-                            if (typeMap[type]) color = typeMap[type];
-
                             return (
-                                <Typography key={i} variant="caption" sx={{ 
-                                    fontFamily: '"Fira Code", "Roboto Mono", monospace',
-                                    color: color,
-                                    fontSize: '0.75rem',
-                                    lineHeight: 1.4
-                                }}>
-                                    <span style={{ opacity: 0.4, marginRight: 8 }}>[{log[0]}]</span>
-                                    {log[2]}
-                                </Typography>
+                                <Accordion 
+                                    key={date}
+                                    className={isProcessing ? 'batch-item-processing' : ''}
+                                    sx={{ 
+                                        bgcolor: isProcessing ? 'rgba(30, 41, 59, 1)' : 'rgba(255,255,255,0.02)',
+                                        border: '1px solid',
+                                        borderColor: isProcessing ? 'primary.main' : 'rgba(255,255,255,0.05)',
+                                        borderRadius: '8px !important',
+                                        mb: 1,
+                                        position: isProcessing ? 'sticky' : 'relative',
+                                        top: isProcessing ? 0 : 'auto',
+                                        zIndex: isProcessing ? 10 : 1,
+                                        '&:before': { display: 'none' }
+                                    }}
+                                    defaultExpanded={isProcessing}
+                                >
+                                    <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ fontSize: 16 }} />}>
+                                        <Stack direction="row" spacing={2} alignItems="center" sx={{ width: '100%', pr: 2 }}>
+                                            {isCompleted ? <SuccessIcon sx={{ color: 'success.main', fontSize: 16 }} /> : 
+                                             isProcessing ? <CircularProgress size={14} thickness={6} /> : 
+                                             <PendingIcon sx={{ color: 'text.disabled', fontSize: 16 }} />}
+                                            <Typography variant="body2" sx={{ fontWeight: 800, flexGrow: 1 }}>{date}</Typography>
+                                            {isProcessing && (
+                                                <Stack direction="row" alignItems="center" spacing={0.5}>
+                                                    <Chip label="PROCESSING" color="primary" size="small" sx={{ height: 16, fontSize: '0.6rem' }} />
+                                                    <IconButton 
+                                                        size="small" 
+                                                        color="primary" 
+                                                        title="Force Restart AI"
+                                                        onClick={(e) => { e.stopPropagation(); retryDay(attachedBatch.id, date); }}
+                                                        sx={{ p: 0.5, bgcolor: 'rgba(59, 130, 246, 0.1)', '&:hover': { bgcolor: 'rgba(59, 130, 246, 0.2)' } }}
+                                                    >
+                                                        <RefreshIcon sx={{ fontSize: '1rem' }} />
+                                                    </IconButton>
+                                                    <IconButton 
+                                                        size="small" 
+                                                        color="warning" 
+                                                        title="Skip AI & Use Raw Commits"
+                                                        onClick={(e) => { e.stopPropagation(); skipBatchItem(attachedBatch.id); }}
+                                                        sx={{ p: 0.5, bgcolor: 'rgba(237, 108, 2, 0.1)', '&:hover': { bgcolor: 'rgba(237, 108, 2, 0.2)' } }}
+                                                    >
+                                                        <SkipNextIcon sx={{ fontSize: '1rem' }} />
+                                                    </IconButton>
+                                                </Stack>
+                                            )}
+                                            {isCompleted && (
+                                                <Stack direction="row" spacing={1}>
+                                                    <Chip label="READY" variant="outlined" color="success" size="small" sx={{ height: 16, fontSize: '0.6rem' }} />
+                                                    <IconButton 
+                                                        size="small" 
+                                                        color="primary" 
+                                                        title="Retry AI Refinement"
+                                                        onClick={(e) => { e.stopPropagation(); retryDay(attachedBatch.id, date); }}
+                                                        sx={{ p: 0.5, bgcolor: 'rgba(59, 130, 246, 0.1)', '&:hover': { bgcolor: 'rgba(59, 130, 246, 0.2)' } }}
+                                                    >
+                                                        <RefreshIcon sx={{ fontSize: '1rem' }} />
+                                                    </IconButton>
+                                                </Stack>
+                                            )}
+                                        </Stack>
+                                    </AccordionSummary>
+                                    <AccordionDetails sx={{ pt: 0 }}>
+                                        {stream?.thinking && (
+                                            <Box sx={{ 
+                                                mb: 2, p: 1.5, borderRadius: 2, bgcolor: 'rgba(0,0,0,0.3)', 
+                                                borderLeft: '3px solid #666', fontSize: '0.75rem', color: 'text.secondary',
+                                                fontFamily: 'monospace', whiteSpace: 'pre-wrap'
+                                            }}>
+                                                <Typography variant="caption" sx={{ fontWeight: 800, display: 'block', mb: 0.5, color: '#aaa' }}>REASONING</Typography>
+                                                {stream.thinking}
+                                            </Box>
+                                        )}
+                                        <Box sx={{ 
+                                            p: 2, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.03)',
+                                            fontSize: '0.8rem', lineHeight: 1.6, color: 'text.primary',
+                                            maxHeight: 400, overflowY: 'auto'
+                                        }}>
+                                            {stream?.content ? (
+                                                <Typography variant="body2" sx={{ fontFamily: 'serif', whiteSpace: 'pre-wrap' }}>
+                                                    {stream.content}
+                                                </Typography>
+                                            ) : page ? (
+                                                <Stack spacing={1.5}>
+                                                    {page.blocks.map((block, bi) => {
+                                                        if (block.type === 'heading') return <Typography key={bi} variant={block.level === 1 ? 'h6' : 'subtitle2'} sx={{ fontWeight: 800, mt: 1 }}>{block.text}</Typography>;
+                                                        if (block.type === 'bullet_list') return (
+                                                            <ul key={bi} style={{ margin: 0, paddingLeft: 20 }}>
+                                                                {block.items.map((it, ii) => <li key={ii}><Typography variant="body2">{it}</Typography></li>)}
+                                                            </ul>
+                                                        );
+                                                        if (block.type === 'callout') return (
+                                                            <Box key={bi} sx={{ p: 1, borderRadius: 1, bgcolor: 'rgba(255,255,255,0.05)', borderLeft: '3px solid', borderColor: 'primary.main' }}>
+                                                                <Typography variant="caption" sx={{ fontWeight: 800, display: 'block' }}>{block.title}</Typography>
+                                                                <Typography variant="body2" sx={{ opacity: 0.8 }}>{block.text}</Typography>
+                                                            </Box>
+                                                        );
+                                                        return <Typography key={bi} variant="body2">{block.text}</Typography>;
+                                                    })}
+                                                </Stack>
+                                            ) : (
+                                                <Typography variant="body2" sx={{ opacity: 0.5, fontStyle: 'italic' }}>
+                                                    {isProcessing ? 'Streaming AI refinement...' : 'Waiting to process...'}
+                                                </Typography>
+                                            )}
+                                        </Box>
+                                    </AccordionDetails>
+                                </Accordion>
                             );
                         })}
-                        <div ref={logEndRef} />
                     </Stack>
                 </Box>
 
@@ -375,10 +617,12 @@ Return ONLY the Markdown content or the %ContextNotFound% signal.`,
       <DialogActions>
         {isAttached ? (
             <>
-                {attachedBatch.status !== 'processing' && (
-                    <Button onClick={() => removeBatch(attachedBatch.id)} color="error">Remove Task</Button>
+                <Typography variant="caption" sx={{ flexGrow: 1, ml: 2, opacity: 0.5 }}>
+                    ID: {attachedBatch.id}
+                </Typography>
+                {attachedBatch.status === 'success' && (
+                    <Button onClick={handleClose} variant="contained" color="success">Finish & Close</Button>
                 )}
-                <Button onClick={handleClose} variant="contained">Close Monitor</Button>
             </>
         ) : (
             <>
@@ -393,6 +637,27 @@ Return ONLY the Markdown content or the %ContextNotFound% signal.`,
             </>
         )}
       </DialogActions>
+
+      {/* Confirmation Modal */}
+      <Dialog open={!!confirmData} onClose={() => setConfirmData(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>{confirmData?.title}</DialogTitle>
+        <DialogContent>
+            <Typography variant="body2">{confirmData?.message}</Typography>
+        </DialogContent>
+        <DialogActions>
+            <Button onClick={() => setConfirmData(null)}>Cancel</Button>
+            <Button 
+                variant="contained" 
+                color={confirmData?.title?.includes('Discard') ? "error" : "primary"}
+                onClick={() => {
+                    confirmData?.onConfirm();
+                    setConfirmData(null);
+                }}
+            >
+                Confirm
+            </Button>
+        </DialogActions>
+      </Dialog>
     </Dialog>
   );
 };

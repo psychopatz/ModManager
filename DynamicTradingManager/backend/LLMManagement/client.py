@@ -24,12 +24,14 @@ class ChatResult:
     usage: dict[str, Any]
 
 
+import httpx
+
 def _build_client(base_url: str, api_key: str) -> AsyncOpenAI:
     """Create a disposable AsyncOpenAI client for a single request."""
     return AsyncOpenAI(
         base_url=base_url.rstrip("/"),
         api_key=api_key or "no-key",
-        timeout=60.0,
+        timeout=httpx.Timeout(600.0, connect=60.0),
     )
 
 

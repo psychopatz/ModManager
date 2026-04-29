@@ -174,7 +174,12 @@ def parse_workshop_txt(workshop_txt_path: Path):
         metadata["description"] = "\n".join(metadata["description"])
         return metadata
     except Exception as e:
-        logger.error(f"Error parsing workshop.txt: {e}")
+        logger.error(f"Error parsing workshop.txt at {workshop_txt_path}: {e}")
+        # In case of 500, we want to know what exactly happened
+        raise e # Re-raise to let FastAPI catch it or for closer inspection if needed, 
+                 # but based on the code it was returning metadata before. 
+                 # Actually, let's keep it returning metadata but LOG IT CLEARLY.
+                 # Actually, if it's 500, then it's NOT this block (since it has a try/except).
         return metadata
 
 

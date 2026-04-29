@@ -17,15 +17,20 @@ import {
   Typography,
   Tooltip,
   Chip,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
 } from '@mui/material';
 import {
   Refresh as RefreshIcon,
   AutoAwesome as AiIcon,
   ContentCopy as CopyIcon,
   RestartAlt as ResetIcon,
+  ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
 import { getGitChanges, getSuiteGitLog, getGitBranches, getSuiteBranches } from '../../services/api';
 import { useGitAi } from '../../hooks/useGitAi';
+import { useLLM } from '../../hooks/useLLM';
 
 /**
  * GitAiAssistant
@@ -59,6 +64,7 @@ const GitAiAssistant = ({
   const [commits, setCommits] = useState([]);
   const [suiteHistory, setSuiteHistory] = useState(null);
   const [selectedHashes, setSelectedHashes] = useState(new Set());
+  const [reasoning, setReasoning] = useState('');
   const [loading, setLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [status, setStatus] = useState({ type: '', message: '' });
@@ -84,6 +90,9 @@ const GitAiAssistant = ({
     storageKey,
     defaultPrompt,
   });
+
+  const { config } = useLLM();
+  const activeProvider = config.providers[config.activeProvider] || {};
 
   const selectedTargetInfo = useMemo(
     () => availableTargets.find(t => t.key === selectedTarget) || null,
@@ -219,6 +228,7 @@ const GitAiAssistant = ({
         customInstructions = `NOTE: This repository contains multiple sub-mods: ${modNames}. Please group the changes accordingly if detected in the commit messages or paths.`;
       }
 
+      setReasoning('');
       const result = await generateContent({
         targetName: activeTargetName,
         branch,
@@ -226,7 +236,8 @@ const GitAiAssistant = ({
         customInstructions,
         subMods: selectedTargetInfo?.sub_mods || []
       });
-      onOutputChange(result);
+      onOutputChange(result.content);
+      if (result.thinking) setReasoning(result.thinking);
       setStatus({ type: 'success', message: 'Generated notes with smart grouping.' });
     } catch (error) {
       setStatus({ type: 'error', message: error.message || 'Generation failed.' });
@@ -439,8 +450,21 @@ const GitAiAssistant = ({
             disabled={isGenerating || loading}
             sx={{ flex: 1, fontWeight: 900 }}
           >
-            {isGenerating ? 'GENEVATING...' : 'GENERATE WITH AI'}
+            {isGenerating ? 'GENERATING...' : 'GENERATE WITH AI'}
           </Button>
+          <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800, lineHeight: 1 }}>
+              PROVIDER
+            </Typography>
+            <Typography variant="body2" color="primary" sx={{ fontWeight: 900 }}>
+              {activeProvider.label || activeProvider.id}
+            </Typography>
+            {activeProvider.model && (
+              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
+                {activeProvider.model}
+              </Typography>
+            )}
+          </Box>
           <Button 
             variant="outlined" 
             startIcon={<CopyIcon />} 
@@ -460,6 +484,21 @@ const GitAiAssistant = ({
           onChange={(e) => onOutputChange(e.target.value)}
           sx={{ '& .MuiInputBase-input': { fontSize: '0.9rem', fontFamily: 'monospace' } }}
         />
+
+        {reasoning && (
+           <Accordion variant="outlined" sx={{ bgcolor: 'rgba(0,0,0,0.02)', borderColor: 'divider' }}>
+             <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+               <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                 <AiIcon sx={{ fontSize: 14 }} /> AI REASONING / THINKING
+               </Typography>
+             </AccordionSummary>
+             <AccordionDetails sx={{ pt: 0 }}>
+               <Typography variant="body2" sx={{ fontSize: '0.75rem', fontStyle: 'italic', whiteSpace: 'pre-wrap', color: 'text.secondary' }}>
+                 {reasoning}
+               </Typography>
+             </AccordionDetails>
+           </Accordion>
+        )}
       </Stack>
     </Paper>
   );

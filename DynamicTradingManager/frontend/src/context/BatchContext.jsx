@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { getBatchedGitHistory, getDonatorsDefinition, createManualDefinition } from '../services/api';
+import { getBatchedGitHistory, getDonatorsDefinition, createManualDefinition, llmChat } from '../services/api';
+import { loadLLMConfig } from '../utils/llmUtils';
 
 const BatchContext = createContext();
 
@@ -129,11 +130,28 @@ export const BatchProvider = ({ children }) => {
                 blocks: [{ type: "heading", id: `heading_${pageId}`, level: 1, text: `Updates for ${date}` }]
             };
             
-            if (improveWithAI && window.puter) {
+            if (improveWithAI) {
                 const prompt = `${systemPrompt}\n\nCommits for ${date}:\n${JSON.stringify(filteredDayData, null, 2)}`;
                 log('system', `   (Thinking... AI is refining ${totalCommits} commits)`);
-                const response = await window.puter.ai.chat(prompt);
-                const refinedText = response?.toString() || '';
+                const llmConfig = loadLLMConfig();
+                const provider = llmConfig.providers[llmConfig.activeProvider] || {};
+                let refinedText = '';
+                if (provider.is_browser_only) {
+                    if (!window.puter) throw new Error('Puter.js not available. Switch LLM provider in Settings.');
+                    const response = await window.puter.ai.chat(prompt);
+                    refinedText = response?.toString() || '';
+                } else {
+                    const response = await llmChat({
+                        base_url: provider.base_url,
+                        api_key: provider.api_key,
+                        model: provider.model,
+                        messages: [
+                            { role: 'system', content: systemPrompt },
+                            { role: 'user', content: `Commits for ${date}:\n${JSON.stringify(filteredDayData, null, 2)}` },
+                        ],
+                    });
+                    refinedText = response.data?.content || '';
+                }
                 
                 if (refinedText.trim() === '%ContextNotFound%') {
                     log('system', `   (Skipped ${date}: Trivial changes)`);

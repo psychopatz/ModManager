@@ -11,6 +11,7 @@ import {
   Pause as PauseIcon
 } from '@mui/icons-material';
 import { useBatchSystem } from '../../context/BatchContext';
+import LLMChatFloating from '../LLM/LLMChatFloating';
 
 const BatchWidget = ({ batch }) => {
   const [expanded, setExpanded] = useState(false);
@@ -129,14 +130,14 @@ const BatchFloatingOverlay = () => {
         position: 'fixed',
         bottom: 24,
         left: 24,
-        zIndex: 5000, // Above almost everything
+        zIndex: 5000, 
         display: 'flex',
         flexDirection: 'column-reverse',
         alignItems: 'flex-start',
-        pointerEvents: 'none' // Allow clicking through empty space
+        pointerEvents: 'none'
       }}
     >
-      <Box sx={{ pointerEvents: 'auto' }}> {/* Re-enable pointer events for contents */}
+      <Box sx={{ pointerEvents: 'auto' }}> 
         {batches.map(batch => (
           <BatchWidget key={batch.id} batch={batch} />
         ))}

@@ -92,4 +92,29 @@ export const getGitBranches = (target) => api.get('/git/branches', { params: { t
 export const getSuiteGitLog = (branch, limit = 100) => api.get('/git/suite/log', { params: { branch, limit } });
 export const getSuiteBranches = () => api.get('/git/suite/branches');
 
+// LLM
+export const getLLMProviders = () => api.get('/llm/providers');
+export const llmChat = (payload) => api.post('/llm/chat', payload);
+export const llmListModels = (payload) => api.post('/llm/models', payload);
+
+/**
+ * Streaming chat completion. 
+ * Uses native fetch because axios handles streams differently in browsers.
+ */
+export const llmChatStream = async (payload) => {
+  const baseUrl = resolveApiBaseUrl();
+  const response = await fetch(`${baseUrl}/llm/chat/stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText || `Stream request failed with status ${response.status}`);
+  }
+
+  return response.body; // Returns a ReadableStream
+};
+
 export default api;

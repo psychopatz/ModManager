@@ -1,6 +1,7 @@
-import React, { Suspense, lazy } from 'react';
-import { ThemeProvider, createTheme, CssBaseline, Container, Typography, Box, AppBar, Toolbar, Button, CircularProgress } from '@mui/material';
+import React, { Suspense, lazy, useState } from 'react';
+import { ThemeProvider, createTheme, CssBaseline, Container, Typography, Box, AppBar, Toolbar, Button, CircularProgress, IconButton, Tooltip } from '@mui/material';
 import { BrowserRouter, Routes, Route, Link as RouterLink } from 'react-router-dom';
+import SmartToyIcon from '@mui/icons-material/SmartToy';
 
 const Dashboard = lazy(() => import('./components/Dashboard'));
 const ItemsPage = lazy(() => import('./components/ItemsPage'));
@@ -13,6 +14,8 @@ const UpdateVersionEditorPage = lazy(() => import('./components/UpdateVersionEdi
 const SimulationDashboard = lazy(() => import('./components/Simulation/SimulationDashboard'));
 const ConsolePage = lazy(() => import('./components/ConsolePage'));
 const WorkshopPage = lazy(() => import('./components/WorkshopPage'));
+const LLMSettingsPanel = lazy(() => import('./components/LLM/LLMSettingsPanel'));
+const LLMChatFloating = lazy(() => import('./components/LLM/LLMChatFloating'));
 
 const darkTheme = createTheme({
   palette: {
@@ -27,15 +30,19 @@ const darkTheme = createTheme({
 });
 
 import { BatchProvider } from './context/BatchContext';
+import { LLMProvider } from './context/LLMContext';
 import BatchFloatingOverlay from './components/ManualEditor/BatchFloatingOverlay';
 import BatchUpdateGenerator from './components/ManualEditor/BatchUpdateGenerator';
 
 function App() {
+  const [llmOpen, setLlmOpen] = useState(false);
+
   return (
     <ThemeProvider theme={darkTheme}>
-      <BatchProvider>
-        <CssBaseline />
-        <BrowserRouter>
+      <LLMProvider>
+        <BatchProvider>
+          <CssBaseline />
+          <BrowserRouter>
             <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
               <AppBar position="static">
                 {/* ... existing header ... */}
@@ -54,6 +61,11 @@ function App() {
                   <Button color="inherit" component={RouterLink} to="/simulation">Economy Simulation</Button>
                   <Button color="inherit" component={RouterLink} to="/workshop">Workshop</Button>
                   <Button color="inherit" component={RouterLink} to="/console">Console</Button>
+                  <Tooltip title="LLM Provider Settings">
+                    <IconButton color="inherit" onClick={() => setLlmOpen(true)} sx={{ ml: 1 }}>
+                      <SmartToyIcon />
+                    </IconButton>
+                  </Tooltip>
                 </Toolbar>
               </AppBar>
               <Container maxWidth="xl" sx={{ mt: 4, mb: 4, flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
@@ -80,11 +92,19 @@ function App() {
               </Container>
               <BatchFloatingOverlay />
               <BatchUpdateGenerator />
+              <Suspense fallback={null}>
+                <LLMSettingsPanel open={llmOpen} onClose={() => setLlmOpen(false)} />
+                <Box sx={{ position: 'fixed', bottom: 100, right: 24, zIndex: 5000, pointerEvents: 'none' }}>
+                    <LLMChatFloating />
+                </Box>
+              </Suspense>
             </Box>
         </BrowserRouter>
-      </BatchProvider>
+        </BatchProvider>
+      </LLMProvider>
     </ThemeProvider>
   );
 }
 
 export default App;
+

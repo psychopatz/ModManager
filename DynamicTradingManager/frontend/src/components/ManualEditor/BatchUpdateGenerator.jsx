@@ -28,6 +28,7 @@ import {
 import { getBatchedGitHistory } from '../../services/api';
 import { useGitAi } from '../../hooks/useGitAi';
 import { useBatchSystem } from '../../context/BatchContext';
+import { useLLM } from '../../hooks/useLLM';
 
 const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop', module = '', targets = [], modules = [], attachedBatchId = null }) => {
   const { batches, spawnBatch, openBatchId, closeFullView, removeBatch } = useBatchSystem();
@@ -312,12 +313,30 @@ Return ONLY the Markdown content or the %ContextNotFound% signal.`,
 
                 <Stack spacing={1}>
                     <FormControlLabel
-                    control={<Checkbox checked={improveWithAI} onChange={(e) => {
-                        setImproveWithAI(e.target.checked);
-                        localStorage.setItem('git_batch_improve_ai', e.target.checked);
-                    }} />}
-                    label="Batch improve commits using AI (Puter AI)"
+                        control={<Checkbox checked={improveWithAI} onChange={(e) => {
+                            setImproveWithAI(e.target.checked);
+                            localStorage.setItem('git_batch_improve_ai', e.target.checked);
+                        }} />}
+                        label="Batch improve commits using AI"
                     />
+                    
+                    {improveWithAI && (
+                        <Box sx={{ ml: 4, mt: -1, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Typography variant="caption" color="text.secondary">using</Typography>
+                            <Chip 
+                                label={activeProvider.label || activeProvider.id} 
+                                size="small" 
+                                color="primary" 
+                                variant="outlined"
+                                sx={{ height: 20, fontSize: '0.7rem', fontWeight: 800 }}
+                            />
+                            {activeProvider.model && (
+                                <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
+                                    ({activeProvider.model})
+                                </Typography>
+                            )}
+                        </Box>
+                    )}
                     
                     {improveWithAI && (
                     <Box>

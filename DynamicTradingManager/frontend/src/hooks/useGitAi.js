@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useLLM } from './useLLM';
 
 /**
  * useGitAi hook
  * Encapsulates git fetching, prompt management, and AI generation logic.
+ * Now routes through the LLM provider system instead of calling Puter directly.
  */
 export const useGitAi = ({
   storageKey = 'git_ai_assistant',
@@ -11,6 +13,8 @@ export const useGitAi = ({
   const [systemPrompt, setSystemPrompt] = useState(() => {
     return localStorage.getItem(storageKey) || defaultPrompt;
   });
+
+  const { sendChat } = useLLM();
 
   const resetPrompt = useCallback(() => {
     setSystemPrompt(defaultPrompt);
@@ -22,10 +26,6 @@ export const useGitAi = ({
   }, [systemPrompt, storageKey]);
 
   const generateContent = async (context) => {
-    if (!window.puter) {
-      throw new Error('Puter.js not found. AI features unavailable.');
-    }
-
     const { targetName, branch, commits, customInstructions, subMods = [] } = context;
     
     let commitSummary = '';
@@ -46,8 +46,17 @@ export const useGitAi = ({
     }
     prompt += `Commits:\n${commitSummary}\n\nRules:\n${systemPrompt}\n\n${customInstructions || ''}`;
     
-    const response = await window.puter.ai.chat(prompt);
-    return response?.message?.content?.trim() || '';
+    const result = await sendChat(prompt, { systemPrompt });
+    
+    // sendChat returns { content, thinking, model } if backend, or string if puter.
+    // We normalize it here.
+    if (typeof result === 'string') {
+        return { content: result, thinking: null };
+    }
+    return {
+        content: result.content || '',
+        thinking: result.thinking || null
+    };
   };
 
   return {

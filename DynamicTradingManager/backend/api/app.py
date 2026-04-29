@@ -18,6 +18,7 @@ from api.routers.pricing import router as pricing_router
 from api.routers.simulation import router as simulation_router
 from api.routers.tasks_actions import router as tasks_actions_router
 from api.routers.workshop import router as workshop_router
+from api.routers.llm import router as llm_router
 from config.server_settings import get_server_settings
 
 
@@ -94,6 +95,7 @@ def create_app() -> FastAPI:
     app.include_router(workshop_router)
     app.include_router(git_router)
     app.include_router(simulation_router)
+    app.include_router(llm_router)
 
     return app
 

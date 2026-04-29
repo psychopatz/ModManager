@@ -252,7 +252,7 @@ const UpdateVersionEditorPage = () => {
 	return (
 		<Stack spacing={2}>
 			<GitAiAssistant
-				title="Update Helper (Git + Puter)"
+				title="Update Helper (Git + AI)"
 				helperText="Generate strict JSON and auto-build a What's New page from the output."
 				outputValue={generatedText}
 				onOutputChange={setGeneratedText}

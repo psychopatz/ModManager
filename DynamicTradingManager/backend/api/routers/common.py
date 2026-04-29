@@ -69,6 +69,10 @@ def get_workshop_project_or_404(target: Optional[str] = None):
         return resolve_project_target(target)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).exception(f"Unexpected error resolving workshop project: {exc}")
+        raise HTTPException(status_code=500, detail=f"Internal server error resolving project: {exc}")
 
 
 def serialize_workshop_projects():

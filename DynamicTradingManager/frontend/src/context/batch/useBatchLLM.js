@@ -28,9 +28,10 @@ import {
 export const useBatchLLM = ({ batchesRef, setBatches, addLog, updateBatch, updateStreamingData, saveBatchCache, abortRefs }) => {
 
     // ─── Stage 1: per-day LLM expansion ────────────────────────────────────────
-    const processDay = useCallback(async (batchId, date, dayRepos, config) => {
+    const processDay = useCallback(async (batchId, date, dayRepos, config, options = {}) => {
         const { improveWithAI, typeFilters, systemPrompt } = config;
         const log = (type, msg) => addLog(batchId, type, msg);
+        const targetModule = String(options?.targetModule || config?.module || '').trim() || null;
         const parseCommitType = (s) =>
             s && typeof s === 'string' ? (s.match(/^(\w+)(\(.*\))?:/)?.[1].toLowerCase() || 'other') : 'other';
 
@@ -53,10 +54,12 @@ export const useBatchLLM = ({ batchesRef, setBatches, addLog, updateBatch, updat
         }
         if (totalCommits === 0) return;
 
-        const pageId = date.replace(/-/g, '_');
+        const pageSuffix = targetModule ? `_${slugify(targetModule)}` : '';
+        const pageId = `${date.replace(/-/g, '_')}${pageSuffix}`;
         const page = {
             id: pageId,
             date,
+            target_module: targetModule,
             chapter_id: 'release_notes',
             title: date,
             keywords: ['update', 'release', date],
@@ -76,6 +79,7 @@ export const useBatchLLM = ({ batchesRef, setBatches, addLog, updateBatch, updat
         const fallbackStructuredItem = {
             id: `item_${pageId}`,
             date,
+            target_module: targetModule,
             sourceRepos: Object.keys(filteredDayData),
             title: `Updates for ${date}`,
             explanation: 'Summary generated from commit activity for this day.',
@@ -219,6 +223,7 @@ ${Object.entries(filteredDayData)
             }
         } else {
             structuredItem = parseStage1StructuredItem(refinedText, fallbackStructuredItem);
+            structuredItem.target_module = structuredItem.target_module || targetModule;
             if (structuredItem.parseWarnings.length > 0) {
                 log('warning', `   Stage 1 parse warnings for ${date}: ${structuredItem.parseWarnings.join(' ')}`);
             }
@@ -259,12 +264,13 @@ ${Object.entries(filteredDayData)
             flush();
         }
 
-        // Merge page + structuredItem into batch state
+        // Merge page + structuredItem into batch state.
+        // Filter by id (not date) so multiple submods on the same date coexist.
         setBatches((prev) =>
             prev.map((b) => {
                 if (b.id !== batchId) return b;
-                const otherPages = b.pages.filter((p) => p.date !== date);
-                const otherItems = (b.stage1Items || []).filter((item) => item.date !== date);
+                const otherPages = b.pages.filter((p) => p.id !== page.id);
+                const otherItems = (b.stage1Items || []).filter((item) => item.id !== structuredItem.id);
                 return {
                     ...b,
                     pages: [...otherPages, page].sort((a, z) => z.date.localeCompare(a.date)),
@@ -280,8 +286,8 @@ ${Object.entries(filteredDayData)
                 branch: batchState.config.branch,
                 since: batchState.config.since,
                 until: batchState.config.until,
-                pages: (batchState.pages || []).filter((p) => p.date !== date).concat([page]),
-                stage1Items: (batchState.stage1Items || []).filter((item) => item.date !== date).concat([structuredItem]),
+                pages: (batchState.pages || []).filter((p) => p.id !== page.id).concat([page]),
+                stage1Items: (batchState.stage1Items || []).filter((item) => item.id !== structuredItem.id).concat([structuredItem]),
             });
         }
     }, [addLog, updateBatch, updateStreamingData, saveBatchCache, setBatches]);

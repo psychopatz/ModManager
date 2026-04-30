@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { 
-    Box, Typography, Stack, Collapse, TextField, Button
+    Box, Typography, Stack, Collapse, TextField, Button, Chip
 } from '@mui/material';
 import {
     ExpandMore as ExpandMoreIcon,
@@ -10,7 +10,8 @@ import {
     RestartAlt as ResetIcon,
     Psychology as ThinkingIcon,
     Save as SaveIcon,
-    Refresh as ForceRecreateIcon
+    Refresh as ForceRecreateIcon,
+    CallSplit as RoutingIcon
 } from '@mui/icons-material';
 
 const StageThematicConsolidation = ({
@@ -27,6 +28,20 @@ const StageThematicConsolidation = ({
     const isLocked = attachedBatch.status !== 'success' && attachedBatch.progress < 100;
     const stream = attachedBatch.streamingData?._consolidation;
     const isStreaming = stream?.status === 'streaming';
+
+    // Compute per-module destination groups from stage1Items
+    const destinationGroups = React.useMemo(() => {
+        const items = attachedBatch.stage1Items || [];
+        if (items.length === 0) return null;
+        const map = {};
+        items.forEach(item => {
+            const mod = item.target_module || attachedBatch.config?.module || 'unknown';
+            map[mod] = (map[mod] || 0) + 1;
+        });
+        return map;
+    }, [attachedBatch.stage1Items, attachedBatch.config?.module]);
+
+    const isMultiModule = destinationGroups && Object.keys(destinationGroups).length > 1;
 
     return (
         <Box sx={{ 
@@ -156,6 +171,33 @@ const StageThematicConsolidation = ({
                         {/* SAVE TO MANUALS — shown once consolidation has produced pages */}
                         {(attachedBatch.consolidatedPages?.length > 0 || attachedBatch.generatedUpdateTitle) && (
                             <Stack spacing={1} sx={{ pt: 1 }}>
+                                {/* DESTINATION BREAKDOWN */}
+                                {destinationGroups && (
+                                    <Box sx={{ p: 1.5, bgcolor: 'rgba(99,102,241,0.06)', borderRadius: 1.5, border: '1px solid rgba(99,102,241,0.2)' }}>
+                                        <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 1 }}>
+                                            <RoutingIcon sx={{ fontSize: 14, color: 'secondary.main' }} />
+                                            <Typography variant="caption" fontWeight={800} color="secondary" sx={{ textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: '0.6rem' }}>
+                                                {isMultiModule ? 'Will save to multiple submods' : 'Save destination'}
+                                            </Typography>
+                                        </Stack>
+                                        <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+                                            {Object.entries(destinationGroups).map(([mod, count]) => (
+                                                <Chip
+                                                    key={mod}
+                                                    label={`${mod} — ${count} page${count !== 1 ? 's' : ''}`}
+                                                    size="small"
+                                                    sx={{
+                                                        fontSize: '0.65rem',
+                                                        fontWeight: 800,
+                                                        bgcolor: 'rgba(99,102,241,0.15)',
+                                                        color: 'secondary.light',
+                                                        border: '1px solid rgba(99,102,241,0.3)',
+                                                    }}
+                                                />
+                                            ))}
+                                        </Stack>
+                                    </Box>
+                                )}
                                 <Button
                                     fullWidth
                                     variant="contained"

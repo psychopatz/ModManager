@@ -33,6 +33,8 @@ const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop', m
   const [until, setUntil] = useState(localStorage.getItem('git_batch_until') || new Date().toISOString().split('T')[0]);
   const [branchName, setBranchName] = useState(branch || localStorage.getItem('git_batch_branch') || 'develop');
   const [history, setHistory] = useState(null);
+  const [routedHistory, setRoutedHistory] = useState(null);
+  const [routingWarnings, setRoutingWarnings] = useState([]);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState({ type: '', message: '' });
   
@@ -120,7 +122,11 @@ const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop', m
     try {
       const res = await getBatchedGitHistory(since, until, branchName, module || targets[0]);
       const historyData = res.data.history || {};
+      const routedHistoryData = res.data.routed_history || {};
+      const routingWarningsData = res.data.routing_warnings || [];
       setHistory(historyData);
+      setRoutedHistory(routedHistoryData);
+      setRoutingWarnings(routingWarningsData);
       
       const totalDays = Object.keys(historyData).length;
       const totalCommits = Object.values(historyData).reduce((acc, reposMap) => {
@@ -150,6 +156,8 @@ const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop', m
         module: module || targets[0] || 'DynamicTrading', 
         branch: branchName,
         history,
+        routedHistory,
+        routingWarnings,
         typeFilters,
         improveWithAI,
         systemPrompt,
@@ -244,6 +252,8 @@ const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop', m
                 availableBranches={availableBranches}
                 loading={loading} fetchHistory={fetchHistory}
                 history={history}
+                routedHistory={routedHistory}
+                routingWarnings={routingWarnings}
                 typeFilters={typeFilters} toggleTypeFilter={toggleTypeFilter} 
                 getTypeColor={getTypeColor}
                 improveWithAI={improveWithAI} setImproveWithAI={setImproveWithAI}

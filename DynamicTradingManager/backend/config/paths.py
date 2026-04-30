@@ -7,6 +7,49 @@ ACTIVE_VERSION = "42.16"
 
 from ProjectManagement.projects import get_mod_path_by_id, find_media_subfolder, get_all_sub_mods
 
+
+def _resolve_submod_root(path: Path) -> Path:
+    """Normalize a discovered sub-mod path to the folder directly under Contents/mods."""
+    path = Path(path)
+    if path.parent.name == "mods":
+        return path
+    if path.parent.parent.name == "mods":
+        return path.parent
+    return path
+
+
+def _collect_manual_dirs_in_priority(mod_root: Path) -> list[Path]:
+    """Collect manual lua directories with preference: common first, then active version."""
+    candidates = []
+
+    # 1) Preferred convention: sibling common folder
+    common_manuals = mod_root / "common" / "media" / "lua"
+    if common_manuals.exists():
+        candidates.extend(p for p in common_manuals.rglob("Manuals") if p.is_dir())
+
+    # 2) Active version fallback (e.g. 42.16)
+    version_manuals = mod_root / ACTIVE_VERSION / "media" / "lua"
+    if version_manuals.exists():
+        candidates.extend(p for p in version_manuals.rglob("Manuals") if p.is_dir())
+
+    # 3) Any other nested manuals within this sub-mod only
+    candidates.extend(p for p in mod_root.rglob("Manuals") if p.is_dir() and "media" in p.parts and "lua" in p.parts)
+
+    deduped = []
+    seen = set()
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        deduped.append(resolved)
+
+    deduped.sort(key=lambda p: (
+        "common" in p.parts,
+        ACTIVE_VERSION in p.parts,
+    ), reverse=True)
+    return deduped
+
 def get_mod_root(mod_id: str) -> Path:
     """Returns the absolute path to a mod's directory within its workshop item."""
     path = get_mod_path_by_id(mod_id)
@@ -27,9 +70,8 @@ def get_manuals_roots(mod_id: str) -> list[Path]:
     """Returns a list of all valid manuals Lua directories for a mod (e.g. common and versioned)."""
     all_subs = get_all_sub_mods()
     target_id = mod_id.lower()
-    candidate_roots = [Path(m["path"]) for m in all_subs if m["id"].lower() == target_id]
+    candidate_roots = [_resolve_submod_root(Path(m["path"])) for m in all_subs if m["id"].lower() == target_id]
     
-    initials = "".join(c for c in mod_id if c.isupper())
     found_roots = []
     seen = set()
 
@@ -40,35 +82,20 @@ def get_manuals_roots(mod_id: str) -> list[Path]:
             seen.add(resolved)
 
     for root in candidate_roots:
-        # 1. Prefer 'common' sibling if it exists (highly likely in B42 structure)
-        parent = root.parent
-        if parent != root:
-            # Check for direct 'common/media/lua/shared/.../Manuals'
-            for candidate in parent.glob("common/media/lua/*/Manuals"):
-                 if candidate.is_dir():
-                     add_if_unique(candidate)
-            # Fallback sibling search
-            for candidate in parent.rglob("Manuals"):
-                if candidate.is_dir() and "media" in candidate.parts and "lua" in candidate.parts:
-                    add_if_unique(candidate)
-
-        # 2. Search directly in mod root (e.g. 42.16/media)
-        media_root = root / "media"
-        if media_root.exists():
-            for candidate in media_root.rglob("Manuals"):
-                if candidate.is_dir() and "lua" in candidate.parts:
-                    add_if_unique(candidate)
+        for candidate in _collect_manual_dirs_in_priority(root):
+            add_if_unique(candidate)
     
     if found_roots:
-        # Sort so that roots containing initials come first, and then prefer 'common' in the path
+        # Keep preference for common first, then active version.
         found_roots.sort(key=lambda p: (
-            (initials != "" and initials in p.parts),
-            ("common" in p.parts)
+            "common" in p.parts,
+            ACTIVE_VERSION in p.parts,
         ), reverse=True)
         return found_roots
 
     # Standard fallback - use mod initials for correct path structure
     root = get_mod_common_path(mod_id)
+    initials = "".join(c for c in mod_id if c.isupper())
     safe_initials = initials or "DT"
     fallback = root / "media" / "lua" / "shared" / safe_initials / "Common" / "Manuals"
     return [fallback]
@@ -88,22 +115,20 @@ def get_manual_assets_root(mod_id: str) -> Path:
     """Returns the path to the manuals UI assets directory for a mod."""
     all_subs = get_all_sub_mods()
     target_id = mod_id.lower()
-    candidate_roots = [Path(m["path"]) for m in all_subs if m["id"].lower() == target_id]
+    candidate_roots = [_resolve_submod_root(Path(m["path"])) for m in all_subs if m["id"].lower() == target_id]
     
     for root in candidate_roots:
-        # Search directly in mod root
-        media_root = root / "media"
-        if media_root.exists():
-            for candidate in media_root.rglob("Manuals"):
-                if candidate.is_dir() and "ui" in candidate.parts:
-                    return candidate
+        common_ui = root / "common" / "media" / "ui" / "Manuals"
+        if common_ui.is_dir():
+            return common_ui.resolve()
 
-        # Search in parent directory for sibling folders
-        parent = root.parent
-        if parent != root:
-            for candidate in parent.rglob("Manuals"):
-                if candidate.is_dir() and "media" in candidate.parts and "ui" in candidate.parts:
-                    return candidate
+        version_ui = root / ACTIVE_VERSION / "media" / "ui" / "Manuals"
+        if version_ui.is_dir():
+            return version_ui.resolve()
+
+        for candidate in root.rglob("Manuals"):
+            if candidate.is_dir() and "media" in candidate.parts and "ui" in candidate.parts:
+                return candidate.resolve()
 
     return get_mod_common_path(mod_id) / "media" / "ui" / "Manuals"
 

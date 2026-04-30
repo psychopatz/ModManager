@@ -108,6 +108,8 @@ export const BatchProvider = ({ children }) => {
             generatedUpdateTitle: resumeCache?.generatedUpdateTitle || '',
             finalPages: resumeCache?.finalPages || null,
             history: config.history || resumeCache?.history || null,
+            routedHistory: config.routedHistory || resumeCache?.routedHistory || null,
+            routingWarnings: config.routingWarnings || resumeCache?.routingWarnings || [],
             streamingData: {},
             paused: false,
             config,
@@ -155,10 +157,18 @@ export const BatchProvider = ({ children }) => {
             addLog(id, 'warning', `Active process aborted for ${date} to force restart.`);
         }
         const historyRes = await getBatchedGitHistory(b.config.since, b.config.until, b.config.branch, b.config.module);
-        const dayRepos = (historyRes.data.history || {})[date];
-        if (!dayRepos) return;
+        const routed = historyRes.data.routed_history || {};
+        const legacy = historyRes.data.history || {};
+        const routedDay = routed[date];
+        const entries = routedDay && Object.keys(routedDay).length > 0
+            ? Object.entries(routedDay).map(([targetModule, commits]) => ({ targetModule, dayRepos: { [targetModule]: commits } }))
+            : [{ targetModule: b.config.module, dayRepos: legacy[date] }];
+        if (!entries.length || !entries[0].dayRepos) return;
         addLog(id, 'system', `Force restarting day refinement for ${date}...`);
-        await processDay(id, date, dayRepos, b.config);
+        for (const entry of entries) {
+            if (!entry.dayRepos) continue;
+            await processDay(id, date, entry.dayRepos, { ...b.config, module: entry.targetModule || b.config.module }, { targetModule: entry.targetModule || b.config.module });
+        }
     }, [addLog, processDay]);
 
     const pauseBatch = useCallback((id) => updateBatch(id, { paused: true }), [updateBatch]);

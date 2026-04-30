@@ -6,7 +6,9 @@ import {
 import {
     RestartAlt as ResetIcon,
     ExpandMore as ExpandMoreIcon,
-    ExpandLess as ExpandLessIcon
+    ExpandLess as ExpandLessIcon,
+    CallSplit as RoutingIcon,
+    Warning as WarningIcon
 } from '@mui/icons-material';
 
 const BatchConfigForm = ({
@@ -18,6 +20,8 @@ const BatchConfigForm = ({
     availableBranches = [],
     loading, fetchHistory,
     history,
+    routedHistory,
+    routingWarnings = [],
     typeFilters, toggleTypeFilter, getTypeColor,
     improveWithAI, setImproveWithAI,
     autoSaveAfterConsolidation, setAutoSaveAfterConsolidation,
@@ -72,6 +76,18 @@ const BatchConfigForm = ({
     const rawDayCount = React.useMemo(() => new Set(rawCommits.map((c) => c.date)).size, [rawCommits]);
     const filteredDayCount = React.useMemo(() => new Set(allCommits.map((c) => c.date)).size, [allCommits]);
 
+    // Compute routing summary: submod → commit count
+    const routingSummary = React.useMemo(() => {
+        if (!routedHistory || Object.keys(routedHistory).length === 0) return null;
+        const map = {};
+        Object.values(routedHistory).forEach(submods => {
+            Object.entries(submods).forEach(([submod, commits]) => {
+                map[submod] = (map[submod] || 0) + (Array.isArray(commits) ? commits.length : 0);
+            });
+        });
+        return map;
+    }, [routedHistory]);
+
     return (
         <Stack spacing={3}>
             {/* Context Header */}
@@ -99,6 +115,42 @@ const BatchConfigForm = ({
                         </Typography>
                     </Stack>
                 </Alert>
+            )}
+
+            {/* ROUTING DESTINATIONS PANEL */}
+            {routingSummary && (
+                <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'rgba(99,102,241,0.05)', borderColor: 'rgba(99,102,241,0.25)', borderRadius: 2 }}>
+                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                        <RoutingIcon sx={{ fontSize: 16, color: 'secondary.main' }} />
+                        <Typography variant="caption" fontWeight={800} color="secondary" sx={{ textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                            Routing Destinations
+                        </Typography>
+                    </Stack>
+                    <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: routingWarnings.length > 0 ? 1 : 0 }}>
+                        {Object.entries(routingSummary).map(([submod, count]) => (
+                            <Chip
+                                key={submod}
+                                label={`${submod} — ${count} commit${count !== 1 ? 's' : ''}`}
+                                size="small"
+                                sx={{
+                                    fontSize: '0.65rem',
+                                    fontWeight: 800,
+                                    bgcolor: 'rgba(99,102,241,0.15)',
+                                    color: 'secondary.light',
+                                    border: '1px solid rgba(99,102,241,0.3)',
+                                }}
+                            />
+                        ))}
+                    </Stack>
+                    {routingWarnings.length > 0 && (
+                        <Stack direction="row" spacing={0.5} alignItems="center">
+                            <WarningIcon sx={{ fontSize: 13, color: 'warning.main' }} />
+                            <Typography variant="caption" sx={{ color: 'warning.main', fontSize: '0.65rem' }}>
+                                {routingWarnings.length} commit{routingWarnings.length !== 1 ? 's' : ''} could not be routed to a submod
+                            </Typography>
+                        </Stack>
+                    )}
+                </Paper>
             )}
 
             <Stack direction="row" spacing={2} alignItems="center">

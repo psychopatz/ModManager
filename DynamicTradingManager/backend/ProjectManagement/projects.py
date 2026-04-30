@@ -46,6 +46,19 @@ def _discover_sub_mods(repo_path: Path) -> list[dict]:
         return []
 
     sub_mods = []
+
+    def _normalize_sub_mod_root(mod_info_path: Path) -> Path:
+        """
+        Resolve the logical sub-mod root under Contents/mods.
+        Example:
+          .../Contents/mods/DynamicTradingCommon/42.16/mod.info -> .../Contents/mods/DynamicTradingCommon
+        """
+        info_dir = mod_info_path.parent
+        if info_dir.parent == mods_dir:
+            return info_dir
+        if info_dir.parent.parent == mods_dir:
+            return info_dir.parent
+        return info_dir
     # Find all mod.info files under Contents/mods
     for mod_info_path in mods_dir.glob("**/mod.info"):
         try:
@@ -57,11 +70,12 @@ def _discover_sub_mods(repo_path: Path) -> list[dict]:
                         mod_data[k.strip()] = v.strip()
             
             if "name" in mod_data:
+                sub_mod_root = _normalize_sub_mod_root(mod_info_path)
                 sub_mods.append({
                     "id": mod_data.get("id", mod_info_path.parent.name),
                     "name": mod_data["name"],
                     "description": mod_data.get("description", ""),
-                    "path": str(mod_info_path.parent)
+                    "path": str(sub_mod_root)
                 })
         except Exception as e:
             logger.debug(f"Error parsing mod.info at {mod_info_path}: {e}")
@@ -206,19 +220,9 @@ def find_media_subfolder(mod_id: str, subpath: str) -> Path | None:
         return None
         
     for root in candidate_roots:
-        # Search directly in mod root
-        media_root = root / "media"
-        if media_root.exists():
-            for candidate in media_root.rglob(subpath):
-                if candidate.is_dir():
-                    return candidate
-        
-        # Search in sibling folders (e.g. if root is '42.16' and media is in 'common')
-        # We check the parent directory for ANY 'media' folder
-        parent = root.parent
-        if parent != root:
-            for candidate in parent.rglob(subpath):
-                # Ensure we are still within the same mod's reach and it's a media path
+        # Search the full sub-mod tree (common + version folders), scoped to this mod only.
+        if root.exists():
+            for candidate in root.rglob(subpath):
                 if candidate.is_dir() and "media" in candidate.parts:
                     return candidate
             

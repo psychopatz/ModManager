@@ -32,25 +32,41 @@ export const useBatchProcess = ({ batchesRef, addLog, updateBatch, processDay, c
                 });
             }
 
-            // Fetch git history only when it was not already previewed in the generator.
+            // Fetch git history payload, preferring routed_history when available.
             let history = config.history || config._resolvedResumeCache?.history;
-            if (!history) {
+            let routedHistory = config.routedHistory || config._resolvedResumeCache?.routedHistory;
+            let routingWarnings = config.routingWarnings || config._resolvedResumeCache?.routingWarnings || [];
+
+            if (!history || !routedHistory) {
                 setStep('Fetching git history...');
                 const historyRes = await getBatchedGitHistory(since, until, branch, module);
                 if (historyRes.status !== 200 || !historyRes.data.history) {
                     throw new Error(historyRes.data?.error || `Git history fetch failed for branch '${branch}'`);
                 }
                 history = historyRes.data.history;
+                routedHistory = historyRes.data.routed_history || {};
+                routingWarnings = historyRes.data.routing_warnings || [];
             } else {
                 setStep('Preparing Stage 1...');
             }
-            updateBatch(id, { history });
+
+            if (routingWarnings.length > 0) {
+                log('warning', `Routing skipped ${routingWarnings.length} commit(s) with unknown submod paths.`);
+            }
+
+            const hasRoutedData = !!routedHistory && Object.keys(routedHistory).length > 0;
+            const stage1History = hasRoutedData ? routedHistory : history;
+
+            updateBatch(id, { history, routedHistory, routingWarnings });
 
             // ─── Stage 1 ───────────────────────────────────────────────────────
             const skipStage1 = config.resumeFromStage === 2 && config._resolvedResumeCache?.stage1Items?.length > 0;
-            const allDates = Object.keys(history).sort();
+            const allDates = Object.keys(stage1History).sort();
             const rangeDates = allDates.filter((d) => d >= since && d <= until);
-            const total = rangeDates.length;
+
+            const total = hasRoutedData
+                ? rangeDates.reduce((acc, d) => acc + Object.keys(stage1History[d] || {}).length, 0)
+                : rangeDates.length;
 
             if (total === 0) {
                 log('system', 'No git history found for the selected module, branch, and date range.');
@@ -59,22 +75,33 @@ export const useBatchProcess = ({ batchesRef, addLog, updateBatch, processDay, c
             }
 
             if (!skipStage1) {
-                for (let i = 0; i < total; i++) {
-                    // Pause support
-                    while (true) {
-                        const currentBatch = batchesRef.current.find((b) => b.id === id);
-                        if (!currentBatch) return;
-                        if (!currentBatch.paused) break;
-                        await new Promise((r) => setTimeout(r, 500));
-                    }
+                let processed = 0;
+                for (let i = 0; i < rangeDates.length; i++) {
                     const date = rangeDates[i];
-                    setStep(`Processing ${date}...`);
-                    const dayRepos = history[date];
-                    if (dayRepos) {
-                        log('system', `-> Building Page for ${date}`);
-                        await processDay(id, date, dayRepos, config);
+                    const dayGroups = stage1History[date] || {};
+
+                    const entries = hasRoutedData
+                        ? Object.entries(dayGroups)
+                        : [[module, dayGroups]];
+
+                    for (const [targetModule, commitsOrRepos] of entries) {
+                        // Pause support
+                        while (true) {
+                            const currentBatch = batchesRef.current.find((b) => b.id === id);
+                            if (!currentBatch) return;
+                            if (!currentBatch.paused) break;
+                            await new Promise((r) => setTimeout(r, 500));
+                        }
+
+                        setStep(`Processing ${date}${hasRoutedData ? ` (${targetModule})` : ''}...`);
+                        const dayRepos = hasRoutedData ? { [targetModule]: commitsOrRepos } : commitsOrRepos;
+                        if (dayRepos && Object.keys(dayRepos).length > 0) {
+                            log('system', `-> Building Page for ${date}${hasRoutedData ? ` [${targetModule}]` : ''}`);
+                            await processDay(id, date, dayRepos, { ...config, module: targetModule || module }, { targetModule: targetModule || module });
+                        }
+                        processed += 1;
+                        setProg(Math.round((processed / total) * 100));
                     }
-                    setProg(Math.round(((i + 1) / total) * 100));
                 }
             } else {
                 setProg(100);
@@ -112,8 +139,14 @@ export const useBatchProcess = ({ batchesRef, addLog, updateBatch, processDay, c
             });
 
             // ─── Stage 3 (auto-save) ───────────────────────────────────────────
+            // Pass categorization directly from the consolidation result to avoid
+            // a batchesRef timing issue (React useEffect may not have synced yet).
             if (config.autoSaveAfterConsolidation) {
-                await saveBatchVolume(id, { pages });
+                const consolidationResult = batchesRef.current.find((b) => b.id === id);
+                await saveBatchVolume(id, {
+                    pages,
+                    categorization: result?.categorization || consolidationResult?.categorization,
+                });
                 return;
             }
 

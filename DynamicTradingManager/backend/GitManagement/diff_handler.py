@@ -3,6 +3,7 @@ import logging
 from pathlib import Path
 import os
 from config.server_settings import get_server_settings
+from GitManagement.submod_routing import get_repo_submod_prefixes, route_commit_paths
 
 logger = logging.getLogger(__name__)
 
@@ -153,55 +154,127 @@ def _resolve_batched_repo_paths(module: str | None = None) -> dict[str, Path]:
 def get_batched_git_log(since_date: str, branch: str = "develop", until_date: str | None = None, module: str | None = None):
     """
     Fetches and groups commits by date, optionally scoped to a single selected module/project.
+    Returns both legacy history and routed history (date -> submod -> commits).
     """
     repos = _resolve_batched_repo_paths(module)
-    
-    batched = {} # date -> repo -> [commits]
+
+    batched = {}  # date -> repo -> [commits]
+    routed_history = {}  # date -> submod -> [commits]
+    routing_warnings = []
+
+    def _parse_name_status_line(line: str) -> tuple[str | None, str | None]:
+        parts = line.split("\t")
+        if len(parts) < 2:
+            return None, None
+
+        status = parts[0].strip()
+        if not status:
+            return None, None
+
+        # Rename/copy lines can be: R100\told\tnew — target path is the last field.
+        if status.startswith("R") or status.startswith("C"):
+            file_path = parts[-1].strip()
+        else:
+            file_path = parts[1].strip()
+
+        if not file_path:
+            return None, None
+        return status, file_path.replace("\\", "/")
     
     for repo_name, path in repos.items():
         if not path or not Path(path).exists():
             continue
-            
+
         try:
-            # Format: DATE|SUBJECT|BODY (with markers to avoid parsing issues)
-            # We use %as for author date (YYYY-MM-DD), %s subject, %b body
+            # Format metadata with a unit-separator to avoid collision with commit text.
+            # Use --name-status to capture changed files for submod routing.
             log_cmd = [
                 "git", "log", branch,
-                f"--since={since_date} 00:00:00", 
-                "--format=COMMIT_START%as|%s|%b|COMMIT_END"
+                f"--since={since_date} 00:00:00",
+                "--name-status",
+                "--format=COMMIT_START%x1f%as%x1f%s%x1f%H"
             ]
             if until_date:
                 log_cmd.insert(3, f"--until={until_date} 23:59:59")
-            
+
             output = subprocess.check_output(log_cmd, cwd=path, encoding="utf-8")
             parts = output.split("COMMIT_START")
+
+            submod_prefixes = get_repo_submod_prefixes(Path(path))
             
             for part in parts:
-                if "COMMIT_END" not in part:
+                chunk = part.strip("\n")
+                if not chunk:
                     continue
-                content = part.split("COMMIT_END")[0].strip()
-                if not content:
+
+                lines = chunk.splitlines()
+                if not lines:
                     continue
-                
-                fields = content.split("|", 2)
-                if len(fields) < 2:
+
+                fields = [f for f in lines[0].split("\x1f") if f]
+                if len(fields) < 3:
                     continue
-                    
+
                 date = fields[0]
                 subject = fields[1]
-                body = fields[2] if len(fields) > 2 else ""
-                
+                commit_hash = fields[2]
+                body = ""
+
+                changed_files = []
+                changed_file_paths = []
+                for file_line in lines[1:]:
+                    status, file_path = _parse_name_status_line(file_line.strip())
+                    if not file_path:
+                        continue
+                    changed_files.append({"status": status, "path": file_path})
+                    changed_file_paths.append(file_path)
+
                 if date not in batched:
                     batched[date] = {}
                 if repo_name not in batched[date]:
                     batched[date][repo_name] = []
-                    
+
+                route_info = route_commit_paths(changed_file_paths, submod_prefixes)
                 batched[date][repo_name].append({
                     "subject": subject,
-                    "body": body.strip()
+                    "body": body.strip(),
+                    "hash": commit_hash,
+                    "changed_files": changed_files,
+                    "resolved_submods": route_info["resolved_submods"],
+                    "primary_submod": route_info["primary_submod"],
+                    "unmatched_files": route_info["unmatched_files"],
                 })
+
+                if route_info["primary_submod"]:
+                    submod_id = route_info["primary_submod"]
+                    if date not in routed_history:
+                        routed_history[date] = {}
+                    if submod_id not in routed_history[date]:
+                        routed_history[date][submod_id] = []
+
+                    routed_history[date][submod_id].append({
+                        "subject": subject,
+                        "body": body.strip(),
+                        "repo": repo_name,
+                        "hash": commit_hash,
+                        "changed_files": changed_files,
+                        "resolved_submods": route_info["resolved_submods"],
+                        "primary_submod": route_info["primary_submod"],
+                    })
+                else:
+                    routing_warnings.append({
+                        "date": date,
+                        "repo": repo_name,
+                        "subject": subject,
+                        "reason": "no_submod_match",
+                        "unmatched_files": route_info["unmatched_files"],
+                    })
         except Exception as e:
             logger.warning(f"Error reading git log for {repo_name} on {branch}: {e}")
             continue
-            
-    return batched
+
+    return {
+        "history": batched,
+        "routed_history": routed_history,
+        "routing_warnings": routing_warnings,
+    }

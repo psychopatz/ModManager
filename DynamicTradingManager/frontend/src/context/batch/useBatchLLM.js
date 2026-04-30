@@ -9,6 +9,8 @@ import {
     normalizeOverallTitle,
     assembleCategoryPages,
     generateSteamBBCode,
+    stripLLMArtifacts,
+    extractSection,
 } from './batchUtils';
 
 /**
@@ -87,24 +89,27 @@ export const useBatchLLM = ({ batchesRef, setBatches, addLog, updateBatch, updat
 
         if (improveWithAI) {
             aiAttempted = true;
-            const stage1SystemMsg = systemPrompt ||
-                `You are a professional release notes writer for a Project Zomboid mod. You write concise, player-facing descriptions of changes. You NEVER reference git internals, commit hashes, or developer jargon. Your tone is clear, informative, and engaging.`;
+            const baseStage1SystemMsg =
+                `You are a professional release notes writer for a Project Zomboid mod. Write concise, player-facing descriptions of changes. NEVER reference git internals, commit hashes, or developer jargon. DO NOT use emoji characters. DO NOT use pipe separators (e.g. " | "). Prefer simple bullet lists ('-' or '*') for details and keep each bullet short (<=120 characters). Consolidate related items and avoid repeating the same detail.`;
+            const stage1SystemMsg = systemPrompt
+                ? `${baseStage1SystemMsg}\n\nAdditional user style guidance:\n${systemPrompt}`
+                : baseStage1SystemMsg;
 
             const expansionPrompt = `Analyze the following git commits for ${date} and produce a structured release note entry.
 
-You MUST output EXACTLY this format with each section marker on its own line. DO NOT include section markers inside the section text:
+You MUST output EXACTLY this format with each section marker on its own line. DO NOT include section markers inside the section text.
 
 [TITLE]
-Write a descriptive, player-facing title for today's changes. Examples: "Radio Scanner UI & LotteryAgent Expansion" or "Companion Combat Improvements". NOT a date.
+Write a descriptive, player-facing title for today's changes (3-8 words). Examples: "Radio Scanner UI & LotteryAgent Expansion" or "Companion Combat Improvements". NOT a date.
 
 [IMPACT]
-One sentence describing the most important player-facing benefit of these changes.
+One short sentence describing the primary player-facing benefit.
 
 [TAGS]
-feat, fix, refactor
+Comma-separated tags: feat, fix, refactor, perf, docs, chore
 
 [EXPLANATION]
-Write 3-6 bullet points or short paragraphs. Use **Bold Topic**: description format. Focus on what PLAYERS experience, not technical details. Do NOT include the [EXPLANATION] tag in the text.
+Write 2-4 concise bullet points using '-' or '*' as markers. Each bullet should be <=120 characters. Use plain-language bullets that summarize player-facing changes. Use markdown emphasis sparingly to highlight the most important change or the biggest player-facing benefit: bold (**text**) or italics (*text*). DO NOT use pipes ("|") or emojis. Consolidate similar items into a single bullet; avoid repeating the same information.
 
 [COMMIT_REFS]
 - RepoName: commit subject line
@@ -174,7 +179,7 @@ ${Object.entries(filteredDayData)
                                 if (part.content) streamContent += part.content;
                                 if (part.thinking) streamThinking += part.thinking;
                                 throttleUpdate();
-                            } catch (e) { /* malformed chunk */ }
+                            } catch { /* malformed chunk */ }
                         }
                     }
                     if (buffer.trim()) {
@@ -182,7 +187,7 @@ ${Object.entries(filteredDayData)
                             const part = JSON.parse(buffer);
                             if (part.content) streamContent += part.content;
                             if (part.thinking) streamThinking += part.thinking;
-                        } catch (e) { /* ignore */ }
+                        } catch { /* ignore */ }
                     }
                     throttleUpdate(true);
                     refinedText = streamContent;
@@ -195,6 +200,11 @@ ${Object.entries(filteredDayData)
                 delete abortRefs.current[batchId];
             }
         }
+
+        refinedText = stripLLMArtifacts(refinedText);
+        // Discard any reasoning preamble that appears before the first structured section marker.
+        const sectionStart = refinedText.search(/^\[(TITLE|IMPACT|TAGS|EXPLANATION|COMMIT_REFS)\]/mi);
+        if (sectionStart > 0) refinedText = refinedText.slice(sectionStart);
 
         let structuredItem = { ...fallbackStructuredItem };
 
@@ -213,21 +223,19 @@ ${Object.entries(filteredDayData)
                 log('warning', `   Stage 1 parse warnings for ${date}: ${structuredItem.parseWarnings.join(' ')}`);
             }
 
-            const lines = refinedText.split('\n');
-            let foundTitle = '';
-            for (let i = 0; i < Math.min(lines.length, 5); i++) {
-                const line = lines[i].trim();
-                const tagMatch = line.match(/^\[TITLE:\s*(.*?)\]/i);
-                const h1Match = line.match(/^#\s*(.*)/);
-                if (tagMatch) { foundTitle = tagMatch[1].trim(); lines.splice(i, 1); break; }
-                else if (h1Match) { foundTitle = h1Match[1].trim(); lines.splice(i, 1); break; }
-            }
-            if (foundTitle) {
-                page.title = foundTitle;
+            // Use structuredItem.title (parsed from full text via extractSection) — authoritative.
+            const resolvedTitle = (structuredItem.title && structuredItem.title !== `Updates for ${date}`)
+                ? structuredItem.title : null;
+            if (resolvedTitle) {
+                page.title = resolvedTitle;
                 const hBlock = page.blocks.find((b) => b.type === 'heading' && b.level === 1);
-                if (hBlock) hBlock.text = foundTitle;
+                if (hBlock) hBlock.text = resolvedTitle;
             }
 
+            // Build blocks only from the [EXPLANATION] section to prevent commit refs,
+            // section markers, or reasoning preamble from leaking into the rendered page.
+            const explanationText = extractSection(refinedText, 'EXPLANATION') || structuredItem.explanation || '';
+            const lines = explanationText.split('\n');
             let curBlocks = [];
             const flush = () => {
                 if (curBlocks.length > 0) { page.blocks.push({ type: 'bullet_list', items: curBlocks }); curBlocks = []; }
@@ -235,6 +243,8 @@ ${Object.entries(filteredDayData)
             for (const line of lines) {
                 const trimmed = line.trim();
                 if (!trimmed) continue;
+                // Skip stray section markers that may bleed into the extracted section.
+                if (/^\[(TITLE|IMPACT|TAGS|EXPLANATION|COMMIT_REFS)\]$/i.test(trimmed)) continue;
                 const hMatch = trimmed.match(/^###\s*(.*)/) || trimmed.match(/^##\s*(.*)/);
                 if (hMatch) { flush(); page.blocks.push({ type: 'heading', id: `ai_h_${pageId}_${slugify(hMatch[1])}`, level: 2, text: hMatch[1].trim() }); continue; }
                 const cMatch = trimmed.match(/^>\s*\[!(info|success|warning|danger)\]\s*(.*?)\s*\|\s*(.*)/i);
@@ -289,29 +299,38 @@ ${Object.entries(filteredDayData)
 
         const defaultConsolidationPrompt = `You are a professional release notes curator for a Project Zomboid mod called Dynamic Trading. Your job is to categorize structured update items into thematic pages and write an engaging overall update title.
 
-IMPORTANT RULES:
-- Do NOT use date ranges in the OVERALL_TITLE. Use a creative, player-facing title that captures the spirit of the changes.
-- OVERALL_TITLE must be 3-8 words. Examples: "The April Sprint: New Tools & Refinements", "Companion Overhaul and Balance Pass"
-- Every item_id must appear in CATEGORY_MAP exactly once.
-- Category summaries should be 1-2 sentences each describing what changed, written for players, not developers.
-- Use only these exact categories: Features, Fixes, QoL, Performance, Balance, Misc
+    IMPORTANT RULES:
+    - Do NOT use date ranges in the OVERALL_TITLE. Use a creative, player-facing title that captures the spirit of the changes.
+    - OVERALL_TITLE must be 3-8 words. Examples: "The April Sprint: New Tools & Refinements", "Companion Overhaul and Balance Pass"
+    - Every item_id must appear in CATEGORY_MAP exactly once.
+    - Use your own judgment when assigning categories. Commit prefixes are only hints, not strict rules.
+    - A commit titled with "feat" can still belong to Fixes, QoL, Performance, or Balance if that better matches the actual player-facing impact.
+    - Category summaries should be short (1 sentence each) and written for players, not developers. Keep each summary <=120 characters.
+    - Do NOT use emojis or pipe separators (e.g. "|"). Prefer plain language and bullets when listing multiple highlights.
+    - Use only these exact categories: Features, Fixes, QoL, Performance, Balance, Misc
 
-Output ONLY in this exact format (no extra text, no JSON, no markdown code blocks):
-OVERALL_TITLE: your creative player-facing title here
-CATEGORY_MAP:
-- item_id => Category
-CATEGORY_SUMMARIES:
-Features: what new features were added this cycle
-Fixes: what bugs or issues were resolved
-QoL: what quality-of-life improvements were made
-Performance: what performance improvements were made
-Balance: what balance changes were made
-Misc: any other changes
+    Output ONLY in this exact format (no extra text, no JSON, no markdown code blocks):
+    OVERALL_TITLE: your creative player-facing title here
+    OVERALL_SUMMARY: A very short (1-2 sentence) overall summary describing the update in plain language.
+    CATEGORY_MAP:
+    - item_id => Category
+    CATEGORY_SUMMARIES:
+    Features: what new features were added this cycle (1 short sentence)
+    Fixes: what bugs or issues were resolved (1 short sentence)
+    QoL: what quality-of-life improvements were made (1 short sentence)
+    Performance: what performance improvements were made (1 short sentence)
+    Balance: what balance changes were made (1 short sentence)
+    Misc: any other changes (1 short sentence)
 
-Input items (id | date | title):
-${stage1TitlePayload.map((item) => `- ${item.id} | ${item.date} | ${item.title}`).join('\n')}`;
+    Use markdown emphasis sparingly in OVERALL_SUMMARY and CATEGORY_SUMMARIES to highlight the key update impact, with **bold** or *italic* text. Do not use markdown code blocks.
 
-        const finalPrompt = customPrompt || defaultConsolidationPrompt;
+    Input items (id | date | title):
+    ${stage1TitlePayload.map((item) => `- ${item.id} | ${item.date} | ${item.title}`).join('\n')}`;
+
+        const finalPrompt = customPrompt
+            ? `${defaultConsolidationPrompt}\n\nAdditional user style guidance:\n${customPrompt}`
+            : defaultConsolidationPrompt;
+        const consolidationSystemMsg = 'You are a strict categorization assistant. Follow the requested markdown format exactly. Use your own judgment when categorizing: commit prefixes are hints, and some feat-labeled items belong in Fixes, QoL, Performance, or Balance based on actual impact. Do NOT use emojis or pipe separators ("|"). Keep category summaries short (<=120 characters).';
         updateStreamingData(batchId, '_consolidation', { status: 'streaming', thinking: '', content: '' });
 
         try {
@@ -320,8 +339,8 @@ ${stage1TitlePayload.map((item) => `- ${item.id} | ${item.date} | ${item.title}`
 
             if (provider.is_browser_only) {
                 if (!window.puter) throw new Error('Puter.js not available.');
-                const response = await window.puter.ai.chat(finalPrompt);
-                const streamContent = response?.toString() || '';
+                const response = await window.puter.ai.chat(`${consolidationSystemMsg}\n\n${finalPrompt}`);
+                const streamContent = stripLLMArtifacts(response?.toString() || '');
                 updateStreamingData(batchId, '_consolidation', { content: streamContent, thinking: '', status: 'completed' });
 
                 const categorization = parseStage2Categorization(streamContent, b.stage1Items || []);
@@ -359,7 +378,7 @@ ${stage1TitlePayload.map((item) => `- ${item.id} | ${item.date} | ${item.title}`
                 api_key: provider.api_key,
                 model: provider.model,
                 messages: [
-                    { role: 'system', content: 'You are a strict categorization assistant. Follow the requested markdown format exactly.' },
+                    { role: 'system', content: consolidationSystemMsg },
                     { role: 'user', content: finalPrompt },
                 ],
                 thinking: !!llmConfig.thinking,
@@ -385,10 +404,11 @@ ${stage1TitlePayload.map((item) => `- ${item.id} | ${item.date} | ${item.title}`
                         if (part.content) streamContent += part.content;
                         if (part.thinking) streamThinking += part.thinking;
                         updateStreamingData(batchId, '_consolidation', { content: streamContent, thinking: streamThinking, status: 'streaming' });
-                    } catch (e) { /* malformed chunk */ }
+                    } catch { /* malformed chunk */ }
                 }
             }
 
+            streamContent = stripLLMArtifacts(streamContent);
             const categorization = parseStage2Categorization(streamContent, b.stage1Items || []);
             categorization.overallTitle = normalizeOverallTitle(categorization.overallTitle, categorization, b.stage1Items || []);
             const newPages = assembleCategoryPages(b.stage1Items || [], categorization);

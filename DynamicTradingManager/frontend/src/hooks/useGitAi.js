@@ -8,7 +8,7 @@ import { useLLM } from './useLLM';
  */
 export const useGitAi = ({
   storageKey = 'git_ai_assistant',
-  defaultPrompt = 'Identify recent changes and summarize them in professional bullet points.',
+  defaultPrompt = 'Identify recent changes and summarize them in professional bullet points. Do NOT use emojis; prefer plain bullet markers (-) and concise phrasing. Avoid pipe separators.',
 }) => {
   const [systemPrompt, setSystemPrompt] = useState(() => {
     return localStorage.getItem(storageKey) || defaultPrompt;

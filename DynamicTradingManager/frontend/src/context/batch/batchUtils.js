@@ -8,7 +8,7 @@ export const CACHE_PREFIX = 'git_batch_cache_';
 
 export const safeJsonParse = (raw, fallback = null) => {
     if (!raw) return fallback;
-    try { return JSON.parse(raw); } catch (e) { return fallback; }
+    try { return JSON.parse(raw); } catch { return fallback; }
 };
 
 export const extractSection = (text, header) => {
@@ -23,11 +23,30 @@ export const extractSection = (text, header) => {
 
 export const SECTION_TAG_RE = /\[(TITLE|IMPACT|TAGS|EXPLANATION|COMMIT_REFS)\][:\s]*/gi;
 
+export const stripLLMArtifacts = (text) => {
+    let clean = String(text || '');
+
+    // Remove fenced code wrappers if the model encloses output in markdown blocks.
+    clean = clean.replace(/```(?:markdown|md|text|json)?\s*/gi, '').replace(/```/g, '');
+
+    // Remove common hidden reasoning tags leaked by some models.
+    clean = clean.replace(/<think>[\s\S]*?<\/think>/gi, '');
+    clean = clean.replace(/<analysis>[\s\S]*?<\/analysis>/gi, '');
+
+    // Remove standalone pseudo-tags that should never be user-facing content.
+    clean = clean
+        .split('\n')
+        .filter((line) => !/^\s*<\/?(think|analysis)\s*>\s*$/i.test(line))
+        .join('\n');
+
+    return clean.trim();
+};
+
 export const sanitizePageText = (text) =>
-    (text || '').replace(SECTION_TAG_RE, '').replace(/\n{3,}/g, '\n\n').trim();
+    stripLLMArtifacts(text).replace(SECTION_TAG_RE, '').replace(/\n{3,}/g, '\n\n').trim();
 
 export const parseStage1StructuredItem = (text, fallback) => {
-    const clean = (text || '').replace(/```[\s\S]*?```/g, (m) => m.replace(/```/g, '')).trim();
+    const clean = stripLLMArtifacts(text);
     const titleFromTag = extractSection(clean, 'TITLE').split('\n')[0]?.trim() || '';
     const impactFromTag = extractSection(clean, 'IMPACT').split('\n')[0]?.trim() || '';
     const tagsRaw = extractSection(clean, 'TAGS').split('\n')[0] || '';

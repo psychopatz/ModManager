@@ -30,14 +30,23 @@ export const useBatchVolume = ({ batchesRef, addLog, updateBatch, saveBatchCache
             const capitals = module.replace(/[^A-Z]/g, '') || 'Upd';
             const volId = `${capitals}_Upd_${until.replace(/-/g, '_')}`;
 
-            const cat = batch.categorization;
-            const activeCats = STAGE2_CATEGORIES.filter((c) => cat?.summaries?.[c]);
-            const rawDescription =
-                activeCats.length > 0
-                    ? activeCats.map((c) => `${c}: ${cat.summaries[c]}`).join(' | ')
-                    : `Consolidated updates from ${since} to ${until}`;
+            const cat = batch.categorization || {};
+            const activeCats = STAGE2_CATEGORIES.filter((c) => cat?.summaries?.[c] && String(cat.summaries[c] || '').trim());
+
+            // Build a concise, player-facing description instead of long pipe-separated lists.
+            let rawDescription = '';
+            if (cat?.overallTitle) {
+                const highlights = activeCats.slice(0, 2).map((c) => String(cat.summaries[c] || '').trim()).filter(Boolean);
+                rawDescription = highlights.length > 0 ? `${cat.overallTitle}. ${highlights.join(' — ')}` : `${cat.overallTitle}.`;
+            } else if (activeCats.length > 0) {
+                const highlights = activeCats.slice(0, 3).map((c) => String(cat.summaries[c] || '').trim()).filter(Boolean);
+                rawDescription = highlights.join(' — ');
+            } else {
+                rawDescription = `Consolidated updates from ${since} to ${until}`;
+            }
+
             const richDescription = rawDescription.length > 499 ? rawDescription.slice(0, 496) + '...' : rawDescription;
-            const chapterDesc = cat?.summaries?.Features || cat?.summaries?.Fixes || '';
+            const chapterDesc = (cat?.summaries?.Features || cat?.summaries?.Fixes || '');
 
             // Determine a sensible sort_order so newer updates appear after existing ones
             let assignedSortOrder = null;

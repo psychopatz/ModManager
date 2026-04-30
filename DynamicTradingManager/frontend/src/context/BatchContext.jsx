@@ -15,13 +15,30 @@ export const useBatchSystem = () => {
 };
 
 export const BatchProvider = ({ children }) => {
-    const [batches, setBatches] = useState(() => safeJsonParse(localStorage.getItem('global_active_batches'), []));
+    // Use a session-scoped instance id so multiple concurrently-opened windows
+    // don't stomp each other's active batch list in localStorage.
+    const INSTANCE_KEY = 'dtm_batch_instance_id';
+    const instanceId = (() => {
+        try {
+            let id = sessionStorage.getItem(INSTANCE_KEY);
+            if (!id) {
+                id = `inst_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+                sessionStorage.setItem(INSTANCE_KEY, id);
+            }
+            return id;
+        } catch (e) {
+            return `inst_${Date.now()}`;
+        }
+    })();
+    const GLOBAL_BATCH_KEY = `global_active_batches_${instanceId}`;
+
+    const [batches, setBatches] = useState(() => safeJsonParse(localStorage.getItem(GLOBAL_BATCH_KEY), []));
     const [openBatchId, setOpenBatchId] = useState(null);
     const batchesRef = useRef([]);
     const abortRefs = useRef({});
 
     useEffect(() => { batchesRef.current = batches; }, [batches]);
-    useEffect(() => { localStorage.setItem('global_active_batches', JSON.stringify(batches)); }, [batches]);
+    useEffect(() => { try { localStorage.setItem(GLOBAL_BATCH_KEY, JSON.stringify(batches)); } catch (e) {} }, [batches, GLOBAL_BATCH_KEY]);
 
     const openFullView = useCallback((id) => setOpenBatchId(id), []);
     const closeFullView = useCallback(() => setOpenBatchId(null), []);

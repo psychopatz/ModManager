@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { createManualDefinition, saveManualDefinition } from '../../services/api';
+import { createManualDefinition, saveManualDefinition, getManualEditorData } from '../../services/api';
 import { STAGE2_CATEGORIES } from './batchUtils';
 
 /**
@@ -39,6 +39,22 @@ export const useBatchVolume = ({ batchesRef, addLog, updateBatch, saveBatchCache
             const richDescription = rawDescription.length > 499 ? rawDescription.slice(0, 496) + '...' : rawDescription;
             const chapterDesc = cat?.summaries?.Features || cat?.summaries?.Fixes || '';
 
+            // Determine a sensible sort_order so newer updates appear after existing ones
+            let assignedSortOrder = null;
+            try {
+                const existingRes = await getManualEditorData('updates', module);
+                const existingManuals = existingRes?.data?.manuals || [];
+                if (existingManuals.length > 0) {
+                    const maxSort = existingManuals.reduce((acc, m) => Math.max(acc, Number(m.sort_order || 0)), Number.MIN_SAFE_INTEGER);
+                    if (Number.isFinite(maxSort) && maxSort > Number.MIN_SAFE_INTEGER) assignedSortOrder = maxSort + 1;
+                }
+            } catch (err) {
+                addLog(batchId, 'warning', `Failed to query existing manuals for sort order: ${err.message}`);
+            }
+
+            // Fallback base for updates mirrors backend default behavior (updates default to 0)
+            if (assignedSortOrder === null) assignedSortOrder = 0 + 1;
+
             const payload = {
                 manual_id: volId,
                 module,
@@ -46,6 +62,7 @@ export const useBatchVolume = ({ batchesRef, addLog, updateBatch, saveBatchCache
                 description: richDescription,
                 start_page_id: pages[0]?.id || 'index',
                 audiences: [module],
+                sort_order: assignedSortOrder,
                 is_whats_new: true,
                 manual_type: 'whats_new',
                 source_folder: 'WhatsNew',

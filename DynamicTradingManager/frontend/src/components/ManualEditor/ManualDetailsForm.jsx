@@ -65,8 +65,9 @@ const getSourceFolderOptions = (module, editorScope = 'manuals') => {
 };
 
 const getPrimaryAudience = (manual) => manual?.audiences?.[0] || 'DynamicTradingCommon';
-const TITLE_MAX_LENGTH = 22;
-const DESCRIPTION_MAX_LENGTH = 69;
+// Keep these in sync with the backend normalize limits
+const TITLE_MAX_LENGTH = 500;
+const DESCRIPTION_MAX_LENGTH = 500;
 
 const incrementVersion = (value) => {
   const match = String(value || '').trim().match(/^(\d+)(?:\.(\d+))?(?:\.(\d+))?$/);

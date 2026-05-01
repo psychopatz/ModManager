@@ -108,9 +108,9 @@ class DonatorEntryRequest(BaseModel):
 
 class DonatorsSaveRequest(BaseModel):
     supporters: List[DonatorEntryRequest] = []
-    title: Optional[str] = "Hall of Fame Donators"
-    page_title: Optional[str] = "Hall of Fame"
-    block_title: Optional[str] = "Hall of Fame Donators"
+    title: Optional[str] = "Thank You"
+    page_title: Optional[str] = "Supporters"
+    block_title: Optional[str] = "Thank You"
     autoplay_ms: Optional[int] = 4000
     currency_symbol: Optional[str] = "$"
     thank_you_text: Optional[str] = "Thank you to everyone helping keep Dynamic Trading moving."

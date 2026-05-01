@@ -37,10 +37,46 @@ export const formatDonation = (value, currencySymbol = '$') => {
 
 export const resolveDonatorImageUrl = (backendOrigin, assetBaseUrl, imagePath) => {
   if (!imagePath) return '';
-  const normalized = String(imagePath);
-  if (normalized.startsWith('media/ui/Manuals/')) {
-    const suffix = normalized.replace('media/ui/Manuals/', '').split('/').slice(1).join('/');
-    return `${backendOrigin}${assetBaseUrl}/${suffix}`;
+  const normalized = String(imagePath).trim().replace(/\\+/g, '/');
+
+  if (!normalized) return '';
+  if (/^(https?:)?\/\//i.test(normalized) || normalized.startsWith('data:') || normalized.startsWith('blob:')) {
+    return normalized;
   }
-  return normalized;
+
+  const joinPath = (base, path) => {
+    const safeBase = String(base || '').replace(/\/+$/, '');
+    const safePath = String(path || '').replace(/^\/+/, '');
+    if (!safeBase) return safePath ? `/${safePath}` : '';
+    if (!safePath) return safeBase;
+    return `${safeBase}/${safePath}`;
+  };
+
+  if (normalized.startsWith('/api/') || normalized.startsWith('/static/') || normalized.startsWith('/assets/')) {
+    return normalized;
+  }
+
+  if (normalized.startsWith('media/ui/Manuals/')) {
+    const relative = normalized.replace(/^media\/ui\/Manuals\/+/, '');
+    const parts = relative.split('/').filter(Boolean);
+    const manualId = parts[0] || '';
+
+    if (assetBaseUrl) {
+      const base = String(assetBaseUrl).replace(/\/+$/, '');
+      const suffix = manualId && base.endsWith(`/${manualId}`) ? parts.slice(1).join('/') : relative;
+      return joinPath(base, suffix || manualId);
+    }
+
+    return backendOrigin ? joinPath(backendOrigin, normalized) : `/${normalized}`;
+  }
+
+  if (assetBaseUrl) {
+    return joinPath(assetBaseUrl, normalized);
+  }
+
+  if (normalized.startsWith('/')) {
+    return normalized;
+  }
+
+  return backendOrigin ? joinPath(backendOrigin, normalized) : normalized;
 };

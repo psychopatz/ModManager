@@ -75,6 +75,21 @@ def _render_block(block: dict) -> str:
             f'width = {int(block["width"])}, height = {int(block["height"])} }}'
         )
     if block["type"] == "supporter_carousel":
+        compact = block.get("compact", False)
+        supporters_ref = str(block.get("supporters_ref") or "").strip()
+        if supporters_ref:
+            compact_part = ", compact = true" if compact else ""
+            return (
+                '{ type = "supporter_carousel", title = "%s", autoplayMs = %d, currencySymbol = "%s", thankYouText = "%s"%s, supportersRef = "%s" }'
+                % (
+                    _escape(block.get("title", "")),
+                    int(block.get("autoplay_ms", 4000) or 4000),
+                    _escape(block.get("currency_symbol", "$")),
+                    _escape(block.get("thank_you_text", "")),
+                    compact_part,
+                    _escape(supporters_ref),
+                )
+            )
         supporters = []
         for supporter in block.get("supporters", []):
             supporters.append(
@@ -88,13 +103,15 @@ def _render_block(block: dict) -> str:
                     "true" if supporter.get("active", True) else "false",
                 )
             )
+        compact_part = ", compact = true" if compact else ""
         return (
-            '{ type = "supporter_carousel", title = "%s", autoplayMs = %d, currencySymbol = "%s", thankYouText = "%s", supporters = { %s } }'
+            '{ type = "supporter_carousel", title = "%s", autoplayMs = %d, currencySymbol = "%s", thankYouText = "%s"%s, supporters = { %s } }'
             % (
                 _escape(block.get("title", "")),
                 int(block.get("autoplay_ms", 4000) or 4000),
                 _escape(block.get("currency_symbol", "$")),
                 _escape(block.get("thank_you_text", "")),
+                compact_part,
                 ", ".join(supporters),
             )
         )

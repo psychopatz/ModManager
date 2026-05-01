@@ -164,6 +164,7 @@ async def get_batch_git_history(
     except Exception as exc:
         logger.error("Error fetching batched git history: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
+@router.get("/api/manuals/assets/{module}/{manual_id}/{filename:path}")
 @router.get("/assets/{module}/{manual_id}/{filename:path}")
 def proxy_manual_asset(module: str, manual_id: str, filename: str):
     """Dynamically resolves and serves manual assets from the correct mod root."""

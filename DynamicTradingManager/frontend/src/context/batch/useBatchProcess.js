@@ -111,9 +111,10 @@ export const useBatchProcess = ({ batchesRef, addLog, updateBatch, processDay, c
             // ─── Stage 2 ───────────────────────────────────────────────────────
             updateBatch(id, { progress: 100 });
             let pages = [];
+            let consolidationResult = null;
             if (config.resumeFromStage !== 3) {
-                const result = await consolidateBatch(id, config.consolidationPrompt);
-                pages = [...(result?.newPages || [])];
+                consolidationResult = await consolidateBatch(id, config.consolidationPrompt);
+                pages = [...(consolidationResult?.newPages || [])];
             } else {
                 const finalBatch = batchesRef.current.find((b) => b.id === id);
                 pages = [...(finalBatch?.finalPages || finalBatch?.consolidatedPages || [])];
@@ -142,10 +143,10 @@ export const useBatchProcess = ({ batchesRef, addLog, updateBatch, processDay, c
             // Pass categorization directly from the consolidation result to avoid
             // a batchesRef timing issue (React useEffect may not have synced yet).
             if (config.autoSaveAfterConsolidation) {
-                const consolidationResult = batchesRef.current.find((b) => b.id === id);
+                const latestBatchState = batchesRef.current.find((b) => b.id === id);
                 await saveBatchVolume(id, {
                     pages,
-                    categorization: result?.categorization || consolidationResult?.categorization,
+                    categorization: consolidationResult?.categorization || latestBatchState?.categorization,
                 });
                 return;
             }

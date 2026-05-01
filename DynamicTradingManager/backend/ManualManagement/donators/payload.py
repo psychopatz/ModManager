@@ -118,7 +118,7 @@ def build_manual_payload(data: dict | None = None) -> dict:
         "chapters": [
             {
                 "id": CHAPTER_ID,
-                "title": "Hall of Fame",
+                "title": "Supporters",
                 "description": "Recognizes the supporters helping keep the project moving.",
             }
         ],
@@ -127,7 +127,7 @@ def build_manual_payload(data: dict | None = None) -> dict:
                 "id": PAGE_ID,
                 "chapter_id": CHAPTER_ID,
                 "title": donor_data["page_title"],
-                "keywords": ["support", "donators", "hall of fame", "supporters", "donation"],
+                "keywords": ["support", "donators", "supporters", "donation", "thank you"],
                 "blocks": [
                     {
                         "type": "supporter_carousel",

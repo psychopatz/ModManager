@@ -255,12 +255,25 @@ def _normalize_block(block: dict, page_id: str, position: int, used_section_ids:
         }
 
     if block_type == "supporter_carousel":
+        supporters_ref = str(block.get("supporters_ref") or block.get("supportersRef") or "").strip()
+        compact = bool(block.get("compact", False))
+        if supporters_ref:
+            # Modular block — references another manual's supporters, no embedded list.
+            return {
+                "type": "supporter_carousel",
+                "title": str(block.get("title", "")).strip(),
+                "autoplay_ms": max(1000, int(block.get("autoplay_ms", 4000) or 4000)),
+                "currency_symbol": str(block.get("currency_symbol", "$") or "$"),
+                "thank_you_text": str(block.get("thank_you_text") or block.get("thankYouText") or "").strip(),
+                "compact": compact,
+                "supporters_ref": supporters_ref,
+            }
         supporter_ids: set[str] = set()
         supporters = [
             _normalize_supporter_entry(entry, page_id, index + 1, supporter_ids)
             for index, entry in enumerate(block.get("supporters") or [])
         ]
-        return {
+        result: dict = {
             "type": "supporter_carousel",
             "title": str(block.get("title", "")).strip(),
             "autoplay_ms": max(1000, int(block.get("autoplay_ms", 4000) or 4000)),
@@ -268,6 +281,9 @@ def _normalize_block(block: dict, page_id: str, position: int, used_section_ids:
             "thank_you_text": str(block.get("thank_you_text") or block.get("thankYouText") or "").strip(),
             "supporters": supporters,
         }
+        if compact:
+            result["compact"] = True
+        return result
 
     raise ValueError(f'Unsupported block type "{block_type}" on page "{page_id}".')
 

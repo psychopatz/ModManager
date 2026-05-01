@@ -22,6 +22,7 @@ const BatchConfigForm = ({
     history,
     routedHistory,
     routingWarnings = [],
+    routingDebug = null,
     typeFilters, toggleTypeFilter, getTypeColor,
     improveWithAI, setImproveWithAI,
     autoSaveAfterConsolidation, setAutoSaveAfterConsolidation,
@@ -88,6 +89,24 @@ const BatchConfigForm = ({
         return map;
     }, [routedHistory]);
 
+    const routingDebugSummary = React.useMemo(() => {
+        if (!routingDebug || typeof routingDebug !== 'object') return null;
+        const repos = Object.entries(routingDebug.repos || {}).map(([repoName, details]) => ({
+            repoName,
+            prefixCount: Number(details?.submod_prefix_count || 0),
+            commitsScanned: Number(details?.commits_scanned || 0),
+            routedCommits: Number(details?.commits_routed || 0),
+            unmatchedCommits: Number(details?.commits_unmatched || 0),
+        }));
+        return {
+            requestedModule: routingDebug.requested_module || module,
+            repos,
+            totalCommits: Number(routingDebug.total_commits || 0),
+            totalRouted: Number(routingDebug.total_routed_commits || 0),
+            totalUnmatched: Number(routingDebug.total_unmatched_commits || 0),
+        };
+    }, [routingDebug, module]);
+
     return (
         <Stack spacing={3}>
             {/* Context Header */}
@@ -148,6 +167,32 @@ const BatchConfigForm = ({
                             <Typography variant="caption" sx={{ color: 'warning.main', fontSize: '0.65rem' }}>
                                 {routingWarnings.length} commit{routingWarnings.length !== 1 ? 's' : ''} could not be routed to a submod
                             </Typography>
+                        </Stack>
+                    )}
+                </Paper>
+            )}
+
+            {!routingSummary && rawCommits.length > 0 && (
+                <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'rgba(255,193,7,0.08)', borderColor: 'rgba(255,193,7,0.35)', borderRadius: 2 }}>
+                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                        <WarningIcon sx={{ fontSize: 16, color: 'warning.main' }} />
+                        <Typography variant="caption" fontWeight={800} sx={{ color: 'warning.main', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                            No Routed Destinations
+                        </Typography>
+                    </Stack>
+                    <Typography variant="caption" sx={{ display: 'block', mb: routingDebugSummary ? 1 : 0 }}>
+                        Commits were found, but none mapped to a submod destination. Batch split by version will not work until routing matches file paths.
+                    </Typography>
+                    {routingDebugSummary && (
+                        <Stack spacing={0.5}>
+                            <Typography variant="caption" sx={{ opacity: 0.75, fontSize: '0.65rem' }}>
+                                Requested module: {routingDebugSummary.requestedModule} • Total commits: {routingDebugSummary.totalCommits} • Routed: {routingDebugSummary.totalRouted} • Unmatched: {routingDebugSummary.totalUnmatched}
+                            </Typography>
+                            {routingDebugSummary.repos.map((repo) => (
+                                <Typography key={repo.repoName} variant="caption" sx={{ opacity: 0.8, fontSize: '0.65rem', fontFamily: 'monospace' }}>
+                                    {repo.repoName}: prefixes={repo.prefixCount}, scanned={repo.commitsScanned}, routed={repo.routedCommits}, unmatched={repo.unmatchedCommits}
+                                </Typography>
+                            ))}
                         </Stack>
                     )}
                 </Paper>

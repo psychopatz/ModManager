@@ -155,11 +155,13 @@ async def get_batch_git_history(
         history = data.get("history", {}) if isinstance(data, dict) else data
         routed_history = data.get("routed_history", {}) if isinstance(data, dict) else {}
         routing_warnings = data.get("routing_warnings", []) if isinstance(data, dict) else []
+        routing_debug = data.get("routing_debug", {}) if isinstance(data, dict) else {}
         return {
             "success": True,
             "history": history,
             "routed_history": routed_history,
             "routing_warnings": routing_warnings,
+            "routing_debug": routing_debug,
         }
     except Exception as exc:
         logger.error("Error fetching batched git history: %s", exc)

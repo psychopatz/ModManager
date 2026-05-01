@@ -19,7 +19,6 @@ import {
 } from '@mui/icons-material';
 import { getBatchedGitHistory, getSuiteBranches } from '../../services/api';
 import { useBatchSystem } from '../../context/BatchContext';
-import { useLLM } from '../../hooks/useLLM';
 
 // New Modular Sub-components
 import BatchConfigForm from './BatchGenerator/BatchConfigForm';
@@ -27,6 +26,10 @@ import BatchProcessMonitor from './BatchGenerator/BatchProcessMonitor';
 
 const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop', module = '', targets = [], modules = [], attachedBatchId = null }) => {
   const { batches, spawnBatch, openBatchId, closeFullView, retryDay, consolidateBatch, saveBatchVolume, listBatchCaches, clearBatchCache } = useBatchSystem();
+  const resolvedModule = useMemo(
+    () => String(module || modules?.[0]?.id || 'DynamicTradingCommon').trim(),
+    [module, modules]
+  );
   
   // State for Configuration
   const [since, setSince] = useState(localStorage.getItem('git_batch_since') || new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0]);
@@ -35,6 +38,7 @@ const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop', m
   const [history, setHistory] = useState(null);
   const [routedHistory, setRoutedHistory] = useState(null);
   const [routingWarnings, setRoutingWarnings] = useState([]);
+  const [routingDebug, setRoutingDebug] = useState(null);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState({ type: '', message: '' });
   
@@ -120,22 +124,33 @@ const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop', m
     setLoading(true);
     setStatus({ type: 'info', message: 'Fetching git history...' });
     try {
-      const res = await getBatchedGitHistory(since, until, branchName, module || targets[0]);
+      const res = await getBatchedGitHistory(since, until, branchName, resolvedModule);
       const historyData = res.data.history || {};
       const routedHistoryData = res.data.routed_history || {};
       const routingWarningsData = res.data.routing_warnings || [];
+      const routingDebugData = res.data.routing_debug || null;
       setHistory(historyData);
       setRoutedHistory(routedHistoryData);
       setRoutingWarnings(routingWarningsData);
+      setRoutingDebug(routingDebugData);
       
-      const totalDays = Object.keys(historyData).length;
       const totalCommits = Object.values(historyData).reduce((acc, reposMap) => {
-        // reposMap is { "RepoName": [commits], ... }
         return acc + Object.values(reposMap).reduce((dayAcc, commits) => dayAcc + (commits?.length || 0), 0);
       }, 0);
-      
-      setStatus({ type: 'success', message: '' });
+      const totalRouted = Object.values(routedHistoryData).reduce((acc, submodsMap) => {
+        return acc + Object.values(submodsMap || {}).reduce((innerAcc, commits) => innerAcc + (commits?.length || 0), 0);
+      }, 0);
+
+      if (totalCommits > 0 && totalRouted === 0) {
+        setStatus({
+          type: 'warning',
+          message: `Found ${totalCommits} commit(s) but none were routed to submods for ${resolvedModule}. Check routing diagnostics below.`,
+        });
+      } else {
+        setStatus({ type: 'success', message: '' });
+      }
     } catch (e) {
+      setRoutingDebug(null);
       setStatus({ type: 'error', message: e.message });
     } finally {
       setLoading(false);
@@ -153,7 +168,7 @@ const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop', m
       await spawnBatch({
         since, 
         until, 
-        module: module || targets[0] || 'DynamicTrading', 
+        module: resolvedModule,
         branch: branchName,
         history,
         routedHistory,
@@ -245,7 +260,7 @@ const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop', m
           ) : (
               <BatchConfigForm 
                 status={status}
-                module={module || targets[0] || 'DynamicTrading'}
+                module={resolvedModule}
                 since={since} setSince={setSince}
                 until={until} setUntil={setUntil}
                 branchName={branchName} setBranchName={setBranchName}
@@ -254,6 +269,7 @@ const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop', m
                 history={history}
                 routedHistory={routedHistory}
                 routingWarnings={routingWarnings}
+                routingDebug={routingDebug}
                 typeFilters={typeFilters} toggleTypeFilter={toggleTypeFilter} 
                 getTypeColor={getTypeColor}
                 improveWithAI={improveWithAI} setImproveWithAI={setImproveWithAI}
@@ -317,7 +333,7 @@ const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop', m
                 <Button 
                     variant="contained" 
                     onClick={startBatch} 
-                  disabled={!history || loading || startingBatch || !module}
+                  disabled={!history || loading || startingBatch || !resolvedModule}
                     sx={{ px: 4 }}
                 >
                   {startingBatch ? 'Starting...' : 'Start Processing'}

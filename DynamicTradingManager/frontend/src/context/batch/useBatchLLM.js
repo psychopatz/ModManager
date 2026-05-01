@@ -180,6 +180,15 @@ ${Object.entries(filteredDayData)
                             if (!trimmed) continue;
                             try {
                                 const part = JSON.parse(trimmed);
+                                if (part.error) {
+                                    if (part.error_type === 'rate_limit') {
+                                        const retryHint = part.retry_after ? ` Retry after ${part.retry_after}s.` : '';
+                                        log('warning', `   AI rate-limited for ${date}.${retryHint}`);
+                                    } else {
+                                        log('warning', `   AI provider warning for ${date}: ${part.error}`);
+                                    }
+                                    continue;
+                                }
                                 if (part.content) streamContent += part.content;
                                 if (part.thinking) streamThinking += part.thinking;
                                 throttleUpdate();
@@ -189,6 +198,14 @@ ${Object.entries(filteredDayData)
                     if (buffer.trim()) {
                         try {
                             const part = JSON.parse(buffer);
+                            if (part.error) {
+                                if (part.error_type === 'rate_limit') {
+                                    const retryHint = part.retry_after ? ` Retry after ${part.retry_after}s.` : '';
+                                    log('warning', `   AI rate-limited for ${date}.${retryHint}`);
+                                } else {
+                                    log('warning', `   AI provider warning for ${date}: ${part.error}`);
+                                }
+                            }
                             if (part.content) streamContent += part.content;
                             if (part.thinking) streamThinking += part.thinking;
                         } catch { /* ignore */ }
@@ -395,6 +412,7 @@ ${Object.entries(filteredDayData)
             let streamContent = '';
             let streamThinking = '';
             let buffer = '';
+            let streamError = null;
 
             while (true) {
                 const { done, value } = await reader.read();
@@ -407,11 +425,23 @@ ${Object.entries(filteredDayData)
                     if (!trimmed) continue;
                     try {
                         const part = JSON.parse(trimmed);
+                        if (part.error) {
+                            streamError = part;
+                            continue;
+                        }
                         if (part.content) streamContent += part.content;
                         if (part.thinking) streamThinking += part.thinking;
                         updateStreamingData(batchId, '_consolidation', { content: streamContent, thinking: streamThinking, status: 'streaming' });
                     } catch { /* malformed chunk */ }
                 }
+            }
+
+            if (streamError) {
+                if (streamError.error_type === 'rate_limit') {
+                    const retryHint = streamError.retry_after ? ` Retry after ${streamError.retry_after}s.` : '';
+                    throw new Error(`LLM provider rate limited during consolidation.${retryHint}`);
+                }
+                throw new Error(streamError.error || 'LLM provider stream error during consolidation.');
             }
 
             streamContent = stripLLMArtifacts(streamContent);

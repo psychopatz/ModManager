@@ -161,6 +161,17 @@ def get_batched_git_log(since_date: str, branch: str = "develop", until_date: st
     batched = {}  # date -> repo -> [commits]
     routed_history = {}  # date -> submod -> [commits]
     routing_warnings = []
+    routing_debug = {
+        "requested_module": module,
+        "branch": branch,
+        "since": since_date,
+        "until": until_date,
+        "resolved_repos": [str(name) for name in repos.keys()],
+        "repos": {},
+        "total_commits": 0,
+        "total_routed_commits": 0,
+        "total_unmatched_commits": 0,
+    }
 
     def _parse_name_status_line(line: str) -> tuple[str | None, str | None]:
         parts = line.split("\t")
@@ -201,6 +212,14 @@ def get_batched_git_log(since_date: str, branch: str = "develop", until_date: st
             parts = output.split("COMMIT_START")
 
             submod_prefixes = get_repo_submod_prefixes(Path(path))
+            repo_debug = {
+                "repo_path": str(path),
+                "submod_prefix_count": sum(len(prefixes or []) for prefixes in submod_prefixes.values()),
+                "submods_discovered": sorted(list(submod_prefixes.keys())),
+                "commits_scanned": 0,
+                "commits_routed": 0,
+                "commits_unmatched": 0,
+            }
             
             for part in parts:
                 chunk = part.strip("\n")
@@ -235,6 +254,8 @@ def get_batched_git_log(since_date: str, branch: str = "develop", until_date: st
                     batched[date][repo_name] = []
 
                 route_info = route_commit_paths(changed_file_paths, submod_prefixes)
+                repo_debug["commits_scanned"] += 1
+                routing_debug["total_commits"] += 1
                 batched[date][repo_name].append({
                     "subject": subject,
                     "body": body.strip(),
@@ -245,23 +266,29 @@ def get_batched_git_log(since_date: str, branch: str = "develop", until_date: st
                     "unmatched_files": route_info["unmatched_files"],
                 })
 
-                if route_info["primary_submod"]:
-                    submod_id = route_info["primary_submod"]
+                routed_submods = route_info.get("resolved_submods") or ([] if not route_info.get("primary_submod") else [route_info.get("primary_submod")])
+                if routed_submods:
+                    repo_debug["commits_routed"] += 1
+                    routing_debug["total_routed_commits"] += 1
                     if date not in routed_history:
                         routed_history[date] = {}
-                    if submod_id not in routed_history[date]:
-                        routed_history[date][submod_id] = []
 
-                    routed_history[date][submod_id].append({
-                        "subject": subject,
-                        "body": body.strip(),
-                        "repo": repo_name,
-                        "hash": commit_hash,
-                        "changed_files": changed_files,
-                        "resolved_submods": route_info["resolved_submods"],
-                        "primary_submod": route_info["primary_submod"],
-                    })
+                    for submod_id in routed_submods:
+                        if submod_id not in routed_history[date]:
+                            routed_history[date][submod_id] = []
+
+                        routed_history[date][submod_id].append({
+                            "subject": subject,
+                            "body": body.strip(),
+                            "repo": repo_name,
+                            "hash": commit_hash,
+                            "changed_files": changed_files,
+                            "resolved_submods": route_info["resolved_submods"],
+                            "primary_submod": route_info["primary_submod"],
+                        })
                 else:
+                    repo_debug["commits_unmatched"] += 1
+                    routing_debug["total_unmatched_commits"] += 1
                     routing_warnings.append({
                         "date": date,
                         "repo": repo_name,
@@ -269,12 +296,23 @@ def get_batched_git_log(since_date: str, branch: str = "develop", until_date: st
                         "reason": "no_submod_match",
                         "unmatched_files": route_info["unmatched_files"],
                     })
+            routing_debug["repos"][repo_name] = repo_debug
         except Exception as e:
             logger.warning(f"Error reading git log for {repo_name} on {branch}: {e}")
+            routing_debug["repos"][repo_name] = {
+                "repo_path": str(path),
+                "error": str(e),
+                "submod_prefix_count": 0,
+                "submods_discovered": [],
+                "commits_scanned": 0,
+                "commits_routed": 0,
+                "commits_unmatched": 0,
+            }
             continue
 
     return {
         "history": batched,
         "routed_history": routed_history,
         "routing_warnings": routing_warnings,
+        "routing_debug": routing_debug,
     }

@@ -7,13 +7,61 @@ All config (base_url, api_key, model) is passed per-request from the frontend.
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import random
+import time
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, AsyncGenerator
 
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, RateLimitError
 
 logger = logging.getLogger(__name__)
+
+
+# Provider pacing state (process-local): helps prevent bursty 429s under batch runs.
+_PROVIDER_PACING_LOCKS: dict[str, asyncio.Lock] = {}
+_PROVIDER_NEXT_ALLOWED_TS: dict[str, float] = {}
+
+
+def _provider_key(base_url: str) -> str:
+    return str(base_url or "").strip().lower().rstrip("/")
+
+
+def _provider_min_interval_seconds(base_url: str) -> float:
+    normalized = _provider_key(base_url)
+
+    # Local providers generally don't need pacing.
+    if "localhost" in normalized or "127.0.0.1" in normalized:
+        return 0.0
+
+    # Cloud provider-specific defaults.
+    if "integrate.api.nvidia.com" in normalized:
+        return 1.25
+    if "api.groq.com" in normalized:
+        return 0.6
+
+    # Conservative default for unknown cloud endpoints.
+    return 0.4
+
+
+async def _wait_for_provider_slot(*, base_url: str) -> None:
+    interval = _provider_min_interval_seconds(base_url)
+    if interval <= 0:
+        return
+
+    key = _provider_key(base_url)
+    lock = _PROVIDER_PACING_LOCKS.setdefault(key, asyncio.Lock())
+
+    async with lock:
+        now = time.monotonic()
+        earliest = _PROVIDER_NEXT_ALLOWED_TS.get(key, 0.0)
+        delay = earliest - now
+        if delay > 0:
+            await asyncio.sleep(delay)
+            now = time.monotonic()
+
+        _PROVIDER_NEXT_ALLOWED_TS[key] = now + interval
 
 
 @dataclass
@@ -32,7 +80,60 @@ def _build_client(base_url: str, api_key: str) -> AsyncOpenAI:
         base_url=base_url.rstrip("/"),
         api_key=api_key or "no-key",
         timeout=httpx.Timeout(600.0, connect=60.0),
+        # We manage rate-limit retries ourselves to avoid short retry storms.
+        max_retries=0,
     )
+
+
+def _extract_retry_after_seconds(exc: Exception) -> float | None:
+    response = getattr(exc, "response", None)
+    if response is None:
+        return None
+    headers = getattr(response, "headers", None) or {}
+    value = headers.get("retry-after") or headers.get("Retry-After")
+    if not value:
+        return None
+    try:
+        parsed = float(str(value).strip())
+    except Exception:
+        return None
+    return parsed if parsed > 0 else None
+
+
+async def _create_with_rate_limit_backoff(
+    client: AsyncOpenAI,
+    kwargs: dict[str, Any],
+    *,
+    model: str,
+    base_url: str,
+    max_attempts: int = 6,
+    base_delay_seconds: float = 1.5,
+    max_delay_seconds: float = 30.0,
+):
+    """Create a completion with explicit 429 backoff and jitter."""
+    attempt = 1
+    while True:
+        try:
+            await _wait_for_provider_slot(base_url=base_url)
+            return await client.chat.completions.create(**kwargs)
+        except RateLimitError as exc:
+            if attempt >= max_attempts:
+                raise
+
+            retry_after = _extract_retry_after_seconds(exc)
+            backoff = min(max_delay_seconds, base_delay_seconds * (2 ** (attempt - 1)))
+            wait_seconds = retry_after if retry_after is not None else (backoff + random.uniform(0.0, 0.6))
+
+            logger.warning(
+                "LLM rate-limited (model=%s base_url=%s attempt=%d/%d). Backing off %.2fs.",
+                model,
+                base_url,
+                attempt,
+                max_attempts,
+                wait_seconds,
+            )
+            await asyncio.sleep(wait_seconds)
+            attempt += 1
 
 
 def _is_reasoning_effort_supported(model: str, base_url: str) -> bool:
@@ -122,7 +223,12 @@ async def chat_completion(
             thinking_parts = []
             response_model = model
 
-            stream_response = await client.chat.completions.create(**kwargs)
+            stream_response = await _create_with_rate_limit_backoff(
+                client,
+                kwargs,
+                model=model,
+                base_url=base_url,
+            )
             async for chunk in stream_response:
                 if not chunk.choices:
                     continue
@@ -141,7 +247,12 @@ async def chat_completion(
                 usage={},
             )
         else:
-            response = await client.chat.completions.create(**kwargs)
+            response = await _create_with_rate_limit_backoff(
+                client,
+                kwargs,
+                model=model,
+                base_url=base_url,
+            )
             choice = response.choices[0] if response.choices else None
             content = ""
             thinking_content = None
@@ -209,7 +320,12 @@ async def stream_completion(
     logger.info("Starting LLM stream: model=%s base_url=%s thinking=%s", model, base_url, thinking)
 
     try:
-        stream_response = await client.chat.completions.create(**kwargs)
+        stream_response = await _create_with_rate_limit_backoff(
+            client,
+            kwargs,
+            model=model,
+            base_url=base_url,
+        )
         async for chunk in stream_response:
             try:
                 if not chunk.choices:
@@ -241,9 +357,24 @@ async def stream_completion(
                 logger.error("Error processing stream chunk: %s", inner_exc, exc_info=True)
                 continue
                 
+    except RateLimitError as exc:
+        retry_after = _extract_retry_after_seconds(exc)
+        logger.warning(
+            "LLM stream rate-limited after retries: model=%s base_url=%s retry_after=%s",
+            model,
+            base_url,
+            retry_after,
+        )
+        payload = {
+            "error": str(exc) or "LLM provider rate limited",
+            "error_type": "rate_limit",
+        }
+        if retry_after is not None:
+            payload["retry_after"] = retry_after
+        yield json.dumps(payload) + "\n"
     except Exception as exc:
         logger.error("Error in LLM stream: %s", exc, exc_info=True)
-        yield json.dumps({"error": str(exc) or "Unknown stream error"}) + "\n"
+        yield json.dumps({"error": str(exc) or "Unknown stream error", "error_type": "provider_error"}) + "\n"
     finally:
         await client.close()
 

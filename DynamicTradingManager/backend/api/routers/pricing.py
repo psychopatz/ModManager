@@ -24,7 +24,7 @@ router = APIRouter(tags=["pricing"])
 
 def _finish_pricing_page_warm():
     try:
-        warmed = warm_pricing_tag_cache(get_items())
+        warmed = warm_pricing_tag_cache()
         logger.info(
             "Warmed tag pricing cache for %s items across %s tags",
             warmed["items"],
@@ -37,7 +37,7 @@ def _finish_pricing_page_warm():
 @router.on_event("startup")
 async def warm_pricing_page_cache():
     try:
-        catalog = build_pricing_tag_catalog(get_items())
+        catalog = build_pricing_tag_catalog()
         logger.info("Warmed tag pricing catalog for %s tags", len(catalog.get("tags", [])))
     except Exception as exc:
         logger.warning("Unable to warm tag pricing catalog on startup: %s", exc)
@@ -104,7 +104,7 @@ async def get_pricing_audit(limit: int = 20):
 @router.get("/api/pricing/tags")
 async def get_pricing_tags():
     try:
-        return build_pricing_tag_catalog(get_items())
+        return build_pricing_tag_catalog()
     except Exception as exc:
         logger.error("Error building pricing tag catalog: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
@@ -114,7 +114,7 @@ async def get_pricing_tags():
 async def preview_pricing_tags(request: PricingTagPreviewRequest):
     try:
         return preview_pricing_tag(
-            get_items(),
+            None,
             request.tag,
             addition=request.addition,
             limit=request.limit,

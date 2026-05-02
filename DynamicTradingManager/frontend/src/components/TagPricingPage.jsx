@@ -358,6 +358,8 @@ const TagPricingPage = () => {
   const [expandedTags, setExpandedTags] = useState({});
   const [blacklistingItemId, setBlacklistingItemId] = useState('');
   const [overrideDraft, setOverrideDraft] = useState(null);
+  const [catalogSource, setCatalogSource] = useState('');
+  const [catalogItemCount, setCatalogItemCount] = useState(0);
 
   const loadPage = async (keepSelection = true) => {
     setLoadingCatalog(true);
@@ -375,6 +377,8 @@ const TagPricingPage = () => {
       setConfig(nextConfig);
       setCatalog(nextCatalog);
       setOverridesByItem(nextOverridesByItem);
+      setCatalogSource(tagRes.data?.source || '');
+      setCatalogItemCount(Number(tagRes.data?.item_count || 0));
 
       const fallbackTag = nextCatalog[0]?.tag || '';
       const nextSelectedTag = keepSelection && selectedTag && nextCatalog.some((row) => row.tag === selectedTag)
@@ -497,7 +501,11 @@ const TagPricingPage = () => {
           ? { ...row, current_addition: nextValue }
           : row
       )));
-      setStatus({ type: 'success', message: `Saved ${selectedTag} to the backend config. Parent values still compound into child tags.` });
+      const luaSync = res?.data?.__lua_sync;
+      const luaNote = luaSync?.path
+        ? ` Lua synced: ${luaSync.path} (${luaSync.count || 0} tag entries).`
+        : '';
+      setStatus({ type: 'success', message: `Saved ${selectedTag} to the backend config.${luaNote} Parent values still compound into child tags.` });
     } catch (err) {
       setStatus({ type: 'error', message: err?.response?.data?.detail || 'Failed to save tag pricing.' });
     } finally {
@@ -805,6 +813,8 @@ const TagPricingPage = () => {
                 <Chip label={`Pending ${formatPrice(pendingAddition)}`} color={hasUnsavedChange ? 'warning' : 'default'} />
                 <Chip label={`Saved ${formatPrice(config?.tag_price_additions?.[selectedTag] || 0)}`} variant="outlined" />
                 <Chip label={`${selectedCatalogRow?.item_count || 0} matching items`} variant="outlined" />
+                {catalogSource ? <Chip label={`Source ${catalogSource}`} variant="outlined" /> : null}
+                {catalogItemCount > 0 ? <Chip label={`Runtime items ${catalogItemCount}`} variant="outlined" /> : null}
               </Stack>
 
               <Divider />

@@ -16,6 +16,14 @@ from .blacklist import (
     add_item_to_blacklist
 )
 
+from .whitelist import (
+    load_whitelist,
+    reload_whitelist,
+    is_item_whitelisted,
+    add_item_to_whitelist,
+    remove_item_from_whitelist,
+)
+
 __all__ = [
     'write_mod_duplicates',
     'write_hierarchical_files',
@@ -24,5 +32,10 @@ __all__ = [
     'filter_items',
     'get_blacklist_stats',
     'reload_blacklist',
-    'add_item_to_blacklist'
+    'add_item_to_blacklist',
+    'load_whitelist',
+    'reload_whitelist',
+    'is_item_whitelisted',
+    'add_item_to_whitelist',
+    'remove_item_from_whitelist',
 ]

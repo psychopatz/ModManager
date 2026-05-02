@@ -23,6 +23,7 @@ def load_blacklist():
         print(f"[WARNING] Blacklist file not found at {blacklist_path}, using empty blacklist")
         _blacklist_cache = {
             "itemIds": [],
+            "whitelistItemIds": [],
             "properties": {
                 "names": [],
                 "values": {}
@@ -33,11 +34,17 @@ def load_blacklist():
     try:
         with open(blacklist_path, 'r') as f:
             _blacklist_cache = json.load(f)
+            if not isinstance(_blacklist_cache, dict):
+                _blacklist_cache = {}
+            _blacklist_cache.setdefault("itemIds", [])
+            _blacklist_cache.setdefault("whitelistItemIds", [])
+            _blacklist_cache.setdefault("properties", {"names": [], "values": {}})
             return _blacklist_cache
     except Exception as e:
         print(f"[ERROR] Failed to load blacklist: {e}")
         _blacklist_cache = {
             "itemIds": [],
+            "whitelistItemIds": [],
             "properties": {
                 "names": [],
                 "values": {}
@@ -199,6 +206,7 @@ def add_item_to_blacklist(item_id):
 
     next_blacklist = {
         "itemIds": item_ids,
+        "whitelistItemIds": list(blacklist.get("whitelistItemIds", [])),
         "properties": blacklist.get("properties", {"names": [], "values": {}}),
     }
 

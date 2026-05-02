@@ -8,7 +8,7 @@ from api.schemas import StatsResponse
 from ItemManagement import calculate_price, generate_tags, get_stat
 from ItemManagement.commons.lua_handler.records import tags_list_to_dict
 from ItemManagement.commons.vanilla_loader import get_translated_name
-from ItemManagement.parse import is_item_blacklisted
+from ItemManagement.parse import is_item_blacklisted, is_item_whitelisted
 from ItemManagement.ui.commands import get_registered_items
 from ItemManagement.ui.stats import count_registered_items, find_invalid_blacklist_ids
 
@@ -60,6 +60,7 @@ async def list_items(
         for item_id in item_keys:
             props = items[item_id]
             is_bl, _ = is_item_blacklisted(item_id, {})
+            is_wl = is_item_whitelisted(item_id)
 
             tags_list = generate_tags(item_id, props)
             tags_dict = tags_list_to_dict(tags_list)
@@ -77,6 +78,8 @@ async def list_items(
                 elif status == "unregistered" and (item_id in registered_ids or is_bl):
                     continue
                 elif status == "blacklisted" and not is_bl:
+                    continue
+                elif status == "whitelisted" and not is_wl:
                     continue
 
             if tag and not any(tag.lower() in t.lower() for t in tags_list):
@@ -96,6 +99,7 @@ async def list_items(
                     "id": item_id,
                     "name": item_name,
                     "is_blacklisted": bool(is_bl),
+                    "is_whitelisted": bool(is_wl),
                     "is_registered": item_id in registered_ids,
                     "price": int(price),
                     "tags": tags_list,

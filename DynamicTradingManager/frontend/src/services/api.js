@@ -45,9 +45,16 @@ export const getTaskLogs = (id, since = 0) => api.get(`/tasks/${id}/logs`, { par
 // Misc
 export const getBlacklist = () => api.get('/blacklist');
 export const addBlacklistItem = (itemId) => api.post('/blacklist/item', { item_id: itemId });
+export const getWhitelist = () => api.get('/whitelist');
+export const addWhitelistItem = (itemId) => api.post('/whitelist/item', { item_id: itemId });
+export const deleteWhitelistItem = (itemId) => api.delete(`/whitelist/item/${itemId}`);
 export const getOverrides = () => api.get('/overrides');
 export const saveItemOverride = (payload) => api.put('/overrides/item', payload);
 export const deleteItemOverride = (itemId) => api.delete(`/overrides/item/${itemId}`);
+export const getRuntimeDump = () => api.get('/runtime/dump');
+export const getRuntimeRules = () => api.get('/runtime/rules');
+export const getRuntimeHeuristics = () => api.get('/runtime/heuristics');
+export const applyRuntimeRules = () => api.post('/runtime/apply');
 
 export const getSimulationData = () => api.get('/simulation/data');
 export const getDebugLogs = (params) => api.get('/debug/logs', { params });

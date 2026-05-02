@@ -15,6 +15,7 @@ from api.routers.donators import router as donators_router
 from api.routers.git import router as git_router
 from api.routers.manuals import router as manuals_router
 from api.routers.pricing import router as pricing_router
+from api.routers.runtime_sync import router as runtime_sync_router
 from api.routers.simulation import router as simulation_router
 from api.routers.tasks_actions import router as tasks_actions_router
 from api.routers.workshop import router as workshop_router
@@ -67,6 +68,7 @@ def create_app() -> FastAPI:
 
     app.include_router(catalog_router)
     app.include_router(pricing_router)
+    app.include_router(runtime_sync_router)
     app.include_router(tasks_actions_router)
     app.include_router(blacklist_overrides_router)
     app.include_router(archetypes_router)

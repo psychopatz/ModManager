@@ -29,7 +29,7 @@ import {
     Alert
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
-import { getItems, getTags, getOverrides, saveItemOverride, deleteItemOverride, addBlacklistItem } from '../services/api';
+import { getItems, getTags, getOverrides, saveItemOverride, deleteItemOverride, addBlacklistItem, addWhitelistItem, deleteWhitelistItem } from '../services/api';
 
 const ItemTable = () => {
     const [items, setItems] = useState([]);
@@ -49,6 +49,7 @@ const ItemTable = () => {
     const [overrideDraft, setOverrideDraft] = useState({ basePrice: '', stockMin: '', stockMax: '', tags: [] });
     const [savingOverride, setSavingOverride] = useState(false);
     const [blacklistingItemId, setBlacklistingItemId] = useState('');
+    const [whitelistMutatingItemId, setWhitelistMutatingItemId] = useState('');
     const [actionStatus, setActionStatus] = useState({ type: '', message: '' });
 
     const fetchItems = async () => {
@@ -247,6 +248,24 @@ const ItemTable = () => {
         }
     };
 
+    const handleWhitelist = async (item) => {
+        setWhitelistMutatingItemId(item.id);
+        try {
+            if (item.is_whitelisted) {
+                await deleteWhitelistItem(item.id);
+                setActionStatus({ type: 'success', message: `${item.id} removed from whitelist.` });
+            } else {
+                await addWhitelistItem(item.id);
+                setActionStatus({ type: 'success', message: `${item.id} added to whitelist.` });
+            }
+            await refreshData();
+        } catch (err) {
+            setActionStatus({ type: 'error', message: err?.response?.data?.detail || 'Failed to update whitelist.' });
+        } finally {
+            setWhitelistMutatingItemId('');
+        }
+    };
+
     const getTagColor = (tag) => {
         if (tag.startsWith('Rarity.Common')) return 'default';
         if (tag.startsWith('Rarity.Uncommon')) return 'primary';
@@ -298,6 +317,7 @@ const ItemTable = () => {
                                 <MenuItem value="registered">Registered</MenuItem>
                                 <MenuItem value="unregistered">Unregistered</MenuItem>
                                 <MenuItem value="blacklisted">Blacklisted</MenuItem>
+                                <MenuItem value="whitelisted">Whitelisted</MenuItem>
                             </Select>
                         </FormControl>
                     </Grid>
@@ -402,6 +422,8 @@ const ItemTable = () => {
                                     <TableCell>
                                         {item.is_blacklisted ? (
                                             <Chip label="Blacklisted" size="small" color="error" variant="soft" />
+                                        ) : item.is_whitelisted ? (
+                                            <Chip label="Whitelisted" size="small" color="info" variant="soft" />
                                         ) : item.is_registered ? (
                                             <Chip label="Registered" size="small" color="success" variant="soft" />
                                         ) : (
@@ -418,6 +440,17 @@ const ItemTable = () => {
                                                 disabled={item.is_blacklisted || blacklistingItemId === item.id}
                                             >
                                                 {blacklistingItemId === item.id ? 'Blacklisting...' : item.is_blacklisted ? 'Blacklisted' : 'Blacklist'}
+                                            </Button>
+                                            <Button
+                                                variant="outlined"
+                                                size="small"
+                                                color={item.is_whitelisted ? 'warning' : 'info'}
+                                                onClick={() => handleWhitelist(item)}
+                                                disabled={whitelistMutatingItemId === item.id}
+                                            >
+                                                {whitelistMutatingItemId === item.id
+                                                    ? (item.is_whitelisted ? 'Removing...' : 'Whitelisting...')
+                                                    : (item.is_whitelisted ? 'Remove Whitelist' : 'Whitelist')}
                                             </Button>
                                             <Button
                                                 variant="outlined"

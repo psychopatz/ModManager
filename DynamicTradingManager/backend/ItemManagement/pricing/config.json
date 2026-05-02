@@ -66,7 +66,7 @@
     "Building.Survival": 18.0,
     "Building.Survival.Trap": 6.0,
     "Building.Vehicle": 12.0,
-    "Clothing": 3.0,
+    "Clothing": 139.0,
     "Clothing.Accessory.Jewelry": 20.0,
     "Clothing.Accessory.Jewelry.Necklace": 13.0,
     "Clothing.Accessory.Jewelry.Nose": 14.0,
@@ -75,7 +75,7 @@
     "Clothing.Accessory.Utility": 5.0,
     "Clothing.Accessory.Jewelry.Ears": 5.0,
     "Clothing.Accessory.Wrist.Watch": 7.0,
-    "Clothing.Armor": 19.0,
+    "Clothing.Armor": 252.0,
     "Clothing.Armor.Arms": 8.0,
     "Clothing.Armor.Face": 6.0,
     "Clothing.Armor.Hands": 18.0,
@@ -94,7 +94,7 @@
     "Clothing.Protective": 9.0,
     "Clothing.Hands": 8.0,
     "Clothing.Tactical": 16.0,
-    "Container": 12.0,
+    "Container": 214.0,
     "Container.Bag": 17.0,
     "Container.Bag.Backpack": 22.0,
     "Container.Bag.Bandolier": 24.0,
@@ -135,7 +135,8 @@
     "Literature.Recipe": 348.0,
     "Literature.Book": -325.0,
     "Literature.Cards": -236.0,
-    "Literature.Media": -258.0
+    "Literature.Media": -258.0,
+    "Container.Capacity": 182.0
   },
   "categories": {
     "Food": {

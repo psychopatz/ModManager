@@ -14,6 +14,7 @@ const UpdateVersionEditorPage = lazy(() => import('./components/UpdateVersionEdi
 const SimulationDashboard = lazy(() => import('./components/Simulation/SimulationDashboard'));
 const ConsolePage = lazy(() => import('./components/ConsolePage'));
 const WorkshopPage = lazy(() => import('./components/WorkshopPage'));
+const RuntimeSyncPage = lazy(() => import('./components/RuntimeSyncPage'));
 const LLMSettingsPanel = lazy(() => import('./components/LLM/LLMSettingsPanel'));
 const LLMChatFloating = lazy(() => import('./components/LLM/LLMChatFloating'));
 
@@ -56,6 +57,7 @@ function AppContent() {
           <Button color="inherit" component={RouterLink} to="/updates">Update Version Editor</Button>
           <Button color="inherit" component={RouterLink} to="/simulation">Economy Simulation</Button>
           <Button color="inherit" component={RouterLink} to="/workshop">Workshop</Button>
+          <Button color="inherit" component={RouterLink} to="/runtime-sync">Runtime Sync</Button>
           <Button color="inherit" component={RouterLink} to="/console">Console</Button>
           <Tooltip title="LLM Provider Settings">
             <IconButton color="inherit" onClick={() => setSettingsOpen(true)} sx={{ ml: 1 }}>
@@ -82,6 +84,7 @@ function AppContent() {
             <Route path="/updates" element={<UpdateVersionEditorPage />} />
             <Route path="/simulation" element={<SimulationDashboard />} />
             <Route path="/workshop" element={<WorkshopPage />} />
+            <Route path="/runtime-sync" element={<RuntimeSyncPage />} />
             <Route path="/console" element={<ConsolePage />} />
           </Routes>
         </Suspense>

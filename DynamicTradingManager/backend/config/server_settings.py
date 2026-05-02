@@ -49,6 +49,8 @@ class ServerSettings:
     dynamic_colonies_path: Path
     dynamic_currency_path: Path
     console_path: Path
+    runtime_dump_file: Path
+    runtime_rules_file: Path
     steamcmd_path: str | None
     allowed_origins: list[str]
 
@@ -99,6 +101,39 @@ def get_server_settings() -> ServerSettings:
     if console_path is None:
         raise RuntimeError("Console path could not be resolved from settings.")
 
+    runtime_dump_file = _resolve_path(
+        _first_non_empty(
+            os.getenv("DT_RUNTIME_DUMP_FILE"),
+            file_settings.get("runtime_dump_file"),
+            str(dynamic_trading_path.parent.parent / "Lua" / "DynamicTrading_ItemRuntimeCacheDump.txt"),
+        )
+    )
+    if runtime_dump_file is None:
+        raise RuntimeError("Runtime dump file path could not be resolved from settings.")
+
+    runtime_rules_file = _resolve_path(
+        _first_non_empty(
+            os.getenv("DT_RUNTIME_RULES_FILE"),
+            file_settings.get("runtime_rules_file"),
+            str(
+                dynamic_trading_path
+                / "Contents"
+                / "mods"
+                / "DynamicTradingCommon"
+                / "common"
+                / "media"
+                / "lua"
+                / "shared"
+                / "DT"
+                / "Common"
+                / "Items"
+                / "DT_RuntimeRules_Data.lua"
+            ),
+        )
+    )
+    if runtime_rules_file is None:
+        raise RuntimeError("Runtime rules file path could not be resolved from settings.")
+
     steamcmd_path = _first_non_empty(
         os.getenv("STEAM_CMD_PATH"),
         os.getenv("STEAMCMD_PATH"),
@@ -119,6 +154,8 @@ def get_server_settings() -> ServerSettings:
         dynamic_colonies_path=dynamic_colonies_path,
         dynamic_currency_path=dynamic_currency_path,
         console_path=console_path,
+        runtime_dump_file=runtime_dump_file,
+        runtime_rules_file=runtime_rules_file,
         steamcmd_path=steamcmd_path,
         allowed_origins=allowed_origins,
     )

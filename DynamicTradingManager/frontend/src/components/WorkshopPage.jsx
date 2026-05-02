@@ -55,7 +55,8 @@ import {
 import * as api from '../services/api';
 import TaskConsole from './TaskConsole';
 import GitAiAssistant from './Common/GitAiAssistant';
-import BBCodeEditorPreview from './Common/BBCodeEditorPreview';
+import WorkshopDeployForm from './Workshop/WorkshopDeployForm';
+import WorkshopPublishConfirmDialog from './Workshop/WorkshopPublishConfirmDialog';
 import { useBatchSystem } from '../context/BatchContext';
 
 const workshopDefaultPrompt = `Task:
@@ -239,7 +240,6 @@ const WorkshopPage = () => {
       const res = await api.getWorkshopSync(selectedTarget, metadata.id || undefined);
       setMetadata(prev => ({ ...prev, ...res.data }));
       if (res.data.preview_url) setPreviewUrl(res.data.preview_url);
-      setUpdateMetadata(true);
       setSnackbar({ open: true, message: 'Synced from Steam', severity: 'success' });
     } catch (err) {
       setSnackbar({ open: true, message: 'Sync failed', severity: 'error' });
@@ -511,86 +511,22 @@ const WorkshopPage = () => {
                 </Stack>
               </Grid>
               <Grid size={{ xs: 12, md: 6 }}>
-                <form onSubmit={onPushSubmit}>
-                  <Stack spacing={3}>
-                    <Box>
-                      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>Workshop Changenote (BBCode)</Typography>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          disabled={!latestStage3Batch?.workshopMetadata}
-                          onClick={() => {
-                            const latest = String(latestStage3Batch?.workshopMetadata || '').trim();
-                            if (!latest) return;
-                            setChangenote(latest);
-                            const batchLabel = latestStage3Batch?.modName || latestStage3Batch?.module || latestStage3Batch?.id || 'Stage 3';
-                            setSnackbar({ open: true, message: `Loaded Stage 3 output from \'${batchLabel}\'.`, severity: 'success' });
-                          }}
-                        >
-                          {latestStage3Batch?.workshopMetadata
-                            ? `Use Stage 3 — ${latestStage3Batch.modName || latestStage3Batch.module || latestStage3Batch.id}`
-                            : 'Use Latest Stage 3'}
-                        </Button>
-                      </Stack>
-                      <BBCodeEditorPreview
-                        label="Workshop Changenote"
-                        value={changenote}
-                        onChange={setChangenote}
-                        editable
-                        minRows={6}
-                        maxRows={26}
-                        editorHelperText={latestStage3Batch?.workshopMetadata
-                          ? `Auto-source available from batch ${latestStage3Batch.id}. This is sent to Steam as changenote.`
-                          : 'This is sent to Steam as the update note for this publish.'}
-                        previewTitle="Rendered Changenote Preview"
-                      />
-                    </Box>
-                    <TextField
-                      label="Steam User"
-                      fullWidth
-                      name="username"
-                      id="steam-username"
-                      autoComplete="username"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      variant="outlined"
-                    />
-                    <TextField
-                      label="Steam Password"
-                      type={showPassword ? 'text' : 'password'}
-                      fullWidth
-                      name="password"
-                      id="steam-password"
-                      autoComplete="current-password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      InputProps={{ endAdornment: <IconButton onClick={() => setShowPassword(!showPassword)}>{showPassword ? <VisibilityOff /> : <VisibilityIcon />}</IconButton> }}
-                    />
-                    <TextField
-                      label="Steam Guard Code"
-                      fullWidth
-                      name="one-time-code"
-                      id="steam-guard-code"
-                      autoComplete="one-time-code"
-                      value={steamGuardCode}
-                      onChange={(e) => setSteamGuardCode(e.target.value)}
-                      helperText="Optional. Fill this in only when SteamCMD asks for an email or authenticator code."
-                    />
-                    <Button
-                      variant="contained"
-                      color="primary"
-                      fullWidth
-                      size="large"
-                      type="submit"
-                      data-testid="workshop-publish-button"
-                      disabled={!selectedTarget || !metadata.id || !username || (!updateFiles && !updateMetadata && !updatePreview)}
-                      sx={{ py: 2.5, borderRadius: 4, fontWeight: 900 }}
-                    >
-                      PUSH UPDATE TO STEAM
-                    </Button>
-                  </Stack>
-                </form>
+                <WorkshopDeployForm
+                  latestStage3Batch={latestStage3Batch}
+                  changenote={changenote}
+                  setChangenote={setChangenote}
+                  setSnackbar={setSnackbar}
+                  username={username}
+                  setUsername={setUsername}
+                  password={password}
+                  setPassword={setPassword}
+                  showPassword={showPassword}
+                  setShowPassword={setShowPassword}
+                  steamGuardCode={steamGuardCode}
+                  setSteamGuardCode={setSteamGuardCode}
+                  onPushSubmit={onPushSubmit}
+                  canSubmit={!!(selectedTarget && metadata.id && username && (updateFiles || updateMetadata || updatePreview))}
+                />
               </Grid>
             </Grid>
           </Collapse>
@@ -610,76 +546,24 @@ const WorkshopPage = () => {
         />
       )}
 
-      <Dialog
+      <WorkshopPublishConfirmDialog
         open={publishConfirmOpen}
-        onClose={() => !isPushing && setPublishConfirmOpen(false)}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle sx={{ fontWeight: 900 }}>Confirm Workshop Upload</DialogTitle>
-        <DialogContent dividers>
-          <Stack spacing={2}>
-            <Alert severity="info">
-              Review exactly what will be uploaded to Steam before continuing.
-            </Alert>
-
-            <Paper variant="outlined" sx={{ p: 2 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 900, mb: 1 }}>Target Project</Typography>
-              <Typography variant="body2">{selectedTargetInfo?.name || selectedTarget}</Typography>
-              <Typography variant="caption" color="text.secondary">Root: {projectRootPath}</Typography>
-            </Paper>
-
-            <Paper variant="outlined" sx={{ p: 2 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 900, mb: 1 }}>Upload Plan</Typography>
-              <List dense disablePadding>
-                <ListItem disableGutters>
-                  <ListItemText
-                    primary={updateFiles ? 'Files & Binaries: WILL UPLOAD' : 'Files & Binaries: SKIPPED'}
-                    secondary={updateFiles
-                      ? `Copies from ${contentSourcePath} to ${stagingPath}, then uploads staging as contentfolder.`
-                      : `No file staging step. SteamCMD will still use contentfolder path: ${stagingPath}.`}
-                  />
-                </ListItem>
-                <ListItem disableGutters>
-                  <ListItemText
-                    primary={updateMetadata ? 'Workshop Metadata: WILL UPDATE' : 'Workshop Metadata: SKIPPED'}
-                    secondary={updateMetadata
-                      ? `Title, Description, Tags, Visibility, and changenote will be written into ${vdfPath}.`
-                      : `Title, Description, Tags, and Visibility will not be changed in this upload.`}
-                  />
-                </ListItem>
-                <ListItem disableGutters>
-                  <ListItemText
-                    primary={updatePreview ? 'Poster Image: WILL UPDATE' : 'Poster Image: SKIPPED'}
-                    secondary={updatePreview
-                      ? `Preview image path in VDF: ${previewFilePath}`
-                      : 'No preview image path will be included in VDF.'}
-                  />
-                </ListItem>
-              </List>
-            </Paper>
-
-            <Paper variant="outlined" sx={{ p: 2 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 900, mb: 1 }}>Request Summary</Typography>
-              <Stack spacing={0.5}>
-                <Typography variant="body2">Workshop ID: {metadata.id || 'Not set'}</Typography>
-                <Typography variant="body2">Steam User: {username || 'Not set'}</Typography>
-                <Typography variant="body2">Changenote length: {changenote?.length || 0} chars</Typography>
-              </Stack>
-            </Paper>
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setPublishConfirmOpen(false)} disabled={isPushing}>Cancel</Button>
-          <Button
-            variant="contained"
-            onClick={handlePush}
-            disabled={isPushing}
-          >
-            {isPushing ? 'PUSHING...' : 'Confirm & Push'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        isPushing={isPushing}
+        onClose={() => setPublishConfirmOpen(false)}
+        onConfirm={handlePush}
+        selectedTargetInfo={selectedTargetInfo}
+        selectedTarget={selectedTarget}
+        updateFiles={updateFiles}
+        updateMetadata={updateMetadata}
+        updatePreview={updatePreview}
+        contentSourcePath={contentSourcePath}
+        stagingPath={stagingPath}
+        vdfPath={vdfPath}
+        previewFilePath={previewFilePath}
+        metadataId={metadata.id}
+        username={username}
+        changenoteLength={changenote?.length || 0}
+      />
 
       <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
         <Alert severity={snackbar.severity}>{snackbar.message}</Alert>

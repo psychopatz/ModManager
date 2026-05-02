@@ -174,6 +174,9 @@ export const BatchProvider = ({ children }) => {
     const pauseBatch = useCallback((id) => updateBatch(id, { paused: true }), [updateBatch]);
     const resumeBatch = useCallback((id) => updateBatch(id, { paused: false }), [updateBatch]);
     const dismissBatch = useCallback((id) => updateBatch(id, { dismissed: true }), [updateBatch]);
+    const setBatchWorkshopMetadata = useCallback((id, workshopMetadata) => {
+        updateBatch(id, { workshopMetadata: String(workshopMetadata || '') });
+    }, [updateBatch]);
 
     return (
         <BatchContext.Provider value={{
@@ -181,6 +184,7 @@ export const BatchProvider = ({ children }) => {
             spawnBatch, removeBatch, skipBatchItem,
             pauseBatch, resumeBatch, restartBatch, retryDay,
             openFullView, closeFullView, dismissBatch,
+            setBatchWorkshopMetadata,
             consolidateBatch, saveBatchVolume,
             listBatchCaches, clearBatchCache,
         }}>

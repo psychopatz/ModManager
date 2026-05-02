@@ -66,7 +66,15 @@ def normalize_manual_module(module: Optional[str]) -> str:
 
 def get_workshop_project_or_404(target: Optional[str] = None):
     try:
-        return resolve_project_target(target)
+        project = resolve_project_target(target)
+        resolved = dict(project)
+        project_path = resolved.get("path")
+        if isinstance(project_path, Path):
+            return resolved
+        if not project_path:
+            raise FileNotFoundError(f"Workshop project '{target or '(default)'}' has no configured path")
+        resolved["path"] = Path(project_path)
+        return resolved
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:

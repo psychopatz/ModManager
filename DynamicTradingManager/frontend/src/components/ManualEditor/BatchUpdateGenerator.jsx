@@ -25,7 +25,7 @@ import BatchConfigForm from './BatchGenerator/BatchConfigForm';
 import BatchProcessMonitor from './BatchGenerator/BatchProcessMonitor';
 
 const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop', module = '', targets = [], modules = [], attachedBatchId = null }) => {
-  const { batches, spawnBatch, openBatchId, closeFullView, retryDay, consolidateBatch, saveBatchVolume, listBatchCaches, clearBatchCache } = useBatchSystem();
+  const { batches, spawnBatch, openBatchId, closeFullView, retryDay, consolidateBatch, saveBatchVolume, listBatchCaches, clearBatchCache, setBatchWorkshopMetadata } = useBatchSystem();
   const resolvedModule = useMemo(
     () => String(module || modules?.[0]?.id || 'DynamicTradingCommon').trim(),
     [module, modules]
@@ -254,6 +254,7 @@ const BatchUpdateGenerator = ({ open, onClose, onComplete, branch = 'develop', m
                 resetConsolidationPrompt={resetConsolidationPrompt}
                 consolidateBatch={consolidateBatch}
                 saveBatchVolume={saveBatchVolume}
+                setBatchWorkshopMetadata={setBatchWorkshopMetadata}
                 setStatus={setStatus}
                 handleClose={handleClose}
               />

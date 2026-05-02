@@ -23,7 +23,14 @@ import {
   Chip,
   Collapse,
   Checkbox,
-  FormGroup
+  FormGroup,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  List,
+  ListItem,
+  ListItemText
 } from '@mui/material';
 import {
   CloudUpload as UploadIcon,
@@ -48,6 +55,8 @@ import {
 import * as api from '../services/api';
 import TaskConsole from './TaskConsole';
 import GitAiAssistant from './Common/GitAiAssistant';
+import BBCodeEditorPreview from './Common/BBCodeEditorPreview';
+import { useBatchSystem } from '../context/BatchContext';
 
 const workshopDefaultPrompt = `Task:
 1. Produce a PROFESSIONAL Steam Workshop change note.
@@ -81,6 +90,8 @@ const WorkshopPage = () => {
   const [targets, setTargets] = useState([]);
   const [selectedTarget, setSelectedTarget] = useState(() => localStorage.getItem(workshopTargetStorageKey) || '');
   const [changenote, setChangenote] = useState('Mod update pushed via Dynamic Trading Manager');
+  const [showLegacyGitAssistant, setShowLegacyGitAssistant] = useState(false);
+  const [hasAutoFilledChangenote, setHasAutoFilledChangenote] = useState(false);
 
 
   // Section Visibility
@@ -103,6 +114,9 @@ const WorkshopPage = () => {
   const [activeTaskId, setActiveTaskId] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
   const [latestCommitHash, setLatestCommitHash] = useState('');
+  const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
+  const [isPushing, setIsPushing] = useState(false);
+  const { batches } = useBatchSystem();
 
   // Base API URL detection (assumes backend is on port 8000)
   const apiBaseUrl = window.location.origin.replace(':5173', ':8000');
@@ -120,6 +134,13 @@ const WorkshopPage = () => {
     [targets, selectedTarget]
   );
 
+  const latestStage3Batch = useMemo(() => {
+    const candidates = (batches || [])
+      .filter((batch) => String(batch?.workshopMetadata || '').trim())
+      .sort((a, b) => (b.startTime || 0) - (a.startTime || 0));
+    return candidates[0] || null;
+  }, [batches]);
+
   useEffect(() => {
     fetchTargets();
   }, []);
@@ -132,6 +153,20 @@ const WorkshopPage = () => {
       fetchVersions(selectedTarget);
     }
   }, [selectedTarget]);
+
+  useEffect(() => {
+    if (hasAutoFilledChangenote) return;
+    const latestStage3Output = String(latestStage3Batch?.workshopMetadata || '').trim();
+    if (!latestStage3Output) return;
+
+    const current = String(changenote || '').trim();
+    const isDefault = !current || current === 'Mod update pushed via Dynamic Trading Manager';
+    if (!isDefault) return;
+
+    setChangenote(latestStage3Output);
+    setHasAutoFilledChangenote(true);
+    setSnackbar({ open: true, message: 'Loaded latest Stage 3 Workshop BBCode into changenote.', severity: 'info' });
+  }, [latestStage3Batch, changenote, hasAutoFilledChangenote]);
 
   const fetchTargets = async () => {
     setLoading(true);
@@ -230,6 +265,7 @@ const WorkshopPage = () => {
   };
 
   const handlePush = async () => {
+    setIsPushing(true);
     try {
       const payload = {
         target: selectedTarget,
@@ -254,13 +290,22 @@ const WorkshopPage = () => {
       }
     } catch (err) {
       setSnackbar({ open: true, message: err.response?.data?.detail || 'Push failed', severity: 'error' });
+    } finally {
+      setIsPushing(false);
+      setPublishConfirmOpen(false);
     }
   };
 
   const onPushSubmit = (e) => {
     e.preventDefault();
-    handlePush();
+    setPublishConfirmOpen(true);
   };
+
+  const projectRootPath = selectedTargetInfo?.path || 'Unknown project path';
+  const stagingPath = selectedTargetInfo?.path ? `${selectedTargetInfo.path}/upload_staging` : 'Unknown staging path';
+  const vdfPath = selectedTargetInfo?.path ? `${selectedTargetInfo.path}/workshop_update.vdf` : 'Unknown VDF path';
+  const contentSourcePath = selectedTargetInfo?.path ? `${selectedTargetInfo.path}/Contents` : 'Unknown content path';
+  const previewFilePath = selectedTargetInfo?.path ? `${selectedTargetInfo.path}/preview.png` : 'Unknown preview path';
 
   if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box>;
 
@@ -306,19 +351,47 @@ const WorkshopPage = () => {
       </Box>
 
       <Stack spacing={4}>
-        <GitAiAssistant
-          title="Workshop Git + AI Assistant"
-          helperText="Select project, branch, and commit set to generate a workshop changelog."
-          outputValue={changenote}
-          onOutputChange={setChangenote}
-          storageKey="workshop_git_prompt"
-          defaultPrompt={workshopDefaultPrompt}
-          selectedTarget={selectedTarget}
-          onTargetChange={setSelectedTarget}
-          availableTargets={targets}
-          showSuiteToggle={(selectedTargetInfo?.sub_mods?.length > 1)}
-          onLatestHash={setLatestCommitHash}
-        />
+        <Paper elevation={2} sx={{ borderRadius: 3, border: '1px solid', borderColor: 'divider' }}>
+          <Box
+            sx={{
+              p: 2,
+              px: 3,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              cursor: 'pointer',
+              bgcolor: 'rgba(0,0,0,0.02)'
+            }}
+            onClick={() => setShowLegacyGitAssistant((prev) => !prev)}
+          >
+            <Box>
+              <Typography variant="subtitle1" sx={{ fontWeight: 900 }}>
+                Workshop Git + AI Assistant
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                Legacy tool. Hidden by default because Batch Update Generator now handles this flow.
+              </Typography>
+            </Box>
+            {showLegacyGitAssistant ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+          </Box>
+          <Collapse in={showLegacyGitAssistant}>
+            <Box sx={{ p: 2.5 }}>
+              <GitAiAssistant
+                title="Workshop Git + AI Assistant"
+                helperText="Select project, branch, and commit set to generate a workshop changelog."
+                outputValue={changenote}
+                onOutputChange={setChangenote}
+                storageKey="workshop_git_prompt"
+                defaultPrompt={workshopDefaultPrompt}
+                selectedTarget={selectedTarget}
+                onTargetChange={setSelectedTarget}
+                availableTargets={targets}
+                showSuiteToggle={(selectedTargetInfo?.sub_mods?.length > 1)}
+                onLatestHash={setLatestCommitHash}
+              />
+            </Box>
+          </Collapse>
+        </Paper>
 
         <Paper elevation={4} sx={{ borderRadius: 4, p: 3, border: '1px solid', borderColor: 'divider' }}>
           <Typography variant="h6" sx={{ fontWeight: 900, mb: 1 }}>
@@ -440,6 +513,39 @@ const WorkshopPage = () => {
               <Grid size={{ xs: 12, md: 6 }}>
                 <form onSubmit={onPushSubmit}>
                   <Stack spacing={3}>
+                    <Box>
+                      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>Workshop Changenote (BBCode)</Typography>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          disabled={!latestStage3Batch?.workshopMetadata}
+                          onClick={() => {
+                            const latest = String(latestStage3Batch?.workshopMetadata || '').trim();
+                            if (!latest) return;
+                            setChangenote(latest);
+                            const batchLabel = latestStage3Batch?.modName || latestStage3Batch?.module || latestStage3Batch?.id || 'Stage 3';
+                            setSnackbar({ open: true, message: `Loaded Stage 3 output from \'${batchLabel}\'.`, severity: 'success' });
+                          }}
+                        >
+                          {latestStage3Batch?.workshopMetadata
+                            ? `Use Stage 3 — ${latestStage3Batch.modName || latestStage3Batch.module || latestStage3Batch.id}`
+                            : 'Use Latest Stage 3'}
+                        </Button>
+                      </Stack>
+                      <BBCodeEditorPreview
+                        label="Workshop Changenote"
+                        value={changenote}
+                        onChange={setChangenote}
+                        editable
+                        minRows={6}
+                        maxRows={26}
+                        editorHelperText={latestStage3Batch?.workshopMetadata
+                          ? `Auto-source available from batch ${latestStage3Batch.id}. This is sent to Steam as changenote.`
+                          : 'This is sent to Steam as the update note for this publish.'}
+                        previewTitle="Rendered Changenote Preview"
+                      />
+                    </Box>
                     <TextField
                       label="Steam User"
                       fullWidth
@@ -477,6 +583,7 @@ const WorkshopPage = () => {
                       fullWidth
                       size="large"
                       type="submit"
+                      data-testid="workshop-publish-button"
                       disabled={!selectedTarget || !metadata.id || !username || (!updateFiles && !updateMetadata && !updatePreview)}
                       sx={{ py: 2.5, borderRadius: 4, fontWeight: 900 }}
                     >
@@ -502,6 +609,78 @@ const WorkshopPage = () => {
           }}
         />
       )}
+
+      <Dialog
+        open={publishConfirmOpen}
+        onClose={() => !isPushing && setPublishConfirmOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 900 }}>Confirm Workshop Upload</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2}>
+            <Alert severity="info">
+              Review exactly what will be uploaded to Steam before continuing.
+            </Alert>
+
+            <Paper variant="outlined" sx={{ p: 2 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 900, mb: 1 }}>Target Project</Typography>
+              <Typography variant="body2">{selectedTargetInfo?.name || selectedTarget}</Typography>
+              <Typography variant="caption" color="text.secondary">Root: {projectRootPath}</Typography>
+            </Paper>
+
+            <Paper variant="outlined" sx={{ p: 2 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 900, mb: 1 }}>Upload Plan</Typography>
+              <List dense disablePadding>
+                <ListItem disableGutters>
+                  <ListItemText
+                    primary={updateFiles ? 'Files & Binaries: WILL UPLOAD' : 'Files & Binaries: SKIPPED'}
+                    secondary={updateFiles
+                      ? `Copies from ${contentSourcePath} to ${stagingPath}, then uploads staging as contentfolder.`
+                      : `No file staging step. SteamCMD will still use contentfolder path: ${stagingPath}.`}
+                  />
+                </ListItem>
+                <ListItem disableGutters>
+                  <ListItemText
+                    primary={updateMetadata ? 'Workshop Metadata: WILL UPDATE' : 'Workshop Metadata: SKIPPED'}
+                    secondary={updateMetadata
+                      ? `Title, Description, Tags, Visibility, and changenote will be written into ${vdfPath}.`
+                      : `Title, Description, Tags, and Visibility will not be changed in this upload.`}
+                  />
+                </ListItem>
+                <ListItem disableGutters>
+                  <ListItemText
+                    primary={updatePreview ? 'Poster Image: WILL UPDATE' : 'Poster Image: SKIPPED'}
+                    secondary={updatePreview
+                      ? `Preview image path in VDF: ${previewFilePath}`
+                      : 'No preview image path will be included in VDF.'}
+                  />
+                </ListItem>
+              </List>
+            </Paper>
+
+            <Paper variant="outlined" sx={{ p: 2 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 900, mb: 1 }}>Request Summary</Typography>
+              <Stack spacing={0.5}>
+                <Typography variant="body2">Workshop ID: {metadata.id || 'Not set'}</Typography>
+                <Typography variant="body2">Steam User: {username || 'Not set'}</Typography>
+                <Typography variant="body2">Changenote length: {changenote?.length || 0} chars</Typography>
+              </Stack>
+            </Paper>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPublishConfirmOpen(false)} disabled={isPushing}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={handlePush}
+            disabled={isPushing}
+          >
+            {isPushing ? 'PUSHING...' : 'Confirm & Push'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
         <Alert severity={snackbar.severity}>{snackbar.message}</Alert>
       </Snackbar>

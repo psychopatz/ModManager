@@ -19,6 +19,7 @@ const BatchProcessMonitor = ({
     consolidationPrompt, setConsolidationPrompt, 
     resetConsolidationPrompt, consolidateBatch,
     saveBatchVolume,
+    setBatchWorkshopMetadata,
     setStatus, handleClose
 }) => {
     if (!attachedBatch) return null;
@@ -99,6 +100,7 @@ const BatchProcessMonitor = ({
                         setSectionsExpanded={setSectionsExpanded}
                         consolidateBatch={consolidateBatch}
                         consolidationPrompt={consolidationPrompt}
+                        setBatchWorkshopMetadata={setBatchWorkshopMetadata}
                         setStatus={setStatus}
                     />
                 </Stack>

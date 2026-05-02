@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
     Box, Typography, Stack, Collapse, IconButton, Button
 } from '@mui/material';
@@ -9,6 +9,7 @@ import {
     AutoFixHigh as AutoFixIcon,
     Terminal as WorkshopIcon
 } from '@mui/icons-material';
+import BBCodeEditorPreview from '../../Common/BBCodeEditorPreview';
 
 const LOG_COLORS = { success: '#10b981', error: '#ef4444', warning: '#f59e0b', system: '#60a5fa', info: '#9ca3af' };
 
@@ -18,10 +19,16 @@ const StageWorkshopBBCode = ({
     setSectionsExpanded,
     consolidateBatch,
     consolidationPrompt,
+    setBatchWorkshopMetadata,
     setStatus,
 }) => {
     const isLocked = !attachedBatch.workshopMetadata && attachedBatch.progress < 100;
     const logs = attachedBatch.logs || [];
+    const [draftMetadata, setDraftMetadata] = useState(attachedBatch.workshopMetadata || '');
+
+    useEffect(() => {
+        setDraftMetadata(attachedBatch.workshopMetadata || '');
+    }, [attachedBatch.id, attachedBatch.workshopMetadata]);
 
     return (
         <Box sx={{ 
@@ -64,20 +71,31 @@ const StageWorkshopBBCode = ({
                     )}
 
                     {attachedBatch.workshopMetadata ? (
-                        <Box sx={{ p: 1.5, bgcolor: 'rgba(0,0,0,0.2)', borderRadius: 1.5, border: '1px solid rgba(255,255,255,0.05)', position: 'relative' }}>
+                        <Box sx={{ position: 'relative' }}>
                             <IconButton 
                                 size="small" 
-                                sx={{ position: 'absolute', top: 5, right: 5, opacity: 0.5, '&:hover': { opacity: 1 } }}
+                                sx={{ position: 'absolute', top: 5, right: 5, opacity: 0.5, '&:hover': { opacity: 1 }, zIndex: 2 }}
                                 onClick={() => {
-                                    navigator.clipboard.writeText(attachedBatch.workshopMetadata);
+                                    navigator.clipboard.writeText(draftMetadata || attachedBatch.workshopMetadata);
                                     setStatus({ type: 'success', message: 'BBCode copied!' });
                                 }}
                             >
                                 <CopyIcon sx={{ fontSize: 16 }} />
                             </IconButton>
-                            <Typography variant="caption" sx={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap', color: '#c9d1d9', fontSize: '0.7rem' }}>
-                                {attachedBatch.workshopMetadata}
-                            </Typography>
+                            <BBCodeEditorPreview
+                                label="Workshop BBCode"
+                                value={draftMetadata}
+                                onChange={(next) => {
+                                    setDraftMetadata(next);
+                                    setBatchWorkshopMetadata?.(attachedBatch.id, next);
+                                }}
+                                editable
+                                minRows={6}
+                                maxRows={22}
+                                editorHelperText="Stage 3 output is editable here and updates live."
+                                previewTitle="Rendered Workshop Preview"
+                                compact
+                            />
                         </Box>
                     ) : (
                         <Button 
@@ -97,7 +115,7 @@ const StageWorkshopBBCode = ({
                             color="info"
                             startIcon={<CopyIcon />}
                             onClick={() => {
-                                navigator.clipboard.writeText(attachedBatch.workshopMetadata);
+                                navigator.clipboard.writeText(draftMetadata || attachedBatch.workshopMetadata);
                                 setStatus({ type: 'success', message: 'Workshop update BBCode copied!' });
                             }}
                             sx={{ mt: 2, fontWeight: 800 }}

@@ -27,7 +27,7 @@ def _split_tags(value: str) -> list[str]:
 
 
 def _extract_item_blocks(text: str) -> list[tuple[str, str]]:
-    pattern = re.compile(r"item\s+(\w+)\s*\{([^}]*)\}", re.IGNORECASE | re.DOTALL)
+    pattern = re.compile(r"item\s+([\w.]+)\s*\{([^}]*)\}", re.IGNORECASE | re.DOTALL)
     return pattern.findall(text)
 
 

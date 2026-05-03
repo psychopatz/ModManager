@@ -55,7 +55,7 @@ async def get_runtime_rules():
 @router.get("/api/runtime/heuristics")
 async def get_runtime_heuristics_source():
     settings = get_server_settings()
-    heuristics_path = Path(settings.dynamic_trading_path) / "Contents/mods/DynamicTradingCommon/42.16/media/lua/shared/DynamicTrading/DT_HeuristicsDB.lua"
+    heuristics_path = Path(settings.market_sense_path) / "Contents/mods/MarketSense/common/media/lua/shared/MarketSense/DT_HeuristicsDB.lua"
     text = _read_text_file(heuristics_path)
 
     return {

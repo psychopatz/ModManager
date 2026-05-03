@@ -117,7 +117,7 @@ def get_server_settings() -> ServerSettings:
         _first_non_empty(
             os.getenv("DT_RUNTIME_DUMP_FILE"),
             file_settings.get("runtime_dump_file"),
-            str(dynamic_trading_path.parent.parent / "Lua" / "DynamicTrading_ItemRuntimeCacheDump.txt"),
+            str(dynamic_trading_path.parent.parent / "Lua" / "MarketSense_ItemRuntimeCacheDump.txt"),
         )
     )
     if runtime_dump_file is None:

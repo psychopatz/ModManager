@@ -6,7 +6,7 @@ from fastapi import HTTPException
 
 from config.server_settings import get_server_settings
 from DebugManagement import LogParser
-from ItemManagement import load_vanilla_items
+from ItemManagement.commons.vanilla_loader import load_dump_items, load_vanilla_items
 from ProjectManagement import list_workshop_projects, resolve_project_target, get_flattened_modules
 
 _settings = get_server_settings()
@@ -43,6 +43,14 @@ def configure_environment(
 def get_items():
     global cached_vanilla_items
     if cached_vanilla_items is None:
+        try:
+            dump_items = load_dump_items()
+            if dump_items:
+                cached_vanilla_items = dump_items
+                return cached_vanilla_items
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning("Failed to load runtime dump, falling back to vanilla loader: %s", e)
         cached_vanilla_items = load_vanilla_items()
     return cached_vanilla_items
 

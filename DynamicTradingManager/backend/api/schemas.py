@@ -4,7 +4,8 @@ from pydantic import BaseModel, Field
 
 
 class StatsResponse(BaseModel):
-    total_vanilla: int
+    total_runtime: int
+    source: str = "runtime"
     registered: int
     unregistered: int
     coverage: float

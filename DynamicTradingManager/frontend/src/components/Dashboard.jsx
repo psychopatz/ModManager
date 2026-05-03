@@ -29,7 +29,8 @@ const darkTheme = createTheme({
 
 const Dashboard = () => {
   const [stats, setStats] = useState({
-    total_vanilla: 0,
+    total_runtime: 0,
+    source: 'runtime',
     registered: 0,
     unregistered: 0,
     coverage: 0,
@@ -66,8 +67,9 @@ const Dashboard = () => {
             {/* Stats Cards */}
             <Grid size={{ xs: 12, sm: 6, md: 3 }}>
               <Paper sx={{ p: 3, textAlign: 'center', borderTop: '4px solid #007acc' }}>
-                <Typography color="textSecondary" variant="overline">Total Vanilla</Typography>
-                <Typography variant="h3">{stats.total_vanilla.toLocaleString()}</Typography>
+                <Typography color="textSecondary" variant="overline">Total Runtime Items</Typography>
+                <Typography variant="h3">{(stats.total_runtime ?? 0).toLocaleString()}</Typography>
+                <Typography variant="caption" color="textSecondary">{stats.source ?? 'runtime'}</Typography>
               </Paper>
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 3 }}>

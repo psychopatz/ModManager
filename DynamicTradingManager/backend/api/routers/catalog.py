@@ -19,10 +19,10 @@ router = APIRouter(tags=["catalog"])
 @router.get("/api/stats", response_model=StatsResponse)
 async def get_stats():
     items = get_items()
-    total_vanilla = len(items)
+    total_runtime = len(items)
     registered = count_registered_items()
-    unregistered = total_vanilla - registered
-    coverage = (registered / total_vanilla * 100) if total_vanilla > 0 else 0
+    unregistered = total_runtime - registered
+    coverage = (registered / total_runtime * 100) if total_runtime > 0 else 0
 
     notifications = []
     invalid_blacklist = find_invalid_blacklist_ids()
@@ -30,7 +30,8 @@ async def get_stats():
         notifications.append(f"{len(invalid_blacklist)} invalid item ID(s) in blacklist")
 
     return {
-        "total_vanilla": total_vanilla,
+        "total_runtime": total_runtime,
+        "source": "dump",
         "registered": registered,
         "unregistered": unregistered,
         "coverage": round(coverage, 2),

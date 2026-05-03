@@ -44,10 +44,14 @@ def get_translated_name(item_id, props, default_module="Base"):
     Attempt to get the properly formatted display name by checking props
     and translating via the game's JSON files.
     """
-    translations = load_translations()
-    
     # Extract DisplayName property if present
     display_name_prop = get_property_value(props, "DisplayName", "")
+    
+    # Fast-path: dump items embed DisplayName directly and cleanly
+    if display_name_prop and not display_name_prop.startswith("ItemName_") and " " in display_name_prop:
+        return display_name_prop
+        
+    translations = load_translations()
     
     # Fallback to item_id if no DisplayName is defined
     base_name = display_name_prop if display_name_prop else item_id
@@ -85,7 +89,76 @@ def get_translated_name(item_id, props, default_module="Base"):
     return base_name
 
 
+def _build_props_string(entry: dict) -> str:
+    """Build a Lua-style props string from a dump entry for compatibility with tagging/pricing."""
+    lines = []
+    
+    name = entry.get("name", entry.get("item_id", ""))
+    if name:
+        lines.append(f"    DisplayName = {name},")
+    
+    # Weight (needed by pricing heuristics)
+    lines.append("    Weight = 0.5,")
+    
+    # Expanded tags as an accessible tag field
+    tags = entry.get("expanded_tags") or entry.get("tags", [])
+    if tags:
+        lines.append(f"    DT_Tags = {', '.join(tags)},")
+    
+    # Price is in dump
+    price = entry.get("current_price", 10)
+    lines.append(f"    BasePrice = {price},")
+    
+    # Source
+    lines.append(f"    DT_LookupSource = {entry.get('lookup_source', 'cache')},")
+    
+    return "\\n".join(lines)
+
+
+def load_dump_items(apply_blacklist=True):
+    """Load items from MarketSense runtime dump, emitting a props-string per item."""
+    from ..pricing.tag_pricing import _parse_runtime_dump, _runtime_dump_path
+    
+    path = _runtime_dump_path()
+    if not path or not os.path.exists(path):
+        return None
+        
+    entries = _parse_runtime_dump(path)
+    if not entries:
+        return None
+        
+    items = {}
+    for entry in entries:
+        item_id = entry["item_id"]
+        if apply_blacklist:
+            from ..parse.blacklist import is_item_blacklisted
+            is_bl, _ = is_item_blacklisted(item_id.split(".")[-1], {})
+            if is_bl:
+                continue
+                
+        props = _build_props_string(entry)
+        items[item_id] = props
+        
+    print(f"✅ Loaded {len(items)} items from runtime dump")
+    return items
+
+
 def load_vanilla_items(apply_blacklist=True, verbose_blacklist=False):
+    """
+    Smart entry point for loading items. Tries the runtime dump first, 
+    then falls back to script parsing if dump is unavailable.
+    """
+    try:
+        dump_items = load_dump_items(apply_blacklist=apply_blacklist)
+        if dump_items:
+            return dump_items
+    except Exception as e:
+        print(f"⚠️ Failed to load runtime dump: {e}")
+        
+    return _load_vanilla_scripts(apply_blacklist=apply_blacklist, verbose_blacklist=verbose_blacklist)
+
+
+def _load_vanilla_scripts(apply_blacklist=True, verbose_blacklist=False):
     """
     Load all vanilla item definitions with full properties
     

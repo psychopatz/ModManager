@@ -188,6 +188,31 @@ def calculate_price_details(item_id: str, props: str, tags_dict: Any, pricing_co
 
     config = pricing_config or get_pricing_config()
     normalized_tags = normalize_tags_dict(tags_dict)
+    
+    # Fast-path: dump items carry their actual runtime exact base price pre-calculated
+    base_price_match = re.search(r"BasePrice\s*=\s*(\d+)", props or "", re.IGNORECASE)
+    if base_price_match and "DT_LookupSource =" in (props or ""):
+        live_price = int(base_price_match.group(1))
+        override = config.get("item_overrides", {}).get(item_id)
+        final_price = override if override is not None else live_price
+        
+        category, subcategories = category_parts(normalized_tags["primary"])
+        return {
+            "item_id": item_id,
+            "price": max(1, int(final_price)),
+            "category": category,
+            "primary_tag": normalized_tags["primary"],
+            "subcategory_path": subcategories,
+            "raw_score": float(live_price),
+            "components": [make_component("Dump Runtime Price", float(live_price))] if override is None else [make_component("Item override", float(override))],
+            "adjustments": [],
+            "tags_dict": normalized_tags,
+            "pre_global_clamp_price": float(final_price),
+            "global_price_clamped": False,
+            "global_price_clamp": None,
+            "global_min_price": float(config.get("global", {}).get("min_price", 1.0)),
+            "global_max_price": None,
+        }
     context = build_item_context(item_id, props, normalized_tags)
     category = context["category"]
     category_cfg = _category_config(config, category)

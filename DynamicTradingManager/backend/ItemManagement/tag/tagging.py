@@ -488,6 +488,13 @@ def categorize_item(item_id, props):
 
 def generate_tags(item_id, props):
     """Generate complete tag set for an item"""
+    # Fast-path: dump items have pre-classified tags embedded as DT_Tags
+    if props:
+        dt_tags_match = re.search(r"DT_Tags\s*=\s*([^\n]+)", props, re.IGNORECASE)
+        if dt_tags_match:
+            raw = dt_tags_match.group(1)
+            return [t.strip() for t in raw.split(",") if t.strip()]
+            
     primary, additional_tags = categorize_item(item_id, props)
     
     tags = [primary]

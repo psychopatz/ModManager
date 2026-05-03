@@ -19,8 +19,7 @@ from .parse.items_parser import parse_items
 from .sim.tag_logic import matches_all_tags, tag_matches
 
 try:
-    from ItemManagement import load_vanilla_items
-    from ItemManagement.commons.vanilla_loader import get_translated_name
+    from ItemManagement.commons.vanilla_loader import get_translated_name, load_vanilla_items
 except ImportError:
     load_vanilla_items = None
     get_translated_name = None

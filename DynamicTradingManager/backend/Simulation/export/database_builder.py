@@ -20,8 +20,9 @@ from ..sim.economy import (
 from ..sim.event_timeline import TimelineState, compute_active_events
 
 try:
-    from ItemManagement import calculate_price, load_vanilla_items
+    from ItemManagement import calculate_price
     from ItemManagement.commons.lua_handler.records import tags_list_to_dict
+    from ItemManagement.commons.vanilla_loader import load_vanilla_items
 except ImportError:
     calculate_price = None
     load_vanilla_items = None
@@ -34,8 +35,9 @@ def build_database(paths: Paths, config: BuildConfig) -> dict:
     archetypes = parse_archetypes(paths.mod_common / "ArchetypeDefinitions")
     events = parse_events(paths.mod_common / "Events")
 
-    if calculate_price and load_vanilla_items and tags_list_to_dict:
-        vanilla_items = load_vanilla_items()
+    if calculate_price and tags_list_to_dict and load_vanilla_items:
+        vanilla_items = load_vanilla_items() or {}
+            
         for item_def in items.values():
             bare_id = item_def.item_id.split(".", 1)[1] if "." in item_def.item_id else item_def.item_id
             props = vanilla_items.get(bare_id)

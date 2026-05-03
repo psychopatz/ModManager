@@ -115,6 +115,31 @@ const Actions = ({ onTaskStarted }) => {
                         >
                             View Rarity Distribution
                         </Button>
+                        <Button 
+                            variant="contained" 
+                            color="primary"
+                            startIcon={<SearchIcon />}
+                            onClick={async () => {
+                                try {
+                                    const res = await api.syncSandboxOptions();
+                                    setSnackbar({ 
+                                        open: true, 
+                                        message: `Successfully synced ${res.data.options_count} sandbox options!`, 
+                                        severity: 'success' 
+                                    });
+                                } catch (err) {
+                                    setSnackbar({ 
+                                        open: true, 
+                                        message: 'Failed to sync sandbox options', 
+                                        severity: 'error' 
+                                    });
+                                }
+                            }}
+                            fullWidth
+                            sx={{ mt: 1 }}
+                        >
+                            Sync MarketSense Sandbox
+                        </Button>
                     </Paper>
                 </Grid>
             </Grid>

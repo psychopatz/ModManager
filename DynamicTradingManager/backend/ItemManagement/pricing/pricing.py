@@ -69,36 +69,42 @@ def _apply_shared_multipliers(
     tags_dict = context["tags_dict"]
     adjustments: list[dict[str, Any]] = []
 
-    price = raw_score * global_cfg.get("base_multiplier", 1.0)
-    if global_cfg.get("base_multiplier", 1.0) != 1.0:
-        adjustments.append(make_component("Global multiplier", global_cfg["base_multiplier"], "multiplier"))
+    price = raw_score + global_cfg.get("base_price", 0.0)
+    if global_cfg.get("base_price", 0.0) != 0.0:
+        adjustments.append(make_component("Global base price", global_cfg["base_price"]))
 
     rarity = tags_dict.get("rarity") or "Common"
-    rarity_mult = config["rarity_multipliers"].get(rarity, 1.0)
-    price *= rarity_mult
-    if rarity_mult != 1.0:
-        adjustments.append(make_component(f"Rarity: {rarity}", rarity_mult, "multiplier"))
+    rarity_add = config.get("rarity_additions", {}).get(rarity, 0.0)
+    price += rarity_add
+    if rarity_add != 0.0:
+        adjustments.append(make_component(f"Rarity addition: {rarity}", rarity_add))
 
     quality = tags_dict.get("quality")
     if quality:
-        quality_mult = config["quality_multipliers"].get(quality, 1.0)
-        price *= quality_mult
-        if quality_mult != 1.0:
-            adjustments.append(make_component(f"Quality: {quality}", quality_mult, "multiplier"))
+        quality_add = config.get("quality_additions", {}).get(quality, 0.0)
+        price += quality_add
+        if quality_add != 0.0:
+            adjustments.append(make_component(f"Quality addition: {quality}", quality_add))
 
     origin = tags_dict.get("origin")
     if origin:
-        origin_mult = config["origin_multipliers"].get(origin, 1.0)
-        price *= origin_mult
-        if origin_mult != 1.0:
-            adjustments.append(make_component(f"Origin: {origin}", origin_mult, "multiplier"))
+        origin_add = config.get("origin_additions", {}).get(origin, 0.0)
+        price += origin_add
+        if origin_add != 0.0:
+            adjustments.append(make_component(f"Origin addition: {origin}", origin_add))
 
     for theme in tags_dict.get("theme", []):
         theme_name = theme.split(".", 1)[1] if theme.startswith("Theme.") else theme
-        theme_mult = config.get("theme_multipliers", {}).get(theme_name, 1.0)
-        price *= theme_mult
-        if theme_mult != 1.0:
-            adjustments.append(make_component(f"Theme: {theme_name}", theme_mult, "multiplier"))
+        theme_add = config.get("theme_additions", {}).get(theme_name, 0.0)
+        price += theme_add
+        if theme_add != 0.0:
+            adjustments.append(make_component(f"Theme addition: {theme_name}", theme_add))
+
+    # Apply global multiplier last if exists (optional master scale)
+    base_mult = global_cfg.get("base_multiplier", 1.0)
+    price *= base_mult
+    if base_mult != 1.0:
+        adjustments.append(make_component("Global multiplier", base_mult, "multiplier"))
 
     if (
         context["total_uses"] > 1

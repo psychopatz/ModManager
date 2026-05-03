@@ -13,6 +13,7 @@ from ItemManagement import (
     load_pricing_config,
     preview_pricing_tag,
     save_pricing_config,
+    sync_sandbox_options,
     warm_pricing_tag_cache,
 )
 from ItemManagement.commons.lua_handler.records import tags_list_to_dict
@@ -121,4 +122,15 @@ async def preview_pricing_tags(request: PricingTagPreviewRequest):
         )
     except Exception as exc:
         logger.error("Error previewing pricing tag %s: %s", request.tag, exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post("/api/pricing/sync-sandbox")
+async def sync_pricing_sandbox():
+    try:
+        return sync_sandbox_options()
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        logger.error("Error syncing sandbox options: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))

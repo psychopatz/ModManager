@@ -3,6 +3,7 @@
   "global": {
     "min_price": 1.0,
     "max_price": 1e+30,
+    "base_price": 0.0,
     "base_multiplier": 1.0,
     "opened_penalty": 0.72,
     "extra_use_bonus": 0.08,
@@ -30,22 +31,22 @@
     "stock_rare_min_ratio": 0.0,
     "stock_opened_multiplier": 0.7
   },
-  "rarity_multipliers": {
+  "rarity_additions": {
     "Common": 1.0,
     "Uncommon": 1.18,
     "Rare": 1.45,
     "Legendary": 2.1,
     "UltraRare": 2.75
   },
-  "quality_multipliers": {
+  "quality_additions": {
     "Waste": 0.3,
     "Sterile": 1.18,
     "Luxury": 1.6
   },
-  "origin_multipliers": {
+  "origin_additions": {
     "Vanilla": 1.0
   },
-  "theme_multipliers": {
+  "theme_additions": {
     "Police": 1.08,
     "Militia": 1.15,
     "Clinical": 1.12,
@@ -66,7 +67,7 @@
     "Building.Survival": 18.0,
     "Building.Survival.Trap": 6.0,
     "Building.Vehicle": 12.0,
-    "Clothing": 139.0,
+    "Clothing": 199.0,
     "Clothing.Accessory.Jewelry": 20.0,
     "Clothing.Accessory.Jewelry.Necklace": 13.0,
     "Clothing.Accessory.Jewelry.Nose": 14.0,
@@ -104,7 +105,7 @@
     "Electronics.Television": 24.0,
     "Electronics.Communicator": 24.0,
     "Electronics.Battery": 10.0,
-    "Food": 21.0,
+    "Food": 194.0,
     "Medical": 40.0,
     "Literature": 465.0,
     "Literature.SkillBook": 468.0,

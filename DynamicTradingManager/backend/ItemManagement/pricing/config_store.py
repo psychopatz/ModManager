@@ -16,6 +16,7 @@ DEFAULT_PRICING_CONFIG: Dict[str, Any] = {
     "global": {
         "min_price": 1,
         "max_price": 1e30,
+        "base_price": 0.0,
         "base_multiplier": 1.0,
         "opened_penalty": 0.72,
         "extra_use_bonus": 0.08,
@@ -43,27 +44,27 @@ DEFAULT_PRICING_CONFIG: Dict[str, Any] = {
         "stock_rare_min_ratio": 0.0,
         "stock_opened_multiplier": 0.7,
     },
-    "rarity_multipliers": {
-        "Common": 1.0,
-        "Uncommon": 1.18,
-        "Rare": 1.45,
-        "Legendary": 2.1,
-        "UltraRare": 2.75,
+    "rarity_additions": {
+        "Common": 0.0,
+        "Uncommon": 14.0,
+        "Rare": 17.0,
+        "Legendary": 20.0,
+        "UltraRare": 27.0,
     },
-    "quality_multipliers": {
-        "Waste": 0.3,
-        "Sterile": 1.18,
-        "Luxury": 1.6,
+    "quality_additions": {
+        "Waste": -10.0,
+        "Sterile": 14.0,
+        "Luxury": 40.0,
     },
-    "origin_multipliers": {
-        "Vanilla": 1.0,
+    "origin_additions": {
+        "Vanilla": 0.0,
     },
-    "theme_multipliers": {
-        "Police": 1.08,
-        "Militia": 1.15,
-        "Clinical": 1.12,
-        "Industrial": 1.06,
-        "Primitive": 1.05,
+    "theme_additions": {
+        "Police": 13.0,
+        "Militia": 20.0,
+        "Clinical": 15.0,
+        "Industrial": 15.0,
+        "Primitive": 7.0,
     },
     "tag_price_additions": {},
     "item_overrides": {},
@@ -492,21 +493,21 @@ def validate_pricing_config(candidate: Dict[str, Any] | None) -> Dict[str, Any]:
     normalized: Dict[str, Any] = {
         "version": int(merged.get("version", 1)),
         "global": _normalize_named_numeric_map(merged.get("global", {}), "global"),
-        "rarity_multipliers": _normalize_named_numeric_map(
-            merged.get("rarity_multipliers", {}),
-            "rarity_multipliers",
+        "rarity_additions": _normalize_named_numeric_map(
+            merged.get("rarity_additions", {}),
+            "rarity_additions",
         ),
-        "quality_multipliers": _normalize_named_numeric_map(
-            merged.get("quality_multipliers", {}),
-            "quality_multipliers",
+        "quality_additions": _normalize_named_numeric_map(
+            merged.get("quality_additions", {}),
+            "quality_additions",
         ),
-        "origin_multipliers": _normalize_named_numeric_map(
-            merged.get("origin_multipliers", {}),
-            "origin_multipliers",
+        "origin_additions": _normalize_named_numeric_map(
+            merged.get("origin_additions", {}),
+            "origin_additions",
         ),
-        "theme_multipliers": _normalize_named_numeric_map(
-            merged.get("theme_multipliers", {}),
-            "theme_multipliers",
+        "theme_additions": _normalize_named_numeric_map(
+            merged.get("theme_additions", {}),
+            "theme_additions",
         ),
         "tag_price_additions": _normalize_named_numeric_map(
             merged.get("tag_price_additions", {}),

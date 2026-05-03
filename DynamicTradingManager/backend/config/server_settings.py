@@ -46,6 +46,7 @@ class ServerSettings:
     backend_root: Path
     settings_file: Path
     dynamic_trading_path: Path
+    market_sense_path: Path
     dynamic_colonies_path: Path
     dynamic_currency_path: Path
     console_path: Path
@@ -83,6 +84,17 @@ def get_server_settings() -> ServerSettings:
             str(dynamic_trading_path.parent / "DynamicColonies"),
         )
     )
+    market_sense_path = _resolve_path(
+        _first_non_empty(
+            os.getenv("MARKET_SENSE_PATH"),
+            file_settings.get("market_sense_path"),
+            str(dynamic_trading_path.parent / "MarketSense"),
+        )
+    )
+    if market_sense_path is None:
+        raise RuntimeError(
+            "Market Sense path is not configured. Set MARKET_SENSE_PATH or add market_sense_path to server settings."
+        )
     dynamic_currency_path = _resolve_path(
         _first_non_empty(
             os.getenv("DYNAMIC_CURRENCY_PATH"),
@@ -116,18 +128,18 @@ def get_server_settings() -> ServerSettings:
             os.getenv("DT_RUNTIME_RULES_FILE"),
             file_settings.get("runtime_rules_file"),
             str(
-                dynamic_trading_path
+                market_sense_path
                 / "Contents"
                 / "mods"
-                / "DynamicTradingCommon"
+                / "MarketSense"
                 / "common"
                 / "media"
                 / "lua"
                 / "shared"
                 / "DT"
-                / "Common"
+                / "MarketSense"
                 / "Items"
-                / "DT_RuntimeRules_Data.lua"
+                / "MS_RuntimeRules_Data.lua"
             ),
         )
     )
@@ -151,6 +163,7 @@ def get_server_settings() -> ServerSettings:
         backend_root=BACKEND_ROOT,
         settings_file=settings_file,
         dynamic_trading_path=dynamic_trading_path,
+        market_sense_path=market_sense_path,
         dynamic_colonies_path=dynamic_colonies_path,
         dynamic_currency_path=dynamic_currency_path,
         console_path=console_path,

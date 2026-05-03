@@ -534,18 +534,18 @@ def _write_config(config: Dict[str, Any]) -> None:
 def _tag_additions_lua_path() -> Path:
     settings = get_server_settings()
     return (
-        Path(settings.dynamic_trading_path)
+        Path(settings.market_sense_path)
         / "Contents"
         / "mods"
-        / "DynamicTradingCommon"
+        / "MarketSense"
         / "common"
         / "media"
         / "lua"
         / "shared"
         / "DT"
-        / "Common"
+        / "MarketSense"
         / "Pricing"
-        / "DT_TagPriceAdditions_Data.lua"
+        / "MS_TagPriceAdditions_Data.lua"
     )
 
 

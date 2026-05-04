@@ -65,6 +65,8 @@ export const getPricingAudit = (params) => api.get('/pricing/audit', { params })
 export const getPricingTags = () => api.get('/pricing/tags');
 export const previewPricingTag = (payload) => api.post('/pricing/tags/preview', payload);
 export const syncSandboxOptions = () => api.post('/pricing/sync-sandbox');
+export const getSandboxOptions = () => api.get('/pricing/sandbox');
+export const updateSandboxOption = (key, value) => api.put('/pricing/sandbox', { key, value });
 export const getArchetypeEditorData = (module = 'DynamicTradingCommon') => api.get('/archetypes/editor', { params: { module } });
 export const saveArchetypeDefinition = (archetypeId, payload, module = 'DynamicTradingCommon') => api.put(`/archetypes/${archetypeId}/allocations`, payload, { params: { module } });
 export const getDonatorsDefinition = () => api.get('/donators');

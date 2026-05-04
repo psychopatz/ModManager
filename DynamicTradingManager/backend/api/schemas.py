@@ -143,3 +143,12 @@ class WorkshopVersionIncrementRequest(BaseModel):
     target: Optional[str] = None
     mod_id: str
     bump: Optional[str] = "patch"
+
+
+class SandboxUpdateRequest(BaseModel):
+    key: str
+    value: Union[float, int, bool]
+
+
+class SandboxResponse(BaseModel):
+    options: Dict[str, Any]

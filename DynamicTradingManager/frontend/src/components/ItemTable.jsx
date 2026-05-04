@@ -26,10 +26,27 @@ import {
     DialogContent,
     DialogTitle,
     Stack,
-    Alert
+    Alert,
+    Drawer,
+    IconButton,
+    Divider,
+    Slider
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
-import { getItems, getTags, getOverrides, saveItemOverride, deleteItemOverride, addBlacklistItem, addWhitelistItem, deleteWhitelistItem } from '../services/api';
+import SettingsIcon from '@mui/icons-material/Settings';
+import CloseIcon from '@mui/icons-material/Close';
+import { 
+    getItems, 
+    getTags, 
+    getOverrides, 
+    saveItemOverride, 
+    deleteItemOverride, 
+    addBlacklistItem, 
+    addWhitelistItem, 
+    deleteWhitelistItem,
+    getSandboxOptions,
+    updateSandboxOption
+} from '../services/api';
 
 const ItemTable = () => {
     const [items, setItems] = useState([]);
@@ -51,6 +68,11 @@ const ItemTable = () => {
     const [blacklistingItemId, setBlacklistingItemId] = useState('');
     const [whitelistMutatingItemId, setWhitelistMutatingItemId] = useState('');
     const [actionStatus, setActionStatus] = useState({ type: '', message: '' });
+    
+    // Sandbox Options
+    const [sandboxOptions, setSandboxOptions] = useState({});
+    const [sandboxOpen, setSandboxOpen] = useState(false);
+    const [sandboxSaving, setSandboxSaving] = useState(false);
 
     const fetchItems = async () => {
         try {
@@ -100,9 +122,19 @@ const ItemTable = () => {
         }
     };
 
+    const fetchSandbox = async () => {
+        try {
+            const response = await getSandboxOptions();
+            setSandboxOptions(response.data?.options || {});
+        } catch (err) {
+            console.error('Failed to fetch sandbox options:', err);
+        }
+    };
+
     useEffect(() => {
         fetchTags();
         fetchOverrides();
+        fetchSandbox();
     }, []);
 
     useEffect(() => {
@@ -232,6 +264,20 @@ const ItemTable = () => {
             setActionStatus({ type: 'error', message: err?.response?.data?.detail || 'Failed to delete override.' });
         } finally {
             setSavingOverride(false);
+        }
+    };
+
+    const handleUpdateSandbox = async (key, value) => {
+        setSandboxSaving(true);
+        try {
+            await updateSandboxOption(key, value);
+            await fetchSandbox();
+            // Refresh items to see predicted price changes if heuristics are being used
+            await fetchItems();
+        } catch (err) {
+            console.error("Failed to update sandbox option:", err);
+        } finally {
+            setSandboxSaving(false);
         }
     };
 
@@ -373,6 +419,15 @@ const ItemTable = () => {
                             onChange={(e) => { setMaxPrice(e.target.value); setPage(0); }}
                         />
                     </Grid>
+                    <Grid size={{ xs: 12, sm: 'auto' }}>
+                        <Button 
+                            variant="outlined" 
+                            startIcon={<SettingsIcon />}
+                            onClick={() => setSandboxOpen(true)}
+                        >
+                            Sandbox Options
+                        </Button>
+                    </Grid>
                 </Grid>
             </Box>
             <TableContainer component={Paper} sx={{ flexGrow: 1, overflow: 'auto', boxShadow: 'none' }}>
@@ -381,7 +436,8 @@ const ItemTable = () => {
                         <TableRow>
                             <TableCell sx={{ fontWeight: 'bold' }}>Item ID</TableCell>
                             <TableCell sx={{ fontWeight: 'bold' }}>Display Name</TableCell>
-                            <TableCell sx={{ fontWeight: 'bold' }}>Price</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold' }}>Auto Price</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold' }}>Total Price</TableCell>
                             <TableCell sx={{ fontWeight: 'bold' }}>Weight</TableCell>
                             <TableCell sx={{ fontWeight: 'bold' }}>Tags</TableCell>
                             <TableCell sx={{ fontWeight: 'bold' }}>Status</TableCell>
@@ -401,7 +457,8 @@ const ItemTable = () => {
                                     {/** keep per-item actions visible for quick override management */}
                                     <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{item.id}</TableCell>
                                     <TableCell>{item.name}</TableCell>
-                                    <TableCell>${item.price}</TableCell>
+                                    <TableCell sx={{ color: 'text.secondary' }}>${item.base_price || item.price}</TableCell>
+                                    <TableCell sx={{ fontWeight: 'bold', color: 'primary.main' }}>${item.price}</TableCell>
                                     <TableCell>{item.weight}kg</TableCell>
                                     <TableCell>
                                         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
@@ -539,6 +596,78 @@ const ItemTable = () => {
                     </Button>
                 </DialogActions>
             </Dialog>
+
+            <Drawer
+                anchor="right"
+                open={sandboxOpen}
+                onClose={() => setSandboxOpen(false)}
+                PaperProps={{
+                    sx: { width: { xs: '100%', sm: 450 }, p: 0 }
+                }}
+            >
+                <Box sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: 1, borderColor: 'divider' }}>
+                    <Typography variant="h6">Market Sense Sandbox</Typography>
+                    <IconButton onClick={() => setSandboxOpen(false)}>
+                        <CloseIcon />
+                    </IconButton>
+                </Box>
+                <Box sx={{ p: 2, overflow: 'auto', flexGrow: 1 }}>
+                    <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                        Simulate in-game sandbox multipliers and additive values. Changes here will update the "Predicted Price" in the table.
+                    </Typography>
+                    
+                    <Stack spacing={3}>
+                        {Object.entries(sandboxOptions).sort(([a],[b]) => a.localeCompare(b)).map(([key, opt]) => (
+                            <Box key={key}>
+                                <Typography variant="caption" sx={{ fontWeight: 'bold', display: 'block', mb: 1 }}>
+                                    {key.replace(/([A-Z])/g, ' $1').trim()}
+                                </Typography>
+                                <Box sx={{ px: 1 }}>
+                                    {opt.type === 'double' ? (
+                                        <Box>
+                                            <Slider
+                                                size="small"
+                                                value={opt.value ?? opt.default}
+                                                step={0.05}
+                                                min={0}
+                                                max={10}
+                                                valueLabelDisplay="auto"
+                                                onChangeCommitted={(_, val) => handleUpdateSandbox(key, val)}
+                                                disabled={sandboxSaving}
+                                            />
+                                            <Typography variant="caption" color="textSecondary">
+                                                Current: {opt.value ?? opt.default} (Default: {opt.default})
+                                            </Typography>
+                                        </Box>
+                                    ) : (
+                                        <TextField
+                                            fullWidth
+                                            size="small"
+                                            type="number"
+                                            variant="outlined"
+                                            value={opt.value ?? opt.default}
+                                            onBlur={(e) => handleUpdateSandbox(key, Number(e.target.value))}
+                                            onKeyDown={(e) => e.key === 'Enter' && handleUpdateSandbox(key, Number(e.target.value))}
+                                            disabled={sandboxSaving}
+                                            helperText={`Default: ${opt.default}`}
+                                        />
+                                    )}
+                                </Box>
+                                <Divider sx={{ mt: 2 }} />
+                            </Box>
+                        ))}
+                    </Stack>
+                </Box>
+                <Box sx={{ p: 2, borderTop: 1, borderColor: 'divider' }}>
+                    <Button 
+                        fullWidth 
+                        variant="contained" 
+                        onClick={() => setSandboxOpen(false)}
+                    >
+                        Review Simulation
+                    </Button>
+                </Box>
+            </Drawer>
         </Box>
     );
 };

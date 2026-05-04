@@ -7,6 +7,7 @@ import re
 from typing import Any, Dict
 
 from .config_store import get_pricing_config
+from .sandbox_manager import get_sandbox_manager
 from .heuristics import (
     build_item_context,
     evaluate_building,
@@ -101,8 +102,28 @@ def _apply_shared_multipliers(
         if theme_add != 0.0:
             adjustments.append(make_component(f"Theme addition: {theme_name}", theme_add))
 
+    # Sandbox Additions (Hierarchical)
+    sm = get_sandbox_manager()
+    tags = [context["primary_tag"]]
+    if tags_dict.get("rarity"): tags.append(f"Rarity.{tags_dict['rarity']}")
+    if tags_dict.get("quality"): tags.append(f"Quality.{tags_dict['quality']}")
+    if tags_dict.get("theme"): 
+        for t in tags_dict["theme"]: tags.append(t)
+    if tags_dict.get("origin"): tags.append(f"Origin.{tags_dict['origin']}")
+    
+    sandbox_add = sm.get_tag_adjustment("Price", tags)
+    sandbox_global_add = sm.get_value("PriceGlobalValue") or 0.0
+    
+    if sandbox_add != 0.0:
+        price += sandbox_add
+        adjustments.append(make_component("Sandbox additive (tags)", sandbox_add))
+    
+    if sandbox_global_add != 0.0:
+        price += sandbox_global_add
+        adjustments.append(make_component("Sandbox additive (global)", sandbox_global_add))
+
     # Apply global multiplier last if exists (optional master scale)
-    base_mult = global_cfg.get("base_multiplier", 1.0)
+    base_mult = sm.get_value("PriceMultiplier") or global_cfg.get("base_multiplier", 1.0)
     price *= base_mult
     if base_mult != 1.0:
         adjustments.append(make_component("Global multiplier", base_mult, "multiplier"))
@@ -195,31 +216,14 @@ def calculate_price_details(item_id: str, props: str, tags_dict: Any, pricing_co
 
     config = pricing_config or get_pricing_config()
     normalized_tags = normalize_tags_dict(tags_dict)
+    sm = get_sandbox_manager()
     
-    # Fast-path: dump items carry their actual runtime exact base price pre-calculated
+    # Check if this is a dump item with a pre-calculated price
+    live_price = None
     base_price_match = re.search(r"BasePrice\s*=\s*(\d+)", props or "", re.IGNORECASE)
     if base_price_match and "DT_LookupSource =" in (props or ""):
-        live_price = int(base_price_match.group(1))
-        override = config.get("item_overrides", {}).get(item_id)
-        final_price = override if override is not None else live_price
-        
-        category, subcategories = category_parts(normalized_tags["primary"])
-        return {
-            "item_id": item_id,
-            "price": max(1, int(final_price)),
-            "category": category,
-            "primary_tag": normalized_tags["primary"],
-            "subcategory_path": subcategories,
-            "raw_score": float(live_price),
-            "components": [make_component("Dump Runtime Price", float(live_price))] if override is None else [make_component("Item override", float(override))],
-            "adjustments": [],
-            "tags_dict": normalized_tags,
-            "pre_global_clamp_price": float(final_price),
-            "global_price_clamped": False,
-            "global_price_clamp": None,
-            "global_min_price": float(config.get("global", {}).get("min_price", 1.0)),
-            "global_max_price": None,
-        }
+        live_price = float(base_price_match.group(1))
+
     context = build_item_context(item_id, props, normalized_tags)
     category = context["category"]
     category_cfg = _category_config(config, category)
@@ -256,9 +260,27 @@ def calculate_price_details(item_id: str, props: str, tags_dict: Any, pricing_co
     raw_score = max(float(result["score"]), float(category_cfg.get("price_floor", 1.0)))
     price, adjustments, clamp_meta = _apply_shared_multipliers(raw_score, context, config)
 
+    # Simulation Logic: If this is a dump item, the 'price' should be the live_price 
+    # unless the user has actively adjusted sandbox multipliers in the ModManager.
+    # This ensures that "Auto Price" vs "Total Price" shows Heuristics vs Game Price by default.
+    sim_tags = [context["primary_tag"]]
+    if normalized_tags.get("rarity"): sim_tags.append(f"Rarity.{normalized_tags['rarity']}")
+    if normalized_tags.get("quality"): sim_tags.append(f"Quality.{normalized_tags['quality']}")
+    if normalized_tags.get("theme"): 
+        for t in normalized_tags["theme"]: sim_tags.append(t)
+    if normalized_tags.get("origin"): sim_tags.append(f"Origin.{normalized_tags['origin']}")
+
+    is_simulating = sm.get_value("PriceMultiplier") is not None or sm.get_tag_adjustment("Price", sim_tags) != 0.0 or sm.get_value("PriceGlobalValue") is not None
+    
+    if live_price is not None and not is_simulating:
+        final_price = live_price
+        adjustments = [make_component("In-Game Registry Price", live_price)]
+    else:
+        final_price = price
+
     return {
         "item_id": item_id,
-        "price": max(1, int(round(price))),
+        "price": max(1, int(round(final_price))),
         "category": effective_category,
         "primary_tag": context["primary_tag"],
         "subcategory_path": context["subcategories"],

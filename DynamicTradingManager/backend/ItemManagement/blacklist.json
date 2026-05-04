@@ -2,6 +2,7 @@
   "itemIds": [
     "Animal",
     "Bag_FoodCanned",
+    "Base.BareHands",
     "FISH_DEV_ITEM",
     "Money",
     "MoneyBundle",

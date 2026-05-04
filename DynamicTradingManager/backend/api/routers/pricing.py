@@ -4,7 +4,7 @@ import threading
 from fastapi import APIRouter, HTTPException
 
 from api.routers.common import get_items
-from api.schemas import PricingConfigRequest, PricingPreviewRequest, PricingTagPreviewRequest
+from api.schemas import PricingConfigRequest, PricingPreviewRequest, PricingTagPreviewRequest, SandboxUpdateRequest, SandboxResponse
 from ItemManagement import (
     build_pricing_audit,
     build_pricing_tag_catalog,
@@ -17,6 +17,7 @@ from ItemManagement import (
     warm_pricing_tag_cache,
 )
 from ItemManagement.commons.vanilla_loader import get_translated_name
+from ItemManagement.pricing.sandbox_manager import get_sandbox_manager
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["pricing"])
@@ -132,4 +133,25 @@ async def sync_pricing_sandbox():
         raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
         logger.error("Error syncing sandbox options: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.get("/api/pricing/sandbox", response_model=SandboxResponse)
+async def get_sandbox_options_api():
+    try:
+        sm = get_sandbox_manager()
+        return SandboxResponse(options=sm.get_all_options())
+    except Exception as exc:
+        logger.error("Error getting sandbox options: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.put("/api/pricing/sandbox")
+async def update_sandbox_option_api(request: SandboxUpdateRequest):
+    try:
+        sm = get_sandbox_manager()
+        sm.save_value(request.key, request.value)
+        return {"status": "success", "key": request.key, "value": request.value}
+    except Exception as exc:
+        logger.error("Error updating sandbox option %s: %s", request.key, exc)
         raise HTTPException(status_code=500, detail=str(exc))

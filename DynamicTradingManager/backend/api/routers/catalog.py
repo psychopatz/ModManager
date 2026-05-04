@@ -7,7 +7,7 @@ from fastapi import APIRouter
 
 from api.routers.common import get_items
 from api.schemas import StatsResponse
-from ItemManagement import calculate_price, generate_tags, get_stat
+from ItemManagement import calculate_price_details, generate_tags, get_stat
 from ItemManagement.commons.vanilla_loader import get_translated_name, get_vanilla_script_count, _load_vanilla_scripts
 from ItemManagement.parse import is_item_blacklisted, is_item_whitelisted
 from ItemManagement.ui.stats import find_invalid_blacklist_ids
@@ -104,7 +104,9 @@ async def list_items(
 
             tags_list = generate_tags(item_id, props)
             tags_dict = {t: True for t in tags_list}
-            price = calculate_price(item_id, props, tags_dict)
+            details = calculate_price_details(item_id, props, tags_dict)
+            price = details["price"]
+            base_price = details["raw_score"]
             weight = get_stat(props, "Weight", 0.5)
 
             item_name = get_translated_name(item_id, props)
@@ -137,6 +139,7 @@ async def list_items(
                     "is_blacklisted": bool(is_bl),
                     "is_whitelisted": bool(is_wl),
                     "price": int(price),
+                    "base_price": int(round(base_price)),
                     "tags": tags_list,
                     "weight": float(weight),
                 }

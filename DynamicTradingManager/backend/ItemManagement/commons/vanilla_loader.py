@@ -115,15 +115,15 @@ def _build_props_string(entry: dict) -> str:
     return "\\n".join(lines)
 
 
-def load_dump_items(apply_blacklist=True):
-    """Load items from MarketSense runtime dump, emitting a props-string per item."""
-    from ..pricing.tag_pricing import _parse_runtime_dump, _runtime_dump_path
+def load_dt_items(apply_blacklist=True):
+    """Load items from MarketSense DT_Items directory, emitting a props-string per item."""
+    from ..pricing.tag_pricing import parse_dt_items, _dt_items_dir
     
-    path = _runtime_dump_path()
+    path = _dt_items_dir()
     if not path or not os.path.exists(path):
         return None
         
-    entries = _parse_runtime_dump(path)
+    entries = parse_dt_items(path)
     if not entries:
         return None
         
@@ -149,13 +149,18 @@ def load_vanilla_items(apply_blacklist=True, verbose_blacklist=False):
     then falls back to script parsing if dump is unavailable.
     """
     try:
-        dump_items = load_dump_items(apply_blacklist=apply_blacklist)
+        dump_items = load_dt_items(apply_blacklist=apply_blacklist)
         if dump_items:
             return dump_items
     except Exception as e:
         print(f"⚠️ Failed to load runtime dump: {e}")
         
     return _load_vanilla_scripts(apply_blacklist=apply_blacklist, verbose_blacklist=verbose_blacklist)
+
+
+def get_vanilla_script_count():
+    """Count total items in vanilla script files."""
+    return len(_load_vanilla_scripts(apply_blacklist=False))
 
 
 def _load_vanilla_scripts(apply_blacklist=True, verbose_blacklist=False):

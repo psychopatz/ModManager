@@ -51,7 +51,7 @@ export const deleteWhitelistItem = (itemId) => api.delete(`/whitelist/item/${ite
 export const getOverrides = () => api.get('/overrides');
 export const saveItemOverride = (payload) => api.put('/overrides/item', payload);
 export const deleteItemOverride = (itemId) => api.delete(`/overrides/item/${itemId}`);
-export const getRuntimeDump = () => api.get('/runtime/dump');
+export const getRuntimeDTItems = () => api.get('/runtime/dt_items');
 export const getRuntimeRules = () => api.get('/runtime/rules');
 export const getRuntimeHeuristics = () => api.get('/runtime/heuristics');
 export const applyRuntimeRules = () => api.post('/runtime/apply');

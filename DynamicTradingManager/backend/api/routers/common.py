@@ -6,7 +6,7 @@ from fastapi import HTTPException
 
 from config.server_settings import get_server_settings
 from DebugManagement import LogParser
-from ItemManagement.commons.vanilla_loader import load_dump_items, load_vanilla_items
+from ItemManagement.commons.vanilla_loader import load_dt_items, load_vanilla_items
 from ProjectManagement import list_workshop_projects, resolve_project_target, get_flattened_modules
 
 _settings = get_server_settings()
@@ -44,7 +44,7 @@ def get_items():
     global cached_vanilla_items
     if cached_vanilla_items is None:
         try:
-            dump_items = load_dump_items()
+            dump_items = load_dt_items()
             if dump_items:
                 cached_vanilla_items = dump_items
                 return cached_vanilla_items

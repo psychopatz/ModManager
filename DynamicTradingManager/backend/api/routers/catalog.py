@@ -1,4 +1,6 @@
 import logging
+import re
+from collections import Counter
 from typing import Optional
 
 from fastapi import APIRouter
@@ -6,11 +8,9 @@ from fastapi import APIRouter
 from api.routers.common import get_items
 from api.schemas import StatsResponse
 from ItemManagement import calculate_price, generate_tags, get_stat
-from ItemManagement.commons.lua_handler.records import tags_list_to_dict
-from ItemManagement.commons.vanilla_loader import get_translated_name
+from ItemManagement.commons.vanilla_loader import get_translated_name, get_vanilla_script_count, _load_vanilla_scripts
 from ItemManagement.parse import is_item_blacklisted, is_item_whitelisted
-from ItemManagement.ui.commands import get_registered_items
-from ItemManagement.ui.stats import count_registered_items, find_invalid_blacklist_ids
+from ItemManagement.ui.stats import find_invalid_blacklist_ids
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["catalog"])
@@ -20,22 +20,62 @@ router = APIRouter(tags=["catalog"])
 async def get_stats():
     items = get_items()
     total_runtime = len(items)
-    registered = count_registered_items()
-    unregistered = total_runtime - registered
-    coverage = (registered / total_runtime * 100) if total_runtime > 0 else 0
+    
+    dt_items = items
+    vanilla_scripts = _load_vanilla_scripts(apply_blacklist=False)
+    
+    total_vanilla = 0
+    total_modded = 0
+    registered_vanilla = 0
+    
+    # Items in DT_Items that are modded
+    mod_origin_counts = Counter()
+    
+    vanilla_keys = set(vanilla_scripts.keys())
+    for item_id, props in dt_items.items():
+        base_id = item_id.split(".")[-1]
+        props_str = str(props)
+        is_vanilla = "origin:Vanilla" in props_str
+        
+        if is_vanilla:
+            total_vanilla += 1
+            if base_id in vanilla_keys:
+                registered_vanilla += 1
+        else:
+            total_modded += 1
+            # Try to grab mod name from origin:ModName
+            origin_match = re.search(r"origin:([A-Za-z0-9_\-\s&]+)", props_str)
+            if origin_match:
+                origin = origin_match.group(1).strip()
+                if origin and origin != "Vanilla":
+                    mod_origin_counts[origin] += 1
 
+    total_unregistered = max(0, len(vanilla_scripts) - registered_vanilla)
     notifications = []
     invalid_blacklist = find_invalid_blacklist_ids()
     if invalid_blacklist:
         notifications.append(f"{len(invalid_blacklist)} invalid item ID(s) in blacklist")
 
+    from ItemManagement.parse import load_blacklist, load_whitelist
+    from ItemManagement.parse.overrides import load_overrides
+    
+    total_blacklisted = len(load_blacklist().get("itemIds", []))
+    total_whitelisted = len(load_whitelist().get("itemIds", []))
+    total_overrides = len(load_overrides())
+
     return {
         "total_runtime": total_runtime,
-        "source": "dump",
-        "registered": registered,
-        "unregistered": unregistered,
-        "coverage": round(coverage, 2),
+        "total_vanilla": total_vanilla,
+        "total_modded": total_modded,
+        "registered_vanilla": registered_vanilla,
+        "unregistered_vanilla": total_unregistered,
+        "mod_breakdown": dict(mod_origin_counts),
+        "source": "dt_items",
+        "total_scripts": len(vanilla_scripts),
         "notifications": notifications,
+        "blacklisted": total_blacklisted,
+        "whitelisted": total_whitelisted,
+        "overrides": total_overrides,
     }
 
 
@@ -53,7 +93,6 @@ async def list_items(
 ):
     try:
         items = get_items()
-        registered_ids = get_registered_items()
 
         filtered_results = []
         item_keys = list(items.keys())
@@ -64,7 +103,7 @@ async def list_items(
             is_wl = is_item_whitelisted(item_id)
 
             tags_list = generate_tags(item_id, props)
-            tags_dict = tags_list_to_dict(tags_list)
+            tags_dict = {t: True for t in tags_list}
             price = calculate_price(item_id, props, tags_dict)
             weight = get_stat(props, "Weight", 0.5)
 
@@ -74,11 +113,7 @@ async def list_items(
                 continue
 
             if status:
-                if status == "registered" and item_id not in registered_ids:
-                    continue
-                elif status == "unregistered" and (item_id in registered_ids or is_bl):
-                    continue
-                elif status == "blacklisted" and not is_bl:
+                if status == "blacklisted" and not is_bl:
                     continue
                 elif status == "whitelisted" and not is_wl:
                     continue
@@ -101,7 +136,6 @@ async def list_items(
                     "name": item_name,
                     "is_blacklisted": bool(is_bl),
                     "is_whitelisted": bool(is_wl),
-                    "is_registered": item_id in registered_ids,
                     "price": int(price),
                     "tags": tags_list,
                     "weight": float(weight),

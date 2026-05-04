@@ -310,6 +310,8 @@ def matches_electronics_signature(item_id, props):
     return matches, confidence, details
 
 
+import re
+
 def get_electronics_tags(item_id, props):
     """
     Generate electronics tags based on signature match.

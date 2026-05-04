@@ -13,7 +13,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { applyRuntimeRules, getRuntimeDump, getRuntimeRules, getRuntimeHeuristics } from '../services/api';
+import { applyRuntimeRules, getRuntimeDTItems, getRuntimeRules, getRuntimeHeuristics } from '../services/api';
 
 const RuntimeSyncPage = () => {
   const [activeTab, setActiveTab] = useState(0);
@@ -22,7 +22,7 @@ const RuntimeSyncPage = () => {
   const [applyStatus, setApplyStatus] = useState(null);
   const [applying, setApplying] = useState(false);
   const [search, setSearch] = useState('');
-  const [dump, setDump] = useState({ path: '', text: '', line_count: 0 });
+  const [dtItems, setDtItems] = useState({ path: '', text: '', line_count: 0 });
   const [rules, setRules] = useState({ path: '', text: '', blacklist: [], whitelist: [], overrides: [] });
   const [heuristics, setHeuristics] = useState({ path: '', text: '', line_count: 0 });
 
@@ -31,12 +31,12 @@ const RuntimeSyncPage = () => {
     setError('');
     try {
       const [dumpRes, rulesRes, heuristicsRes] = await Promise.all([
-        getRuntimeDump(),
+        getRuntimeDTItems(),
         getRuntimeRules(),
         getRuntimeHeuristics(),
       ]);
 
-      setDump(dumpRes.data || { path: '', text: '', line_count: 0 });
+      setDtItems(dumpRes.data || { path: '', text: '', line_count: 0 });
       setRules(rulesRes.data || { path: '', text: '', blacklist: [], whitelist: [], overrides: [] });
       setHeuristics(heuristicsRes.data || { path: '', text: '', line_count: 0 });
     } catch (err) {
@@ -78,9 +78,9 @@ const RuntimeSyncPage = () => {
 
   const tabData = useMemo(() => [
     {
-      label: `Dump (${dump.line_count || 0})`,
-      path: dump.path,
-      text: dump.text || '',
+      label: `DT_Items (${dtItems.line_count || 0})`,
+      path: dtItems.path,
+      text: dtItems.text || '',
       tone: { bg: 'hsla(202, 82%, 52%, 0.12)', border: 'hsla(202, 88%, 67%, 0.38)', text: 'hsl(202, 88%, 82%)' },
     },
     {
@@ -95,7 +95,7 @@ const RuntimeSyncPage = () => {
       text: heuristics.text || '',
       tone: { bg: 'hsla(126, 72%, 44%, 0.12)', border: 'hsla(126, 78%, 61%, 0.38)', text: 'hsl(126, 82%, 78%)' },
     },
-  ], [dump, rules, heuristics]);
+  ], [dtItems, rules, heuristics]);
 
   const current = tabData[activeTab] || tabData[0];
   const filteredText = useMemo(() => {
@@ -117,7 +117,7 @@ const RuntimeSyncPage = () => {
               Runtime Sync
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Same visual workflow as Tag Pricing, but focused on runtime data flow: dump, active rules, and heuristics source.
+              Same visual workflow as Tag Pricing, but focused on runtime data flow: generated DT_Items database, active rules, and heuristics source.
             </Typography>
           </Box>
 
@@ -130,7 +130,7 @@ const RuntimeSyncPage = () => {
           ) : null}
 
           <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-            <Chip label={`Dump lines ${dump.line_count || 0}`} variant="outlined" />
+            <Chip label={`Generated database lines ${dtItems.line_count || 0}`} variant="outlined" />
             <Chip label={`Blacklisted ${(rules.blacklist || []).length}`} color="error" variant="outlined" />
             <Chip label={`Whitelisted ${(rules.whitelist || []).length}`} color="info" variant="outlined" />
             <Chip label={`Overrides ${(rules.overrides || []).length}`} color="warning" variant="outlined" />
@@ -227,7 +227,7 @@ const RuntimeSyncPage = () => {
         <Paper elevation={3} sx={{ p: 3, minHeight: 240 }}>
           <Typography variant="h6" gutterBottom>Runtime Source</Typography>
           <Typography variant="body2" color="text.secondary">
-            Tag Pricing now resolves against game runtime dump data instead of manual vanilla item parsing, so preview/counters reflect what the game actually cached.
+            Tag Pricing now resolves against the generated DT_Items database data instead of manual vanilla item parsing, so preview/counters reflect actual item coverage logic.
           </Typography>
         </Paper>
       </Stack>

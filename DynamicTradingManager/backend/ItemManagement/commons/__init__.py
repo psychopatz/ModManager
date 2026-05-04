@@ -20,15 +20,7 @@ from ..pricing.pricing import calculate_price
 # Stock
 from ..pricing.stock import calculate_base_max_stock, apply_category_multiplier, calculate_min_stock
 
-# Lua file handling
-from .lua_handler import (
-    ensure_lua_files_exist,
-    process_lua_file,
-    get_registered_items,
-    collect_unregistered_items,
-    add_new_items,
-    create_item_entry
-)
+
 
 # Item data structures and utilities
 from .items import (
@@ -74,14 +66,7 @@ __all__ = [
     'apply_category_multiplier',
     'calculate_min_stock',
     
-    # Lua handling
-    'ensure_lua_files_exist',
-    'process_lua_file',
-    'get_registered_items',
-    'collect_unregistered_items',
-    'add_new_items',
-    'create_item_entry',
-    
+
     # Items
     'ItemData',
     'PriceBreakdown',

@@ -3,6 +3,7 @@ Config-backed pricing calculation with category heuristics and price breakdowns.
 """
 from __future__ import annotations
 
+import re
 from typing import Any, Dict
 
 from .config_store import get_pricing_config

@@ -30,7 +30,6 @@ from .parse import (
     add_item_to_whitelist,
     remove_item_from_whitelist,
 )
-from .commons.lua_handler import process_lua_file, add_items_to_file, get_registered_items, collect_unregistered_items, add_new_items, rebuild_liquid_registries
 from .analyze.property_analyzer import (
     find_items_with_property,
     dump_items_by_property,

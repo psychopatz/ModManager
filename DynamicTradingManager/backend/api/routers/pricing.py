@@ -16,7 +16,6 @@ from ItemManagement import (
     sync_sandbox_options,
     warm_pricing_tag_cache,
 )
-from ItemManagement.commons.lua_handler.records import tags_list_to_dict
 from ItemManagement.commons.vanilla_loader import get_translated_name
 
 logger = logging.getLogger(__name__)
@@ -76,7 +75,7 @@ async def preview_pricing(request: PricingPreviewRequest):
             raise HTTPException(status_code=404, detail=f"Unknown item: {request.item_id}")
 
         tags_list = request.tags or generate_tags(request.item_id, props)
-        tags_dict = tags_list_to_dict(tags_list)
+        tags_dict = {t: True for t in tags_list}
         details = calculate_price_details(request.item_id, props, tags_dict)
 
         return {

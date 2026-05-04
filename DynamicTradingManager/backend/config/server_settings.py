@@ -50,7 +50,7 @@ class ServerSettings:
     dynamic_colonies_path: Path
     dynamic_currency_path: Path
     console_path: Path
-    runtime_dump_file: Path
+    dt_items_dir: Path
     runtime_rules_file: Path
     steamcmd_path: str | None
     allowed_origins: list[str]
@@ -113,15 +113,17 @@ def get_server_settings() -> ServerSettings:
     if console_path is None:
         raise RuntimeError("Console path could not be resolved from settings.")
 
-    runtime_dump_file = _resolve_path(
+    dt_items_dir = _resolve_path(
         _first_non_empty(
+            os.getenv("DT_ITEMS_DIR"),
             os.getenv("DT_RUNTIME_DUMP_FILE"),
+            file_settings.get("dt_items_dir"),
             file_settings.get("runtime_dump_file"),
-            str(Path.home() / "Zomboid" / "Lua" / "MarketSense_ItemRuntimeCacheDump.txt"),
+            str(Path.home() / "Zomboid" / "Lua" / "DT_Items"),
         )
     )
-    if runtime_dump_file is None:
-        raise RuntimeError("Runtime dump file path could not be resolved from settings.")
+    if dt_items_dir is None:
+        raise RuntimeError("DT_Items directory path could not be resolved from settings.")
 
     runtime_rules_file = _resolve_path(
         _first_non_empty(
@@ -167,7 +169,7 @@ def get_server_settings() -> ServerSettings:
         dynamic_colonies_path=dynamic_colonies_path,
         dynamic_currency_path=dynamic_currency_path,
         console_path=console_path,
-        runtime_dump_file=runtime_dump_file,
+        dt_items_dir=dt_items_dir,
         runtime_rules_file=runtime_rules_file,
         steamcmd_path=steamcmd_path,
         allowed_origins=allowed_origins,

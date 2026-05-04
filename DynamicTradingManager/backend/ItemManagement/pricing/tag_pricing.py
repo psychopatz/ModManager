@@ -12,8 +12,8 @@ from .config_store import get_pricing_config
 _RUNTIME_INDEX_CACHE: dict[str, Any] | None = None
 
 
-def _runtime_dump_path() -> Path:
-    return Path(get_server_settings().runtime_dump_file)
+def _dt_items_dir() -> Path:
+    return Path(get_server_settings().dt_items_dir)
 
 
 def _file_mtime(path: Path) -> float:
@@ -26,20 +26,9 @@ def _split_tags(value: str) -> list[str]:
     return [tag.strip() for tag in re.split(r"[;,]", value) if tag.strip()]
 
 
-def _extract_item_blocks(text: str) -> list[tuple[str, str]]:
-    pattern = re.compile(r"item\s+([\w.]+)\s*\{([^}]*)\}", re.IGNORECASE | re.DOTALL)
-    return pattern.findall(text)
-
-
-def _extract_prop(props: str, key: str, default: str = "") -> str:
-    match = re.search(rf"\b{re.escape(key)}\s*=\s*([^,\n]+)", props, re.IGNORECASE)
-    if not match:
-        return default
-    return match.group(1).strip()
-
-
 def _to_int(value: str | int | float | None, default: int = 0) -> int:
     try:
+        if value is None: return default
         return int(float(value))
     except Exception:
         return default
@@ -47,67 +36,97 @@ def _to_int(value: str | int | float | None, default: int = 0) -> int:
 
 def _to_float(value: str | int | float | None, default: float = 0.0) -> float:
     try:
+        if value is None: return default
         return float(value)
     except Exception:
         return default
 
 
-def _parse_runtime_dump(path: Path) -> list[dict[str, Any]]:
+def _parse_v2_file(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
         return []
 
-    text = path.read_text(encoding="utf-8", errors="replace")
-    blocks = _extract_item_blocks(text)
-    if not blocks:
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except Exception:
         return []
 
     entries: list[dict[str, Any]] = []
-
-    for item_id, props in blocks:
-        full_type = _extract_prop(props, "FullType", "") or item_id
-        module_name = _extract_prop(props, "Module", "Base")
-        if "." not in full_type:
-            full_type = f"{module_name}.{item_id}"
-
-        expanded_tags = _split_tags(_extract_prop(props, "ExpandedTags", ""))
-        if not expanded_tags:
-            expanded_tags = _split_tags(_extract_prop(props, "Tags", ""))
-
-        primary_tag = _extract_prop(props, "PrimaryTag", "") or (expanded_tags[0] if expanded_tags else "Misc.General")
-        if primary_tag and primary_tag not in expanded_tags:
-            expanded_tags = [primary_tag, *expanded_tags]
-
-        display_name = _extract_prop(props, "DisplayName", "") or item_id
-        lookup_source = _extract_prop(props, "DT_LookupSource", "cache")
-        current_price = _to_int(_extract_prop(props, "DT_Price", _extract_prop(props, "Price", "0")))
-        stock_min = _to_int(_extract_prop(props, "DT_StockMin", _extract_prop(props, "StockMin", "0")))
-        stock_max = _to_int(_extract_prop(props, "DT_StockMax", _extract_prop(props, "StockMax", "0")))
-
-        entries.append(
-            {
+    current_origin = "Unknown"
+    current_tags = []
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        
+        if line.startswith("#"):
+            continue
+            
+        if line.startswith("@origin="):
+            current_origin = line.split("=", 1)[1].strip()
+            continue
+            
+        if line.startswith("@tags="):
+            tag_str = line.split("=", 1)[1].strip()
+            current_tags = [t.strip() for t in tag_str.split("|") if t.strip()]
+            continue
+            
+        # Data row: FullType | Price | StockMin | StockMax
+        parts = [p.strip() for p in line.split("|")]
+        if len(parts) >= 2:
+            full_type = parts[0]
+            current_price = _to_int(parts[1])
+            stock_min = _to_int(parts[2]) if len(parts) >= 3 else 0
+            stock_max = _to_int(parts[3]) if len(parts) >= 4 else 0
+            
+            module_name = "Base"
+            display_name = full_type
+            if "." in full_type:
+                module_parts = full_type.split(".", 1)
+                module_name = module_parts[0]
+                display_name = module_parts[1]
+                
+            primary_tag = current_tags[0] if current_tags else "Misc.General"
+            
+            entries.append({
                 "item_id": full_type,
                 "module_name": module_name,
-                "legacy_item_id": item_id,
+                "legacy_item_id": display_name,
                 "name": display_name,
-                "expanded_tags": list(dict.fromkeys([tag for tag in expanded_tags if isinstance(tag, str) and tag])),
+                "expanded_tags": list(current_tags),
                 "primary_tag": primary_tag,
                 "current_price": current_price,
                 "stock_min": stock_min,
                 "stock_max": stock_max,
-                "lookup_source": lookup_source,
-                "has_price_override": bool("override" in str(lookup_source).lower()),
-                "has_override": bool("override" in str(lookup_source).lower()),
-                "confidence": _to_float(_extract_prop(props, "DT_Confidence", "0")),
-            }
-        )
-
+                "lookup_source": f"origin:{current_origin}",
+                "has_price_override": False,
+                "has_override": False,
+                "confidence": 1.0,
+            })
+            
     return entries
+
+def parse_dt_items(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    
+    if path.is_file():
+        # Fallback for old single-file dump if it still exists
+        return _parse_v2_file(path)
+        
+    # Recursive directory scan for V2
+    all_entries = []
+    for txt_file in path.rglob("*.txt"):
+        all_entries.extend(_parse_v2_file(txt_file))
+        
+    return all_entries
 
 
 def _build_runtime_index() -> dict[str, Any]:
-    path = _runtime_dump_path()
+    path = _dt_items_dir()
     signature = (str(path), _file_mtime(path))
-    entries = _parse_runtime_dump(path)
+    entries = parse_dt_items(path)
     if not entries:
         return {
             "signature": signature,
@@ -184,7 +203,7 @@ def _build_runtime_index() -> dict[str, Any]:
 
 def _get_runtime_index() -> dict[str, Any]:
     global _RUNTIME_INDEX_CACHE
-    path = _runtime_dump_path()
+    path = _dt_items_dir()
     signature = (str(path), _file_mtime(path))
     if _RUNTIME_INDEX_CACHE and _RUNTIME_INDEX_CACHE.get("signature") == signature:
         return _RUNTIME_INDEX_CACHE

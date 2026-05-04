@@ -5,14 +5,11 @@ from api.schemas import AddRequest, FindPropertyRequest, ListPropertiesRequest
 from ItemManagement import DISTRIBUTIONS_DIR, VANILLA_SCRIPTS_DIR
 from ItemManagement.task_manager import manager
 from ItemManagement.ui.commands import (
-    add as run_add,
     analyze_properties,
     analyze_spawns,
-    delete_all_items,
     find_property,
     list_properties,
     rarity_stats,
-    update as run_update,
 )
 
 router = APIRouter(tags=["tasks-actions"])
@@ -34,26 +31,6 @@ async def get_task_status(task_id: str):
 @router.get("/api/tasks/{task_id}/logs")
 async def get_task_logs(task_id: str, since: int = 0):
     return manager.get_logs(task_id, since)
-
-
-@router.post("/api/actions/update")
-async def trigger_update():
-    items = get_items()
-    task_id = manager.create_task("Update Items", run_update, items)
-    return {"task_id": task_id}
-
-
-@router.post("/api/actions/add")
-async def trigger_add(request: AddRequest):
-    items = get_items()
-    task_id = manager.create_task(f"Add Items (Batch: {request.batch_size})", run_add, items, request.batch_size)
-    return {"task_id": task_id}
-
-
-@router.post("/api/actions/reset")
-async def trigger_reset():
-    task_id = manager.create_task("Reset Item Registry", delete_all_items, force=True)
-    return {"task_id": task_id}
 
 
 @router.post("/api/actions/list-properties")

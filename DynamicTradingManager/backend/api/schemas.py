@@ -5,11 +5,17 @@ from pydantic import BaseModel, Field
 
 class StatsResponse(BaseModel):
     total_runtime: int
-    source: str = "runtime"
-    registered: int
-    unregistered: int
-    coverage: float
+    total_vanilla: int
+    total_modded: int
+    registered_vanilla: int
+    unregistered_vanilla: int
+    mod_breakdown: Dict[str, int]
+    source: str = "dt_items"
+    total_scripts: int
     notifications: List[str]
+    blacklisted: int
+    whitelisted: int
+    overrides: int
 
 
 class AddRequest(BaseModel):

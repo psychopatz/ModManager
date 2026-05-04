@@ -22,15 +22,39 @@ def _read_text_file(path: Path) -> str:
         return path.read_text(encoding="latin-1", errors="replace")
 
 
-@router.get("/api/runtime/dump")
-async def get_runtime_dump():
+@router.get("/api/runtime/dt_items")
+async def get_runtime_dt_items():
     settings = get_server_settings()
-    dump_path = Path(settings.runtime_dump_file)
-    text = _read_text_file(dump_path)
+    dt_items_path = Path(settings.dt_items_dir)
+    
+    if dt_items_path.is_file():
+        text = _read_text_file(dt_items_path)
+        return {
+            "path": str(dt_items_path),
+            "text": text,
+            "line_count": len(text.splitlines()),
+            "type": "file"
+        }
+    
+    # Aggregated directory view
+    aggregated_text = []
+    file_count = 0
+    for txt_file in sorted(dt_items_path.rglob("*.txt")):
+        try:
+            rel_path = txt_file.relative_to(dt_items_path)
+            content = _read_text_file(txt_file)
+            aggregated_text.append(f"--- FILE: {rel_path} ---\n{content}\n")
+            file_count += 1
+        except Exception:
+            continue
+            
+    full_text = "\n".join(aggregated_text)
     return {
-        "path": str(dump_path),
-        "text": text,
-        "line_count": len(text.splitlines()),
+        "path": str(dt_items_path),
+        "text": full_text,
+        "line_count": len(full_text.splitlines()),
+        "file_count": file_count,
+        "type": "directory"
     }
 
 

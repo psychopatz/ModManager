@@ -6,6 +6,7 @@ import {
   Paper, 
   Typography, 
   Divider,
+  Chip,
   ThemeProvider,
   createTheme,
   CssBaseline
@@ -30,10 +31,16 @@ const darkTheme = createTheme({
 const Dashboard = () => {
   const [stats, setStats] = useState({
     total_runtime: 0,
-    source: 'runtime',
-    registered: 0,
-    unregistered: 0,
-    coverage: 0,
+    total_vanilla: 0,
+    total_modded: 0,
+    registered_vanilla: 0,
+    unregistered_vanilla: 0,
+    mod_breakdown: {},
+    source: 'dt_items',
+    total_scripts: 0,
+    blacklisted: 0,
+    whitelisted: 0,
+    overrides: 0,
     notifications: []
   });
   const [activeTaskId, setActiveTaskId] = useState(null);
@@ -65,32 +72,54 @@ const Dashboard = () => {
 
           <Grid container spacing={3}>
             {/* Stats Cards */}
-            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-              <Paper sx={{ p: 3, textAlign: 'center', borderTop: '4px solid #007acc' }}>
-                <Typography color="textSecondary" variant="overline">Total Runtime Items</Typography>
-                <Typography variant="h3">{(stats.total_runtime ?? 0).toLocaleString()}</Typography>
-                <Typography variant="caption" color="textSecondary">{stats.source ?? 'runtime'}</Typography>
-              </Paper>
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-              <Paper sx={{ p: 3, textAlign: 'center', borderTop: '4px solid #4caf50' }}>
-                <Typography color="textSecondary" variant="overline">Registered</Typography>
-                <Typography variant="h3" sx={{ color: '#4caf50' }}>{stats.registered.toLocaleString()}</Typography>
-              </Paper>
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-              <Paper sx={{ p: 3, textAlign: 'center', borderTop: '4px solid #ff9800' }}>
-                <Typography color="textSecondary" variant="overline">Unregistered</Typography>
-                <Typography variant="h3" sx={{ color: '#ff9800' }}>{stats.unregistered.toLocaleString()}</Typography>
-              </Paper>
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-              <Paper sx={{ p: 3, textAlign: 'center', borderTop: '4px solid #9c27b0' }}>
-                <Typography color="textSecondary" variant="overline">Coverage</Typography>
-                <Typography variant="h3" sx={{ color: '#9c27b0' }}>{stats.coverage}%</Typography>
-              </Paper>
-            </Grid>
+            <Grid size={{ xs: 12, sm: 10, md: 8, lg: 6 }} sx={{ mx: 'auto' }}>
+              <Paper sx={{ p: 4, textAlign: 'center', borderTop: '4px solid #007acc' }}>
+                <Typography color="textSecondary" variant="overline" sx={{ letterSpacing: 1.5 }}>Local Items Database</Typography>
+                <Typography variant="h2" sx={{ my: 2 }}>{(stats.total_runtime ?? 0).toLocaleString()}</Typography>
+                <Typography variant="caption" color="textSecondary" sx={{ fontSize: '0.9rem', display: 'block', mb: 1 }}>
+                  {stats.registered_vanilla} Registered | {stats.unregistered_vanilla} Unregistered | {stats.total_modded} Modded
+                </Typography>
+                <Typography variant="caption" color="textSecondary" sx={{ fontSize: '0.75rem', display: 'block', opacity: 0.7, fontStyle: 'italic' }}>
+                  {stats.total_scripts} Vanilla Script Items found in Game Files
+                </Typography>
 
+                {Object.keys(stats.mod_breakdown).length > 0 && (
+                  <Box sx={{ mt: 2, textAlign: 'center' }}>
+                    <Typography variant="caption" color="textSecondary" sx={{ letterSpacing: 1, display: 'block', mb: 1 }}>
+                      DETECTED MODS
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, justifyContent: 'center' }}>
+                      {Object.entries(stats.mod_breakdown).map(([modName, count]) => (
+                        <Chip 
+                          key={modName} 
+                          label={`${modName}: ${count}`} 
+                          size="small" 
+                          variant="outlined" 
+                          sx={{ fontSize: '0.65rem', borderColor: 'rgba(255,255,255,0.1)' }} 
+                        />
+                      ))}
+                    </Box>
+                  </Box>
+                )}
+                
+                {/* Embed Blacklist, Whitelist, Overrides cleanly beneath */}
+                <Divider sx={{ my: 2, opacity: 0.1 }} />
+                <Grid container spacing={2} justifyContent="center">
+                  <Grid size={4}>
+                    <Typography variant="h6" sx={{ color: '#f44336' }}>{stats.blacklisted}</Typography>
+                    <Typography variant="caption" color="textSecondary">Blacklisted</Typography>
+                  </Grid>
+                  <Grid size={4}>
+                    <Typography variant="h6" sx={{ color: '#4caf50' }}>{stats.whitelisted}</Typography>
+                    <Typography variant="caption" color="textSecondary">Whitelisted</Typography>
+                  </Grid>
+                  <Grid size={4}>
+                    <Typography variant="h6" sx={{ color: '#ff9800' }}>{stats.overrides}</Typography>
+                    <Typography variant="caption" color="textSecondary">Overrides</Typography>
+                  </Grid>
+                </Grid>
+              </Paper>
+            </Grid>
             {/* Actions & Tools */}
             <Grid size={12}>
               <Paper sx={{ p: 0, overflow: 'hidden' }}>

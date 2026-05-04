@@ -314,8 +314,6 @@ const ItemTable = () => {
                                 onChange={(e) => { setStatusFilter(e.target.value); setPage(0); }}
                             >
                                 <MenuItem value="">All Statuses</MenuItem>
-                                <MenuItem value="registered">Registered</MenuItem>
-                                <MenuItem value="unregistered">Unregistered</MenuItem>
                                 <MenuItem value="blacklisted">Blacklisted</MenuItem>
                                 <MenuItem value="whitelisted">Whitelisted</MenuItem>
                             </Select>
@@ -424,11 +422,7 @@ const ItemTable = () => {
                                             <Chip label="Blacklisted" size="small" color="error" variant="soft" />
                                         ) : item.is_whitelisted ? (
                                             <Chip label="Whitelisted" size="small" color="info" variant="soft" />
-                                        ) : item.is_registered ? (
-                                            <Chip label="Registered" size="small" color="success" variant="soft" />
-                                        ) : (
-                                            <Chip label="Unregistered" size="small" color="warning" variant="soft" />
-                                        )}
+                                        ) : null}
                                     </TableCell>
                                     <TableCell>
                                         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>

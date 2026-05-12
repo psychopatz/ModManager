@@ -93,6 +93,13 @@ export const uploadWorkshopImage = (formData, target) => api.post('/workshop/ima
   headers: { 'Content-Type': 'multipart/form-data' }
 });
 
+// Geolocator
+export const getGeolocatorTargets = () => api.get('/geolocator/targets');
+export const getGeolocatorWorkshopSources = (root, target, module) =>
+  api.get('/geolocator/workshop-sources', { params: { root, target, module } });
+export const inspectGeolocatorSource = (payload) => api.post('/geolocator/inspect', payload);
+export const generateGeolocatorRegistry = (payload) => api.post('/geolocator/generate', payload);
+
 // Git
 export const getGitChanges = (branch, target, since = '') => api.get('/git/changes', { params: { branch, target, since } });
 export const getGitBranches = (target) => api.get('/git/branches', { params: { target } });

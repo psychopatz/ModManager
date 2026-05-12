@@ -136,3 +136,15 @@ class WorkshopVersionIncrementRequest(BaseModel):
     target: Optional[str] = None
     mod_id: str
     bump: Optional[str] = "patch"
+
+
+class GeolocatorInspectRequest(BaseModel):
+    source_path: str
+    target: Optional[str] = None
+    module: Optional[str] = "DynamicTradingCommon"
+
+
+class GeolocatorGenerateRequest(BaseModel):
+    source_path: str
+    target: Optional[str] = None
+    module: Optional[str] = "DynamicTradingCommon"

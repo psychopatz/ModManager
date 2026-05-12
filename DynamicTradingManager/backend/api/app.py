@@ -13,6 +13,7 @@ from api.routers.common import configure_environment
 from api.routers.debug_logs import router as debug_logs_router
 from api.routers.donators import router as donators_router
 from api.routers.git import router as git_router
+from api.routers.geolocator import router as geolocator_router
 from api.routers.manuals import router as manuals_router
 from api.routers.pricing import router as pricing_router
 from api.routers.runtime_sync import router as runtime_sync_router
@@ -76,6 +77,7 @@ def create_app() -> FastAPI:
     app.include_router(donators_router)
     app.include_router(debug_logs_router)
     app.include_router(workshop_router)
+    app.include_router(geolocator_router)
     app.include_router(git_router)
     app.include_router(simulation_router)
     app.include_router(llm_router)

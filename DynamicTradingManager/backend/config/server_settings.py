@@ -48,6 +48,7 @@ class ServerSettings:
     dynamic_trading_path: Path
     dynamic_colonies_path: Path
     dynamic_currency_path: Path
+    workshop_content_path: Path
     console_path: Path
     runtime_dump_file: Path
     runtime_rules_file: Path
@@ -90,6 +91,16 @@ def get_server_settings() -> ServerSettings:
             str(dynamic_trading_path.parent / "CurrencyExpanded"),
         )
     )
+
+    workshop_content_path = _resolve_path(
+        _first_non_empty(
+            os.getenv("WORKSHOP_CONTENT_PATH"),
+            file_settings.get("workshop_content_path"),
+            str(Path.home() / ".steam" / "debian-installation" / "steamapps" / "workshop" / "content" / "108600"),
+        )
+    )
+    if workshop_content_path is None:
+        raise RuntimeError("Workshop content path could not be resolved from settings.")
 
     console_path = _resolve_path(
         _first_non_empty(
@@ -153,6 +164,7 @@ def get_server_settings() -> ServerSettings:
         dynamic_trading_path=dynamic_trading_path,
         dynamic_colonies_path=dynamic_colonies_path,
         dynamic_currency_path=dynamic_currency_path,
+        workshop_content_path=workshop_content_path,
         console_path=console_path,
         runtime_dump_file=runtime_dump_file,
         runtime_rules_file=runtime_rules_file,

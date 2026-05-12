@@ -28,6 +28,7 @@ import MapIcon from '@mui/icons-material/Map';
 import RefreshIcon from '@mui/icons-material/Refresh';
 
 import * as api from '../services/api';
+import { useLLMInternal } from '../context/LLMContext';
 import TaskConsole from './TaskConsole';
 
 const GeolocatorPage = () => {
@@ -52,6 +53,9 @@ const GeolocatorPage = () => {
   const [preview, setPreview] = useState(null);
   const [activeTaskId, setActiveTaskId] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, severity: 'info', message: '' });
+  const { config: llmStateConfig } = useLLMInternal();
+  const activeLLMConfig = buildActiveLLMConfig(llmStateConfig);
+  const llmConfigKey = JSON.stringify(activeLLMConfig || {});
 
   useEffect(() => {
     loadTargets();
@@ -69,7 +73,7 @@ const GeolocatorPage = () => {
     if (!loadingTargets && selectedTarget && selectedModule) {
       loadWorkshopSources(workshopRoot);
     }
-  }, [selectedTarget, selectedModule]);
+  }, [selectedTarget, selectedModule, llmConfigKey]);
 
   useEffect(() => {
     localStorage.setItem(pathStorageKey, sourcePath);
@@ -112,6 +116,7 @@ const GeolocatorPage = () => {
         overrideRoot || workshopRoot || undefined,
         selectedTarget || undefined,
         selectedModule || 'DynamicTradingCommon',
+        activeLLMConfig,
       );
       const nextRoot = res.data?.root_path || overrideRoot || workshopRoot;
       const sources = res.data?.sources || [];
@@ -163,6 +168,7 @@ const GeolocatorPage = () => {
         source_path: sourcePath.trim(),
         target: selectedTarget || undefined,
         module: selectedModule || 'DynamicTradingCommon',
+        llm_config: activeLLMConfig,
       });
       setPreview(res.data);
       setSnackbar({ open: true, severity: 'success', message: 'Map source inspected.' });
@@ -189,6 +195,7 @@ const GeolocatorPage = () => {
         source_path: sourcePath.trim(),
         target: selectedTarget || undefined,
         module: selectedModule || 'DynamicTradingCommon',
+        llm_config: activeLLMConfig,
       });
       setActiveTaskId(res.data.task_id || null);
       setSnackbar({ open: true, severity: 'info', message: 'Generation task started.' });
@@ -223,7 +230,7 @@ const GeolocatorPage = () => {
                 Geolocator Forge
               </Typography>
               <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 860, mt: 1 }}>
-                Generate modded-map geolocator definitions directly into `DynamicTradingCommon/common`, with automatic bounds, activation metadata, and label-based POIs.
+                Generate modded-map geolocator definitions directly into `DynamicTradingCommon/common`, with automatic bounds, activation metadata, and clustered POIs from annotations, named objects, and world map geometry.
               </Typography>
             </Box>
             <Chip icon={<MapIcon />} label="Modded Maps Only" color="primary" variant="outlined" />
@@ -385,6 +392,12 @@ const GeolocatorPage = () => {
                     <Alert severity="info" variant="outlined">
                       Only workshop mods with real map assets are listed here. Generated files are written into the selected project module under `common/media/lua/shared/DT/Common/GeolocatorDefinitions`.
                     </Alert>
+
+                    {!activeLLMConfig && (
+                      <Alert severity="warning" variant="outlined">
+                        No backend LLM is active. Generic clustered POIs will use deterministic fallback labels.
+                      </Alert>
+                    )}
                   </>
                 )}
               </Stack>
@@ -400,7 +413,7 @@ const GeolocatorPage = () => {
 
                 {!preview ? (
                   <Alert severity="warning" variant="outlined">
-                    Run an inspect first to preview detected mods, maps, bounds, POIs, and output files.
+                    Run an inspect first to preview detected mods, maps, bounds, POIs by source bucket, and output files.
                   </Alert>
                 ) : (
                   <>
@@ -485,6 +498,24 @@ const GeolocatorPage = () => {
                                             variant="outlined"
                                           />
                                           <Chip size="small" label={`POIs: ${mapItem.poi_count}`} />
+                                          <Chip
+                                            size="small"
+                                            label={`Annotations: ${mapItem.poi_buckets?.annotation?.length || 0}`}
+                                            color="info"
+                                            variant="outlined"
+                                          />
+                                          <Chip
+                                            size="small"
+                                            label={`Objects: ${mapItem.poi_buckets?.objects?.length || 0}`}
+                                            color="success"
+                                            variant="outlined"
+                                          />
+                                          <Chip
+                                            size="small"
+                                            label={`Generic: ${mapItem.poi_buckets?.generic?.length || 0}`}
+                                            color="warning"
+                                            variant="outlined"
+                                          />
                                           <Chip size="small" label={`Spawn Points: ${mapItem.spawnpoint_count}`} />
                                         </Stack>
                                       </Box>
@@ -507,19 +538,14 @@ const GeolocatorPage = () => {
                                           POI Preview
                                         </Typography>
                                         {mapItem.pois?.length ? (
-                                          <List dense sx={{ py: 0 }}>
-                                            {mapItem.pois.slice(0, 8).map((poi) => (
-                                              <ListItem key={`${poi.id}-${poi.x}-${poi.y}`} sx={{ px: 0 }}>
-                                                <ListItemText
-                                                  primary={poi.name}
-                                                  secondary={`${poi.type} | ${poi.x}, ${poi.y}`}
-                                                />
-                                              </ListItem>
-                                            ))}
-                                          </List>
+                                          <Stack spacing={1.5}>
+                                            {renderPoiBucket('Annotation Labels', mapItem.poi_buckets?.annotation, 'info')}
+                                            {renderPoiBucket('Named Objects', mapItem.poi_buckets?.objects, 'success')}
+                                            {renderPoiBucket('Generic Clusters', mapItem.poi_buckets?.generic, 'warning')}
+                                          </Stack>
                                         ) : (
                                           <Typography variant="body2" color="text.secondary">
-                                            No label-based POIs were detected for this map.
+                                            No POIs were generated for this map.
                                           </Typography>
                                         )}
                                       </Box>
@@ -557,6 +583,54 @@ const GeolocatorPage = () => {
 
 export default GeolocatorPage;
 
+function buildActiveLLMConfig(config) {
+  const activeProvider = config?.providers?.[config?.activeProvider] || config?.providers?.puter;
+  if (!activeProvider || activeProvider.is_browser_only) {
+    return null;
+  }
+
+  const baseUrl = String(activeProvider.base_url || '').trim();
+  const model = String(activeProvider.model || '').trim();
+  if (!baseUrl || !model) {
+    return null;
+  }
+
+  return {
+    base_url: baseUrl,
+    api_key: String(activeProvider.api_key || ''),
+    model,
+    thinking: Boolean(config?.thinking),
+    reasoning_effort: String(config?.reasoningEffort || 'medium'),
+  };
+}
+
+function renderPoiBucket(title, pois, color) {
+  if (!pois?.length) {
+    return null;
+  }
+
+  return (
+    <Box key={title}>
+      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+          {title}
+        </Typography>
+        <Chip size="small" label={pois.length} color={color} variant="outlined" />
+      </Stack>
+      <List dense sx={{ py: 0 }}>
+        {pois.slice(0, 6).map((poi) => (
+          <ListItem key={`${poi.id}-${poi.x}-${poi.y}`} sx={{ px: 0 }}>
+            <ListItemText
+              primary={poi.name}
+              secondary={formatPoiSecondary(poi)}
+            />
+          </ListItem>
+        ))}
+      </List>
+    </Box>
+  );
+}
+
 function renderRegistryLabel(status) {
   const state = status?.state || 'unknown';
   if (state === 'added') return 'Already Added';
@@ -584,4 +658,10 @@ function formatDate(value) {
   } catch (error) {
     return String(value || '');
   }
+}
+
+function formatPoiSecondary(poi) {
+  const source = poi?.metadata?.source || 'unknown';
+  const method = poi?.metadata?.label_method || 'unknown';
+  return `${poi.type} | ${poi.x}, ${poi.y} | ${source} | ${method}`;
 }

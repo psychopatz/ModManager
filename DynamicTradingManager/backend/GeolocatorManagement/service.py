@@ -16,6 +16,7 @@ from .discovery import (
     sanitize_pascal_case,
     strip_version_tokens,
 )
+from .poi import build_map_pois
 from .lua_writer import (
     normalize_generated_content_for_compare,
     parse_generated_metadata,
@@ -25,9 +26,11 @@ from .lua_writer import (
 from .parsers import (
     parse_lotheader_cells,
     parse_mod_info,
+    parse_objects_lua,
     parse_spawnpoints,
     parse_spawnregions,
     parse_worldmap_annotations,
+    parse_worldmap_features,
 )
 
 
@@ -36,7 +39,7 @@ GEOLOCATOR_DEFINITIONS_SUBPATH = Path(
 )
 
 
-def inspect_source_path(source_path: str, target: str | None = None, module: str = "DynamicTradingCommon") -> dict[str, object]:
+def inspect_source_path(source_path: str, target: str | None = None, module: str = "DynamicTradingCommon", llm_config: dict[str, object] | None = None) -> dict[str, object]:
     project = resolve_project_target(target)
     module_root = _resolve_module_root(project, module)
     source_mods = discover_mods_from_source(source_path)
@@ -44,7 +47,7 @@ def inspect_source_path(source_path: str, target: str | None = None, module: str
     mod_previews: list[dict[str, object]] = []
     total_maps = 0
     for source_mod in source_mods:
-        preview = _build_mod_preview(source_mod, module_root)
+        preview = _build_mod_preview(source_mod, module_root, llm_config=llm_config)
         mod_previews.append(preview)
         total_maps += len(preview["maps"])
 
@@ -66,6 +69,7 @@ def list_workshop_sources(
     root_path: str | None = None,
     target: str | None = None,
     module: str = "DynamicTradingCommon",
+    llm_config: dict[str, object] | None = None,
 ) -> dict[str, object]:
     settings = get_server_settings()
     resolved_root = Path(root_path).expanduser().resolve() if root_path else settings.workshop_content_path
@@ -80,7 +84,7 @@ def list_workshop_sources(
     source_mods = discover_mods_from_source(resolved_root)
     sources: list[dict[str, object]] = []
     for source_mod in source_mods:
-        mod_preview = _build_mod_preview(source_mod, module_root) if module_root is not None else _build_mod_preview_without_target(source_mod)
+        mod_preview = _build_mod_preview(source_mod, module_root, llm_config=llm_config) if module_root is not None else _build_mod_preview_without_target(source_mod)
         sources.append(_build_workshop_source_summary(mod_preview))
 
     sources.sort(key=lambda item: ((item["mod_name"] or "").lower(), str(item["workshop_item_id"] or "")))
@@ -91,8 +95,8 @@ def list_workshop_sources(
     }
 
 
-def generate_registry_files(source_path: str, target: str | None = None, module: str = "DynamicTradingCommon") -> dict[str, object]:
-    preview = inspect_source_path(source_path, target=target, module=module)
+def generate_registry_files(source_path: str, target: str | None = None, module: str = "DynamicTradingCommon", llm_config: dict[str, object] | None = None) -> dict[str, object]:
+    preview = inspect_source_path(source_path, target=target, module=module, llm_config=llm_config)
     generated_files: list[str] = []
     skipped_maps: list[dict[str, str]] = []
 
@@ -136,10 +140,10 @@ def _resolve_module_root(project: dict[str, object], module: str) -> Path:
     raise FileNotFoundError(f"Module '{normalized_module}' was not found in project '{project['name']}'.")
 
 
-def _build_mod_preview(source_mod: DiscoveredMod, module_root: Path) -> dict[str, object]:
+def _build_mod_preview(source_mod: DiscoveredMod, module_root: Path, llm_config: dict[str, object] | None = None) -> dict[str, object]:
     mod_metadata = _collect_mod_metadata(source_mod)
     output_folder = _determine_output_folder_name(mod_metadata)
-    map_previews = [_build_map_preview(source_mod, map_folder, module_root, output_folder, mod_metadata) for map_folder in source_mod.map_folders]
+    map_previews = [_build_map_preview(source_mod, map_folder, module_root, output_folder, mod_metadata, llm_config=llm_config) for map_folder in source_mod.map_folders]
 
     warnings = list(mod_metadata["warnings"])
     for map_preview in map_previews:
@@ -190,22 +194,27 @@ def _build_map_preview(
     module_root: Path,
     output_folder: str,
     mod_metadata: dict[str, object],
+    llm_config: dict[str, object] | None = None,
 ) -> dict[str, object]:
     map_name = map_folder.name
     spawnregions_path = map_folder / "spawnregions.lua"
     annotations_path = map_folder / "worldmap-annotations.lua"
+    objects_path = map_folder / "objects.lua"
+    worldmap_path = map_folder / "worldmap.xml"
 
     spawnregions = parse_spawnregions(spawnregions_path) if spawnregions_path.exists() else []
     spawnpoints = _collect_spawnpoints(source_mod, map_folder, spawnregions)
     annotations = parse_worldmap_annotations(annotations_path) if annotations_path.exists() else []
+    object_entries = parse_objects_lua(objects_path) if objects_path.exists() else []
+    world_features = parse_worldmap_features(worldmap_path) if worldmap_path.exists() else []
     lotheader_cells = parse_lotheader_cells(map_folder)
 
     bounds, bound_warnings = build_map_bounds(lotheader_cells, spawnpoints, annotations)
     warnings = list(bound_warnings)
-    if not annotations:
-        warnings.append(f"{map_name}: no worldmap-annotations.lua was found, so no POIs were generated.")
     if not spawnpoints:
         warnings.append(f"{map_name}: no spawnpoints.lua was found.")
+    if not world_features:
+        warnings.append(f"{map_name}: no worldmap.xml features were found for generic POI clustering.")
 
     short_name = _determine_short_name(map_name, spawnregions, annotations)
     long_name = _determine_long_name(short_name, spawnregions)
@@ -213,7 +222,16 @@ def _build_map_preview(
     county_name = short_name
     map_folders = _unique_strings([map_name])
     world_maps = _unique_strings([map_name] + [entry["name"] for entry in spawnregions if entry.get("name")])
-    pois = _build_pois(short_name, county_name, annotations)
+    pois, poi_buckets, poi_warnings = build_map_pois(
+        map_name=map_name,
+        town_name=short_name,
+        county_name=county_name,
+        annotations=annotations,
+        object_entries=object_entries,
+        world_features=world_features,
+        llm_config=llm_config,
+    )
+    warnings.extend(poi_warnings)
 
     definition = {
         "id": file_base_name,
@@ -282,6 +300,7 @@ def _build_map_preview(
         "spawnpoint_count": len(spawnpoints),
         "poi_count": len(pois),
         "pois": pois,
+        "poi_buckets": poi_buckets,
         "output_file": str(output_file),
         "definition": definition,
         "generation_metadata": generation_metadata,
@@ -322,38 +341,6 @@ def _strip_region_suffix(value: str) -> str:
     if "," in text:
         text = text.split(",", 1)[0].strip()
     return strip_version_tokens(text) or text
-
-
-def _build_pois(town_name: str, county_name: str, annotations: list[dict[str, object]]) -> list[dict[str, object]]:
-    pois: list[dict[str, object]] = []
-    seen: set[tuple[str, int, int]] = set()
-
-    for label in annotations:
-        name = str(label.get("name", "")).strip()
-        x = int(label.get("x", 0))
-        y = int(label.get("y", 0))
-        if not name:
-            continue
-        key = (normalize_registry_key(name), x, y)
-        if key in seen:
-            continue
-        seen.add(key)
-        pois.append(
-            {
-                "id": normalize_registry_key(name),
-                "name": name,
-                "type": "Label",
-                "x": x,
-                "y": y,
-                "town": town_name,
-                "county": county_name,
-                "metadata": {
-                    "source": "worldmap-annotations",
-                    "symbolType": label.get("symbolType"),
-                },
-            }
-        )
-    return pois
 
 
 def _collect_spawnpoints(

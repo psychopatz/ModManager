@@ -142,9 +142,11 @@ class GeolocatorInspectRequest(BaseModel):
     source_path: str
     target: Optional[str] = None
     module: Optional[str] = "DynamicTradingCommon"
+    llm_config: Optional[Dict[str, Any]] = None
 
 
 class GeolocatorGenerateRequest(BaseModel):
     source_path: str
     target: Optional[str] = None
     module: Optional[str] = "DynamicTradingCommon"
+    llm_config: Optional[Dict[str, Any]] = None

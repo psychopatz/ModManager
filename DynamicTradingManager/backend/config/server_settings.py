@@ -53,6 +53,7 @@ class ServerSettings:
     runtime_dump_file: Path
     runtime_rules_file: Path
     steamcmd_path: str | None
+    game_media_path: Path
     allowed_origins: list[str]
 
 
@@ -152,6 +153,16 @@ def get_server_settings() -> ServerSettings:
         file_settings.get("steam_cmd_path"),
     )
 
+    game_media_path = _resolve_path(
+        _first_non_empty(
+            os.getenv("GAME_PATH"),
+            file_settings.get("game_media_path"),
+            str(Path.home() / ".steam" / "steam" / "steamapps" / "common" / "ProjectZomboid" / "projectzomboid" / "media"),
+        )
+    )
+    if game_media_path is None:
+        raise RuntimeError("Game media path could not be resolved from settings.")
+
     allowed_origins_raw = _first_non_empty(
         os.getenv("ALLOWED_ORIGINS"),
         file_settings.get("allowed_origins"),
@@ -169,6 +180,7 @@ def get_server_settings() -> ServerSettings:
         runtime_dump_file=runtime_dump_file,
         runtime_rules_file=runtime_rules_file,
         steamcmd_path=steamcmd_path,
+        game_media_path=game_media_path,
         allowed_origins=allowed_origins,
     )
 

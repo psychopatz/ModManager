@@ -95,6 +95,7 @@ export const uploadWorkshopImage = (formData, target) => api.post('/workshop/ima
 
 // Geolocator
 export const getGeolocatorTargets = () => api.get('/geolocator/targets');
+export const getGeolocatorVanillaMaps = () => api.get('/geolocator/vanilla-maps');
 export const getGeolocatorWorkshopSources = (root, target, module, llmConfig) =>
   api.get('/geolocator/workshop-sources', {
     params: {

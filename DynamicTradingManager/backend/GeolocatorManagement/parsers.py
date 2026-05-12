@@ -24,16 +24,40 @@ def parse_spawnregions(path: Path) -> list[dict[str, str]]:
 
 def parse_spawnpoints(path: Path) -> list[dict[str, int]]:
     text = path.read_text(encoding="utf-8", errors="replace")
-    pattern = re.compile(
-        r"worldX\s*=\s*(-?\d+)\s*,\s*worldY\s*=\s*(-?\d+)\s*,\s*posX\s*=\s*(-?\d+)\s*,\s*posY\s*=\s*(-?\d+)(?:\s*,\s*posZ\s*=\s*(-?\d+))?"
-    )
+    
+    # Match the entire block between { and } for each spawn point entry
+    # This allows us to find key-value pairs independently of their order
+    entry_pattern = re.compile(r"\{([^\}]+)\}")
+    
     points: list[dict[str, int]] = []
-    for match in pattern.finditer(text):
-        world_x = int(match.group(1))
-        world_y = int(match.group(2))
-        pos_x = int(match.group(3))
-        pos_y = int(match.group(4))
-        pos_z = int(match.group(5) or 0)
+    for match in entry_pattern.finditer(text):
+        entry_text = match.group(1)
+        
+        # Extract values using specific key-based searches
+        def get_val(key: str) -> int | None:
+            m = re.search(rf"\b{key}\s*=\s*(-?\d+)", entry_text)
+            return int(m.group(1)) if m else None
+        
+        world_x = get_val("worldX")
+        world_y = get_val("worldY")
+        pos_x = get_val("posX")
+        pos_y = get_val("posY")
+        pos_z = get_val("posZ") or 0
+        
+        if pos_x is None or pos_y is None:
+            continue
+            
+        # If worldX/Y are provided, x/y are relative to the cell
+        if world_x is not None and world_y is not None:
+            abs_x = world_x * 300 + pos_x
+            abs_y = world_y * 300 + pos_y
+        else:
+            # If worldX/Y are missing, posX/posY are treated as absolute coordinates
+            abs_x = pos_x
+            abs_y = pos_y
+            world_x = abs_x // 300
+            world_y = abs_y // 300
+            
         points.append(
             {
                 "worldX": world_x,
@@ -41,8 +65,8 @@ def parse_spawnpoints(path: Path) -> list[dict[str, int]]:
                 "posX": pos_x,
                 "posY": pos_y,
                 "posZ": pos_z,
-                "x": world_x * 300 + pos_x,
-                "y": world_y * 300 + pos_y,
+                "x": abs_x,
+                "y": abs_y,
             }
         )
     return points

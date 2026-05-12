@@ -150,3 +150,9 @@ class GeolocatorGenerateRequest(BaseModel):
     target: Optional[str] = None
     module: Optional[str] = "DynamicTradingCommon"
     llm_config: Optional[Dict[str, Any]] = None
+
+
+class GeolocatorVanillaGenerateRequest(BaseModel):
+    target: Optional[str] = None
+    module: Optional[str] = "DynamicTradingCommon"
+    map_ids: Optional[List[str]] = None

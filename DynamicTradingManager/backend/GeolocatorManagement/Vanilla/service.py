@@ -54,11 +54,19 @@ def build_vanilla_map_definitions(target: str | None = None, module: str = "Dyna
             
     return definitions
 
-def generate_vanilla_registry(target: str | None = None, module: str = "DynamicTradingCommon") -> dict[str, object]:
+def generate_vanilla_registry(
+    target: str | None = None,
+    module: str = "DynamicTradingCommon",
+    map_ids: list[str] | None = None,
+) -> dict[str, object]:
     previews = build_vanilla_map_definitions(target=target, module=module)
     generated_files: list[str] = []
     
     for preview in previews:
+        # If map_ids are provided, only generate if the ID is in the list
+        if map_ids and preview["id"] not in map_ids:
+            continue
+            
         output_path = Path(preview["output_file"])
         definition = preview["definition"]
         metadata = preview.get("generation_metadata")

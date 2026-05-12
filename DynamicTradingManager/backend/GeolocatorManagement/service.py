@@ -96,6 +96,7 @@ def list_workshop_sources(
 
 
 def generate_registry_files(source_path: str, target: str | None = None, module: str = "DynamicTradingCommon", llm_config: dict[str, object] | None = None) -> dict[str, object]:
+    print(f"[Geolocator] Starting registry generation for source: {source_path}")
     preview = inspect_source_path(source_path, target=target, module=module, llm_config=llm_config)
     generated_files: list[str] = []
     skipped_maps: list[dict[str, str]] = []
@@ -120,6 +121,10 @@ def generate_registry_files(source_path: str, target: str | None = None, module:
             write_definition_file(output_path, definition, metadata=metadata if isinstance(metadata, dict) else None)
             generated_files.append(str(output_path))
 
+    print(
+        f"[Geolocator] Generation complete: generated={len(generated_files)} skipped={len(skipped_maps)} "
+        f"target={preview['target']} module={preview['module']}"
+    )
     return {
         "target": preview["target"],
         "project_name": preview["project_name"],

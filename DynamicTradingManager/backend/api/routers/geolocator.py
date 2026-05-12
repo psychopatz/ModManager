@@ -3,7 +3,11 @@ import logging
 from fastapi import APIRouter, HTTPException
 
 from api.routers.common import serialize_workshop_projects
-from api.schemas import GeolocatorGenerateRequest, GeolocatorInspectRequest
+from api.schemas import (
+    GeolocatorGenerateRequest,
+    GeolocatorInspectRequest,
+    GeolocatorVanillaGenerateRequest,
+)
 from GeolocatorManagement.service import (
     generate_registry_files,
     inspect_source_path,
@@ -31,13 +35,14 @@ async def get_vanilla_maps(target: str | None = None, module: str = "DynamicTrad
 
 
 @router.post("/api/geolocator/vanilla-generate")
-async def generate_vanilla_registry_endpoint(request: GeolocatorGenerateRequest):
+async def generate_vanilla_registry_endpoint(request: GeolocatorVanillaGenerateRequest):
     try:
         task_id = manager.create_task(
             "Generate Vanilla Geolocator Registry",
             generate_vanilla_registry,
             request.target,
             request.module,
+            request.map_ids,
         )
         return {"task_id": task_id}
     except Exception as exc:

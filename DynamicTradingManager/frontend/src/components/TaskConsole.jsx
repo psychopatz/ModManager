@@ -6,6 +6,7 @@ import { getTaskLogs, getTaskStatus } from '../services/api';
 const TaskConsole = ({ taskId, onClose, onSuccess }) => {
   const [logs, setLogs] = useState([]);
   const [status, setStatus] = useState('running');
+  const [task, setTask] = useState(null);
   const [lastIndex, setLastIndex] = useState(0);
   const scrollRef = useRef(null);
   const pollingRef = useRef(null);
@@ -26,6 +27,7 @@ const TaskConsole = ({ taskId, onClose, onSuccess }) => {
         }
 
         setStatus(statusRes.data.status);
+        setTask(statusRes.data);
 
         if (statusRes.data.status === 'completed' || statusRes.data.status === 'failed') {
           clearInterval(pollingRef.current);
@@ -122,6 +124,26 @@ const TaskConsole = ({ taskId, onClose, onSuccess }) => {
               '&::-webkit-scrollbar-thumb': { bgcolor: '#333', borderRadius: 4 },
             }}
           >
+            {task?.status === 'failed' && task?.error && (
+              <Box sx={{ mb: 1.5, p: 1.25, border: '1px solid #5c1f1f', bgcolor: '#2b1111', borderRadius: 1 }}>
+                <Typography sx={{ color: '#f44336', fontWeight: 700, mb: 0.5 }}>
+                  Task failed
+                </Typography>
+                <Typography sx={{ color: '#ffb4b4', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                  {task.error}
+                </Typography>
+              </Box>
+            )}
+            {task?.status === 'completed' && task?.result && (
+              <Box sx={{ mb: 1.5, p: 1.25, border: '1px solid #1f4d2e', bgcolor: '#102015', borderRadius: 1 }}>
+                <Typography sx={{ color: '#4caf50', fontWeight: 700, mb: 0.5 }}>
+                  Task completed
+                </Typography>
+                <Typography sx={{ color: '#b7dfbf', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                  {renderResultSummary(task.result)}
+                </Typography>
+              </Box>
+            )}
             {logs.map((log, i) => (
               <Box key={i} sx={{ display: 'flex', gap: 1.5, mb: 0.5, flexShrink: 0 }}>
                 <Typography component="span" sx={{ color: '#666', minWidth: 70, fontSize: '0.75rem' }}>
@@ -149,3 +171,20 @@ const TaskConsole = ({ taskId, onClose, onSuccess }) => {
 };
 
 export default TaskConsole;
+
+function renderResultSummary(result) {
+  if (result?.total_generated != null) {
+    return `Generated files: ${result.total_generated}`;
+  }
+  if (result?.generated_files?.length != null) {
+    return `Generated files: ${result.generated_files.length}`;
+  }
+  if (typeof result === 'string') {
+    return result;
+  }
+  try {
+    return JSON.stringify(result, null, 2);
+  } catch (error) {
+    return String(result ?? '');
+  }
+}

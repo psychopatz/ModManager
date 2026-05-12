@@ -4,8 +4,10 @@ import {
   Box,
   Card,
   CardContent,
+  Checkbox,
   Chip,
   CircularProgress,
+  FormControlLabel,
   Grid,
   Paper,
   Stack,
@@ -23,6 +25,7 @@ const GeolocatorVanillaTab = ({ selectedTarget, selectedModule }) => {
   const [generating, setGenerating] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState(null);
   const [maps, setMaps] = useState([]);
+  const [selectedMapIds, setSelectedMapIds] = useState([]);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -36,9 +39,17 @@ const GeolocatorVanillaTab = ({ selectedTarget, selectedModule }) => {
     setError('');
     try {
       const res = await api.getGeolocatorVanillaMaps(selectedTarget, selectedModule);
-      setMaps(Array.isArray(res.data) ? res.data : []);
+      const newMaps = Array.isArray(res.data) ? res.data : [];
+      setMaps(newMaps);
+      
+      // Select all by default, except things that look like challenge maps
+      const defaultSelected = newMaps
+        .filter(m => !String(m.folder || '').toLowerCase().includes('challenge'))
+        .map(m => m.id);
+      setSelectedMapIds(defaultSelected);
     } catch (loadError) {
       setMaps([]);
+      setSelectedMapIds([]);
       setError(loadError.response?.data?.detail || 'Failed to load vanilla map discovery data.');
     } finally {
       setLoading(false);
@@ -51,6 +62,7 @@ const GeolocatorVanillaTab = ({ selectedTarget, selectedModule }) => {
       const res = await api.generateGeolocatorVanillaRegistry({
         target: selectedTarget,
         module: selectedModule,
+        map_ids: selectedMapIds,
       });
       setActiveTaskId(res.data.task_id || null);
     } catch (genError) {
@@ -59,6 +71,22 @@ const GeolocatorVanillaTab = ({ selectedTarget, selectedModule }) => {
       setGenerating(false);
     }
   };
+
+  const toggleMapSelection = (id) => {
+    setSelectedMapIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAll = () => {
+    setSelectedMapIds(maps.map((m) => m.id));
+  };
+
+  const handleSelectNone = () => {
+    setSelectedMapIds([]);
+  };
+
+  const selectedCount = selectedMapIds.length;
 
   return (
     <Grid container spacing={3}>
@@ -80,16 +108,21 @@ const GeolocatorVanillaTab = ({ selectedTarget, selectedModule }) => {
             </Stack>
 
             <Alert severity="info" variant="outlined">
-              This panel dynamically discovers base game map assets. You can generate registry files for all discovered vanilla locations into the current project context.
+              This panel dynamically discovers base game map assets. You can generate registry files for the selected vanilla locations into the current project context.
             </Alert>
+
+            <Stack direction="row" spacing={1}>
+              <Button size="small" onClick={handleSelectAll}>All</Button>
+              <Button size="small" onClick={handleSelectNone}>None</Button>
+            </Stack>
 
             <Button
               variant="contained"
               onClick={handleGenerate}
-              disabled={loading || generating || maps.length === 0}
+              disabled={loading || generating || maps.length === 0 || selectedCount === 0}
               fullWidth
             >
-              {generating ? 'Starting...' : 'Generate Vanilla Registry'}
+              {generating ? 'Starting...' : `Generate Registry for ${selectedCount} Maps`}
             </Button>
 
             {error && (
@@ -134,13 +167,21 @@ const GeolocatorVanillaTab = ({ selectedTarget, selectedModule }) => {
                       <CardContent>
                         <Stack spacing={1.5}>
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
-                            <Box>
-                              <Typography variant="h6" sx={{ fontWeight: 800 }}>
-                                {mapItem.name}
-                              </Typography>
-                              <Typography variant="body2" color="text.secondary">
-                                Folder: {mapItem.folder} | Definition ID: {mapItem.id}
-                              </Typography>
+                            <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                              <Checkbox
+                                size="small"
+                                checked={selectedMapIds.includes(mapItem.id)}
+                                onChange={() => toggleMapSelection(mapItem.id)}
+                                sx={{ p: 0.5, mt: -0.25 }}
+                              />
+                              <Box>
+                                <Typography variant="h6" sx={{ fontWeight: 800 }}>
+                                  {mapItem.name}
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                  Folder: {mapItem.folder} | Definition ID: {mapItem.id}
+                                </Typography>
+                              </Box>
                             </Box>
                             <Stack direction="row" spacing={1} flexWrap="wrap">
                               <Chip size="small" label={`Cells: ${mapItem.cellCount}`} />

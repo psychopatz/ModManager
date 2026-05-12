@@ -31,6 +31,7 @@ import TaskConsole from '../TaskConsole';
 import {
   countByState,
   formatDate,
+  formatErrorMessage,
   formatPoiSecondary,
   getRegistryChipColor,
   renderRegistryLabel,
@@ -144,7 +145,7 @@ const GeolocatorModdedTab = ({
       setSnackbar({
         open: true,
         severity: 'error',
-        message: error.response?.data?.detail || 'Failed to inspect the map source.',
+        message: formatErrorMessage(error.response?.data?.detail || 'Failed to inspect source.'),
       });
     } finally {
       setInspecting(false);
@@ -170,7 +171,7 @@ const GeolocatorModdedTab = ({
       setSnackbar({
         open: true,
         severity: 'error',
-        message: error.response?.data?.detail || 'Failed to start generation.',
+        message: formatErrorMessage(error.response?.data?.detail || 'Failed to start generation.'),
       });
     } finally {
       setGenerating(false);
@@ -182,7 +183,7 @@ const GeolocatorModdedTab = ({
   return (
     <>
       <Grid container spacing={3}>
-        <Grid item xs={12} lg={5}>
+        <Grid size={{ xs: 12, lg: 5 }}>
           <Paper elevation={3} sx={{ p: 3, height: '100%' }}>
             <Stack spacing={2.5}>
               <Typography variant="h5" sx={{ fontWeight: 800 }}>
@@ -316,7 +317,7 @@ const GeolocatorModdedTab = ({
           </Paper>
         </Grid>
 
-        <Grid item xs={12} lg={7}>
+        <Grid size={{ xs: 12, lg: 7 }}>
           <Paper elevation={3} sx={{ p: 3, height: '100%' }}>
             <Stack spacing={2}>
               <Typography variant="h5" sx={{ fontWeight: 800 }}>

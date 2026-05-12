@@ -90,13 +90,13 @@ const GeolocatorPage = () => {
               </Box>
             ) : (
               <Grid container spacing={2}>
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <FormControl fullWidth>
                     <InputLabel id="geolocator-target-label">Project Target</InputLabel>
                     <Select
                       labelId="geolocator-target-label"
                       label="Project Target"
-                      value={selectedTarget}
+                      value={targets.some(t => t.key === selectedTarget) ? selectedTarget : ''}
                       onChange={(event) => setSelectedTarget(event.target.value)}
                     >
                       {targets.map((target) => (
@@ -107,13 +107,13 @@ const GeolocatorPage = () => {
                     </Select>
                   </FormControl>
                 </Grid>
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <FormControl fullWidth>
                     <InputLabel id="geolocator-module-label">Output Module</InputLabel>
                     <Select
                       labelId="geolocator-module-label"
                       label="Output Module"
-                      value={selectedModule}
+                      value={modules.some(m => m.id === selectedModule) ? selectedModule : ''}
                       onChange={(event) => setSelectedModule(event.target.value)}
                     >
                       {modules.map((module) => (
@@ -149,7 +149,10 @@ const GeolocatorPage = () => {
             activeLLMConfig={activeLLMConfig}
           />
         ) : (
-          <GeolocatorVanillaTab />
+          <GeolocatorVanillaTab
+            selectedTarget={selectedTarget}
+            selectedModule={selectedModule}
+          />
         )}
       </Stack>
     </Box>

@@ -21,6 +21,7 @@ import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
 import { getArchetypeEditorData, saveArchetypeDefinition, getWorkshopTargets } from '../services/api';
+import { formatErrorMessage } from './Geolocator/geolocatorUtils';
 
 const DRAG_MIME = 'application/x-dt-archetype-entry';
 
@@ -368,7 +369,7 @@ const ArchetypeEditorPage = () => {
     } catch (error) {
       setStatus({
         type: 'error',
-        message: error?.response?.data?.detail || 'Failed to load archetype editor data.',
+        message: formatErrorMessage(error?.response?.data?.detail || 'Failed to load archetype editor data.'),
       });
     } finally {
       setLoading(false);
@@ -550,7 +551,7 @@ const ArchetypeEditorPage = () => {
     } catch (error) {
       setStatus({
         type: 'error',
-        message: error?.response?.data?.detail || 'Failed to save archetype definition.',
+        message: formatErrorMessage(error?.response?.data?.detail || 'Failed to save archetype definition.'),
       });
     } finally {
       setSaving(false);

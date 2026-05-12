@@ -83,6 +83,7 @@ def build_map_pois(
     world_features: list[dict[str, object]],
     llm_config: dict[str, object] | None = None,
 ) -> tuple[list[dict[str, object]], dict[str, list[dict[str, object]]], list[str]]:
+    print(f"[POI] Building POIs for {map_name}")
     warnings: list[str] = []
     buckets: dict[str, list[dict[str, object]]] = {
         "annotation": [],
@@ -100,6 +101,10 @@ def build_map_pois(
             buckets["objects"].append(poi)
 
     generic_clusters = _cluster_generic_features(world_features)
+    print(
+        f"[POI] {map_name}: annotations={len(buckets['annotation'])} "
+        f"named_objects={len(buckets['objects'])} generic_clusters={len(generic_clusters)}"
+    )
     generic_pois = _build_generic_cluster_pois(
         map_name=map_name,
         town_name=town_name,
@@ -119,6 +124,10 @@ def build_map_pois(
     if not buckets["generic"]:
         warnings.append(f"{map_name}: no generic clustered POIs were generated from worldmap.xml.")
 
+    print(
+        f"[POI] {map_name}: merged={len(merged)} "
+        f"(annotation={len(buckets['annotation'])}, objects={len(buckets['objects'])}, generic={len(buckets['generic'])})"
+    )
     return merged, buckets, warnings
 
 
@@ -378,6 +387,8 @@ def _label_generic_clusters(
 ) -> dict[str, str]:
     usable_config = _normalize_llm_config(llm_config)
     if not usable_config or not clusters:
+        if clusters:
+            print(f"[LLM] {map_name}: no usable backend LLM config, using deterministic cluster labels for {len(clusters)} clusters.")
         return {}
 
     grouped_batches: list[list[dict[str, object]]] = []
@@ -385,12 +396,21 @@ def _label_generic_clusters(
     for index in range(0, len(clusters), batch_size):
         grouped_batches.append(clusters[index : index + batch_size])
 
+    print(
+        f"[LLM] {map_name}: labeling {len(clusters)} generic clusters in {len(grouped_batches)} batch(es) "
+        f"with model={usable_config['model']}"
+    )
     output: dict[str, str] = {}
-    for batch in grouped_batches:
+    for batch_index, batch in enumerate(grouped_batches, start=1):
         try:
-            output.update(asyncio.run(_label_generic_clusters_batch(map_name, batch, higher_priority_pois, usable_config)))
+            print(f"[LLM] {map_name}: requesting labels for batch {batch_index}/{len(grouped_batches)} ({len(batch)} clusters)")
+            batch_output = asyncio.run(_label_generic_clusters_batch(map_name, batch, higher_priority_pois, usable_config))
+            output.update(batch_output)
+            print(f"[LLM] {map_name}: received {len(batch_output)} label(s) for batch {batch_index}/{len(grouped_batches)}")
         except Exception as exc:
+            print(f"[LLM] {map_name}: batch {batch_index}/{len(grouped_batches)} failed, falling back to deterministic labels: {exc}")
             logger.warning("Generic POI LLM labeling failed for %s: %s", map_name, exc)
+    print(f"[LLM] {map_name}: labeled {len(output)} cluster(s) through LLM")
     return output
 
 

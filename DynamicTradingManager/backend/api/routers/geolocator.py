@@ -9,7 +9,7 @@ from GeolocatorManagement.service import (
     inspect_source_path,
     list_workshop_sources,
 )
-from GeolocatorManagement.Vanilla.service import build_vanilla_map_definitions
+from GeolocatorManagement.Vanilla.service import build_vanilla_map_definitions, generate_vanilla_registry
 from ItemManagement.task_manager import manager
 
 logger = logging.getLogger(__name__)
@@ -22,11 +22,26 @@ async def get_geolocator_targets():
 
 
 @router.get("/api/geolocator/vanilla-maps")
-async def get_vanilla_maps():
+async def get_vanilla_maps(target: str | None = None, module: str = "DynamicTradingCommon"):
     try:
-        return build_vanilla_map_definitions()
+        return build_vanilla_map_definitions(target=target, module=module)
     except Exception as exc:
         logger.exception("Failed to build vanilla map definitions")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post("/api/geolocator/vanilla-generate")
+async def generate_vanilla_registry_endpoint(request: GeolocatorGenerateRequest):
+    try:
+        task_id = manager.create_task(
+            "Generate Vanilla Geolocator Registry",
+            generate_vanilla_registry,
+            request.target,
+            request.module,
+        )
+        return {"task_id": task_id}
+    except Exception as exc:
+        logger.exception("Failed to start vanilla generation")
         raise HTTPException(status_code=500, detail=str(exc))
 
 

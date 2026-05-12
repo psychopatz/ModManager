@@ -95,7 +95,7 @@ export const uploadWorkshopImage = (formData, target) => api.post('/workshop/ima
 
 // Geolocator
 export const getGeolocatorTargets = () => api.get('/geolocator/targets');
-export const getGeolocatorVanillaMaps = () => api.get('/geolocator/vanilla-maps');
+export const getGeolocatorVanillaMaps = (target, module) => api.get('/geolocator/vanilla-maps', { params: { target, module } });
 export const getGeolocatorWorkshopSources = (root, target, module, llmConfig) =>
   api.get('/geolocator/workshop-sources', {
     params: {
@@ -111,6 +111,7 @@ export const getGeolocatorWorkshopSources = (root, target, module, llmConfig) =>
   });
 export const inspectGeolocatorSource = (payload) => api.post('/geolocator/inspect', payload);
 export const generateGeolocatorRegistry = (payload) => api.post('/geolocator/generate', payload);
+export const generateGeolocatorVanillaRegistry = (payload) => api.post('/geolocator/vanilla-generate', payload);
 
 // Git
 export const getGitChanges = (branch, target, since = '') => api.get('/git/changes', { params: { branch, target, since } });

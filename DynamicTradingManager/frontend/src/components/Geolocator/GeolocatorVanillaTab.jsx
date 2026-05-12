@@ -13,23 +13,29 @@ import {
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import Button from '@mui/material/Button';
+import TaskConsole from '../TaskConsole';
+import { formatDate, formatErrorMessage, getRegistryChipColor, renderRegistryLabel } from './geolocatorUtils';
 
 import * as api from '../../services/api';
 
-const GeolocatorVanillaTab = () => {
+const GeolocatorVanillaTab = ({ selectedTarget, selectedModule }) => {
   const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [activeTaskId, setActiveTaskId] = useState(null);
   const [maps, setMaps] = useState([]);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    loadMaps();
-  }, []);
+    if (selectedTarget && selectedModule) {
+      loadMaps();
+    }
+  }, [selectedTarget, selectedModule]);
 
   const loadMaps = async () => {
     setLoading(true);
     setError('');
     try {
-      const res = await api.getGeolocatorVanillaMaps();
+      const res = await api.getGeolocatorVanillaMaps(selectedTarget, selectedModule);
       setMaps(Array.isArray(res.data) ? res.data : []);
     } catch (loadError) {
       setMaps([]);
@@ -39,9 +45,24 @@ const GeolocatorVanillaTab = () => {
     }
   };
 
+  const handleGenerate = async () => {
+    setGenerating(true);
+    try {
+      const res = await api.generateGeolocatorVanillaRegistry({
+        target: selectedTarget,
+        module: selectedModule,
+      });
+      setActiveTaskId(res.data.task_id || null);
+    } catch (genError) {
+      setError(genError.response?.data?.detail || 'Failed to start vanilla generation.');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   return (
     <Grid container spacing={3}>
-      <Grid item xs={12} lg={4}>
+      <Grid size={{ xs: 12, lg: 4 }}>
         <Paper elevation={3} sx={{ p: 3, height: '100%' }}>
           <Stack spacing={2.5}>
             <Typography variant="h5" sx={{ fontWeight: 800 }}>
@@ -59,19 +80,28 @@ const GeolocatorVanillaTab = () => {
             </Stack>
 
             <Alert severity="info" variant="outlined">
-              This panel is discovery-only for now. It reads the current vanilla map layout from the game media path exposed by the backend.
+              This panel dynamically discovers base game map assets. You can generate registry files for all discovered vanilla locations into the current project context.
             </Alert>
 
+            <Button
+              variant="contained"
+              onClick={handleGenerate}
+              disabled={loading || generating || maps.length === 0}
+              fullWidth
+            >
+              {generating ? 'Starting...' : 'Generate Vanilla Registry'}
+            </Button>
+
             {error && (
-              <Alert severity="error" variant="outlined">
-                {error}
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {formatErrorMessage(error)}
               </Alert>
             )}
           </Stack>
         </Paper>
       </Grid>
 
-      <Grid item xs={12} lg={8}>
+      <Grid size={{ xs: 12, lg: 8 }}>
         <Paper elevation={3} sx={{ p: 3, height: '100%' }}>
           <Stack spacing={2}>
             <Typography variant="h5" sx={{ fontWeight: 800 }}>
@@ -120,8 +150,27 @@ const GeolocatorVanillaTab = () => {
                             </Stack>
                           </Box>
 
+                          <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 1 }}>
+                            <Chip
+                              size="small"
+                              label={renderRegistryLabel(mapItem.registry_status)}
+                              color={getRegistryChipColor(mapItem.registry_status)}
+                              variant="outlined"
+                            />
+                            {mapItem.registry_status?.added_at && (
+                              <Chip size="small" label={`Added ${formatDate(mapItem.registry_status.added_at)}`} variant="outlined" />
+                            )}
+                          </Stack>
+
+                          <Typography variant="body2" sx={{ fontStyle: 'italic', color: 'text.secondary', mt: 1 }}>
+                            {mapItem.poiCount} POIs discovered: {mapItem.poiBuckets?.annotation?.length || 0} annotations, {mapItem.poiBuckets?.objects?.length || 0} objects
+                          </Typography>
+
                           <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
                             Bounds: X {mapItem.bounds.minX}..{mapItem.bounds.maxX} | Y {mapItem.bounds.minY}..{mapItem.bounds.maxY}
+                          </Typography>
+                          <Typography variant="body2" sx={{ fontSize: '0.75rem', color: 'text.secondary', wordBreak: 'break-all' }}>
+                            Output: {mapItem.output_file}
                           </Typography>
                         </Stack>
                       </CardContent>
@@ -133,6 +182,7 @@ const GeolocatorVanillaTab = () => {
           </Stack>
         </Paper>
       </Grid>
+      <TaskConsole taskId={activeTaskId} onClose={() => setActiveTaskId(null)} onSuccess={loadMaps} />
     </Grid>
   );
 };

@@ -53,3 +53,29 @@ export function formatPoiSecondary(poi) {
   const method = poi?.metadata?.label_method || 'unknown';
   return `${poi.type} | ${poi.x}, ${poi.y} | ${source} | ${method}`;
 }
+
+/**
+ * Safely formats a backend error (string or JSON/Pydantic detail) for UI rendering.
+ * @param {any} err - The error data from the backend response.
+ */
+export function formatErrorMessage(err) {
+  if (!err) return '';
+  if (typeof err === 'string') return err;
+  
+  if (Array.isArray(err)) {
+    return err.map(e => {
+      if (typeof e === 'object' && e !== null) {
+        const loc = Array.isArray(e.loc) ? e.loc.filter(l => l !== 'body' && l !== 'query').join(' > ') : '';
+        const msg = e.msg || JSON.stringify(e);
+        return loc ? `${loc}: ${msg}` : msg;
+      }
+      return String(e);
+    }).join(' | ');
+  }
+  
+  if (typeof err === 'object' && err !== null) {
+    return err.message || err.detail || JSON.stringify(err);
+  }
+  
+  return String(err);
+}

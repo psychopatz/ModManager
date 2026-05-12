@@ -3,6 +3,7 @@ import sys
 import io
 import time
 import uuid
+import traceback
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 
@@ -70,10 +71,12 @@ class TaskManager:
                 self.tasks[task_id]["status"] = "completed"
                 self.tasks[task_id]["result"] = result
         except Exception as e:
+            error_trace = traceback.format_exc()
             with self._lock:
                 self.tasks[task_id]["status"] = "failed"
                 self.tasks[task_id]["error"] = str(e)
-            print(f"Error in task {task_id}: {e}")
+            print(f"❌ Error in task {task_id}: {e}")
+            print(error_trace.rstrip())
         finally:
             sys.stdout = original_stdout
             with self._lock:

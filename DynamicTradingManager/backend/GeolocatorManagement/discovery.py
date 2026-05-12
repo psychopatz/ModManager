@@ -194,10 +194,13 @@ def _ascend_to_mod_root_from_content_root(path: Path) -> Path | None:
 def _is_valid_map_folder(path: Path) -> bool:
     if not path.is_dir():
         return False
-    patterns = ("*.lotheader", "worldmap.xml", "worldmap.xml.bin", "worldmap-annotations.lua")
+    patterns = ("*.lotheader", "worldmap.xml", "worldmap.xml.bin", "worldmap-annotations.lua", "map.info", "spawnpoints.lua")
     for pattern in patterns:
-        if any(path.glob(pattern)):
-            return True
+        try:
+            if any(path.glob(pattern)):
+                return True
+        except Exception:
+            continue
     return False
 
 

@@ -17,6 +17,7 @@ import {
   flattenVisibleNodes,
   lineageForTag,
   makeOverrideDraft,
+  tagTreeToLLMMarkdown,
 } from './treeUtils';
 import TagTreePanel from './TagTreePanel';
 import TagDetailsPanel from './TagDetailsPanel';
@@ -212,6 +213,17 @@ const TagPricingPage = () => {
     setExpandedTags({});
   };
 
+  const handleExportLLM = () => {
+    try {
+      const markdown = tagTreeToLLMMarkdown(tree);
+      const text = `# Dynamic Trading Tag Registry\n\n${markdown}`;
+      navigator.clipboard.writeText(text);
+      setStatus({ type: 'success', message: 'LLM-friendly tag summary copied to clipboard!' });
+    } catch (err) {
+      setStatus({ type: 'error', message: 'Failed to copy LLM export.' });
+    }
+  };
+
   const handleGeneratePreview = async () => {
     if (!selectedTag || !config) {
       return;
@@ -393,6 +405,7 @@ const TagPricingPage = () => {
         selectedTag={selectedTag}
         handleSelectTag={handleSelectTag}
         toggleExpanded={toggleExpanded}
+        handleExportLLM={handleExportLLM}
       />
 
       <Stack spacing={3}>

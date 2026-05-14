@@ -135,3 +135,13 @@ export const flattenVisibleNodes = (nodes, expandedTags, forceExpand = false, de
 
   return [row, ...flattenVisibleNodes(node.children, expandedTags, forceExpand, depth + 1)];
 });
+export const tagTreeToLLMMarkdown = (nodes, depth = 0) => nodes.map((node) => {
+  const indent = '  '.repeat(depth);
+  const samplesText = (node.samples || []).map((s) => s.name || s.item_id).join(', ');
+  const line = `${indent}- **${node.label}** (${node.item_count} items)${samplesText ? ` - Samples: ${samplesText}` : ''}`;
+  if (node.children && node.children.length > 0) {
+    const childrenText = tagTreeToLLMMarkdown(node.children, depth + 1);
+    return `${line}\n${childrenText}`;
+  }
+  return line;
+}).join('\n');

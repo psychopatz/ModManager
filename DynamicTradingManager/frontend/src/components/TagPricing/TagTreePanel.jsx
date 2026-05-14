@@ -27,6 +27,7 @@ const TagTreePanel = ({
   selectedTag,
   handleSelectTag,
   toggleExpanded,
+  handleExportLLM,
 }) => (
   <Paper elevation={3} sx={{ p: 3, minHeight: 760, display: 'flex', flexDirection: 'column' }}>
     <Stack spacing={2}>
@@ -57,6 +58,9 @@ const TagTreePanel = ({
           {loadingCatalog ? 'Loading tags...' : `${visibleNodeCount} visible nodes`}
         </Typography>
         <Stack direction="row" spacing={1}>
+          <Button variant="outlined" onClick={handleExportLLM} color="secondary" disabled={loadingCatalog}>
+            LLM Export
+          </Button>
           <Button variant="outlined" onClick={handleExpandAll} disabled={loadingCatalog}>
             Expand All
           </Button>

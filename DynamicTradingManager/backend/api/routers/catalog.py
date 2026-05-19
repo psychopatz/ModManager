@@ -3,12 +3,8 @@ from typing import Optional
 
 from fastapi import APIRouter
 
-from api.routers.common import get_items
+from api.routers.common import get_items, get_processed_items
 from api.schemas import StatsResponse
-from ItemManagement import calculate_price, generate_tags, get_stat
-from ItemManagement.commons.lua_handler.records import tags_list_to_dict
-from ItemManagement.commons.vanilla_loader import get_translated_name
-from ItemManagement.parse import is_item_blacklisted, is_item_whitelisted
 from ItemManagement.ui.commands import get_registered_items
 from ItemManagement.ui.stats import count_registered_items, find_invalid_blacklist_ids
 
@@ -51,23 +47,19 @@ async def list_items(
     offset: int = 0,
 ):
     try:
-        items = get_items()
+        processed_items = get_processed_items()
         registered_ids = get_registered_items()
 
         filtered_results = []
-        item_keys = list(items.keys())
 
-        for item_id in item_keys:
-            props = items[item_id]
-            is_bl, _ = is_item_blacklisted(item_id, {})
-            is_wl = is_item_whitelisted(item_id)
-
-            tags_list = generate_tags(item_id, props)
-            tags_dict = tags_list_to_dict(tags_list)
-            price = calculate_price(item_id, props, tags_dict)
-            weight = get_stat(props, "Weight", 0.5)
-
-            item_name = get_translated_name(item_id, props)
+        for item in processed_items:
+            item_id = item["id"]
+            is_bl = item["is_blacklisted"]
+            is_wl = item["is_whitelisted"]
+            price = item["price"]
+            weight = item["weight"]
+            tags_list = item["tags"]
+            item_name = item["name"]
 
             if search and search.lower() not in item_name.lower() and search.lower() not in item_id.lower():
                 continue
@@ -98,12 +90,12 @@ async def list_items(
                 {
                     "id": item_id,
                     "name": item_name,
-                    "is_blacklisted": bool(is_bl),
-                    "is_whitelisted": bool(is_wl),
+                    "is_blacklisted": is_bl,
+                    "is_whitelisted": is_wl,
                     "is_registered": item_id in registered_ids,
-                    "price": int(price),
+                    "price": price,
                     "tags": tags_list,
-                    "weight": float(weight),
+                    "weight": weight,
                 }
             )
 
@@ -119,12 +111,11 @@ async def list_items(
 @router.get("/api/tags")
 async def list_unique_tags():
     try:
-        items = get_items()
+        processed_items = get_processed_items()
         unique_tags = set()
 
-        for item_id, props in items.items():
-            tags_list = generate_tags(item_id, props)
-            for tag in tags_list:
+        for item in processed_items:
+            for tag in item["tags"]:
                 unique_tags.add(tag)
 
         return {"tags": sorted(list(unique_tags))}

@@ -184,15 +184,6 @@ def handle_menu_choice(choice, vanilla_items, chunk_limit, vanilla_scripts_dir, 
     
     # ITEM ANALYSIS
     elif choice == '9':
-        # Cleanup blacklisted items
-        dry_run = input("🧹 Dry run first? (y/n): ").lower().startswith('y')
-        print("\n🧹 Starting cleanup...")
-        cleanup_blacklist(vanilla_items, dry_run=dry_run)
-        input("\n⏸️  Press Enter to continue...")
-        return False
-    
-    # ITEM ANALYSIS
-    elif choice == '9':
         # Find items by property
         prop_name = input("🔎 Enter property name (e.g., StressChange): ").strip()
         if prop_name:

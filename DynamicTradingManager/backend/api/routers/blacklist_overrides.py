@@ -185,6 +185,7 @@ async def save_item_override(request: ItemOverrideRequest):
         overrides.append(override)
         save_overrides(overrides)
         sync_info = _write_runtime_rules_file()
+        clear_items_cache()
         return {
             "success": True,
             "override": override,
@@ -208,6 +209,7 @@ async def delete_item_override(item_id: str):
 
         save_overrides(next_overrides)
         sync_info = _write_runtime_rules_file()
+        clear_items_cache()
         return {
             "success": True,
             "item_id": item_id,

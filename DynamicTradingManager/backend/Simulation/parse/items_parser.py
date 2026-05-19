@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Dict
 
 from ..models import ItemDef, TagDef
-from .lua_utils import find_lua_files, parse_quoted_list, read_text
+from .lua_utils import find_lua_files, parse_quoted_list, read_text, extract_balanced_block
 
 
 ITEM_BLOCK_RE = re.compile(r'\{([^}]+)\}', re.DOTALL)
@@ -45,44 +45,52 @@ def parse_items(items_root: Path) -> Dict[str, ItemDef]:
         # Resolve mod ID from path as a fallback
         default_module = get_mod_id_from_path(lua_file)
         
-        # We look for table entries inside DynamicTrading.RegisterBatch({ ... })
-        # or simplified blocks.
-        for match in ITEM_BLOCK_RE.finditer(content):
-            block = match.group(1)
+        idx = 0
+        while idx < len(content):
+            idx = content.find('{', idx)
+            if idx == -1:
+                break
             
-            # Extract fields using targeted regexes for flexibility
-            item_id_match = re.search(r'item\s*=\s*"([^"]+)"', block)
-            if not item_id_match:
+            block = extract_balanced_block(content, idx)
+            if not block:
+                idx += 1
                 continue
             
-            item_id = item_id_match.group(1).strip()
+            inner = block[1:-1]
             
-            price_match = re.search(r'basePrice\s*=\s*([-]?\d+(?:\.\d+)?)', block)
-            base_price = float(price_match.group(1)) if price_match else 0.0
+            # Extract fields using targeted regexes for flexibility
+            item_id_match = re.search(r'item\s*=\s*"([^"]+)"', inner)
+            if item_id_match:
+                item_id = item_id_match.group(1).strip()
+                
+                price_match = re.search(r'basePrice\s*=\s*([-]?\d+(?:\.\d+)?)', inner)
+                base_price = float(price_match.group(1)) if price_match else 0.0
+                
+                tags_match = re.search(r'tags\s*=\s*\{([^}]*)\}', inner)
+                tags = parse_quoted_list(tags_match.group(1)) if tags_match else []
+                
+                stock_match = re.search(r'stockRange\s*=\s*\{\s*min\s*=\s*(\d+)\s*,\s*max\s*=\s*(\d+)\s*\}', inner)
+                stock_min = int(stock_match.group(1)) if stock_match else 0
+                stock_max = int(stock_match.group(2)) if stock_match else 0
+                
+                chance_match = re.search(r'chance\s*=\s*([-]?\d+(?:\.\d+)?)', inner)
+                chance = float(chance_match.group(1)) if chance_match else None
+                
+                module_match = re.search(r'module\s*=\s*"([^"]+)"', inner)
+                module_id = module_match.group(1).strip() if module_match else default_module
+                
+                items[item_id] = ItemDef(
+                    item_id=item_id,
+                    base_price=base_price,
+                    tags=tags,
+                    stock_min=stock_min,
+                    stock_max=stock_max,
+                    chance=chance,
+                    module=module_id,
+                    source_file=rel_file,
+                )
             
-            tags_match = re.search(r'tags\s*=\s*\{([^}]*)\}', block)
-            tags = parse_quoted_list(tags_match.group(1)) if tags_match else []
-            
-            stock_match = re.search(r'stockRange\s*=\s*\{\s*min\s*=\s*(\d+)\s*,\s*max\s*=\s*(\d+)\s*\}', block)
-            stock_min = int(stock_match.group(1)) if stock_match else 0
-            stock_max = int(stock_match.group(2)) if stock_match else 0
-            
-            chance_match = re.search(r'chance\s*=\s*([-]?\d+(?:\.\d+)?)', block)
-            chance = float(chance_match.group(1)) if chance_match else None
-            
-            module_match = re.search(r'module\s*=\s*"([^"]+)"', block)
-            module_id = module_match.group(1).strip() if module_match else default_module
-            
-            items[item_id] = ItemDef(
-                item_id=item_id,
-                base_price=base_price,
-                tags=tags,
-                stock_min=stock_min,
-                stock_max=stock_max,
-                chance=chance,
-                module=module_id,
-                source_file=rel_file,
-            )
+            idx += 1
     return items
 
 

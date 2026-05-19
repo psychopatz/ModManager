@@ -17,6 +17,7 @@ CURRENCY_ROOT = _settings.dynamic_currency_path
 
 debug_parser = LogParser(CONSOLE_PATH)
 cached_vanilla_items = None
+cached_processed_items = None
 
 
 def configure_environment(
@@ -47,9 +48,44 @@ def get_items():
     return cached_vanilla_items
 
 
+def get_processed_items():
+    global cached_processed_items
+    if cached_processed_items is None:
+        raw_items = get_items()
+        from ItemManagement import calculate_price, generate_tags, get_stat
+        from ItemManagement.commons.lua_handler.records import tags_list_to_dict
+        from ItemManagement.commons.vanilla_loader import get_translated_name
+        from ItemManagement.parse import is_item_blacklisted, is_item_whitelisted
+
+        processed = []
+        for item_id, props in raw_items.items():
+            is_bl, _ = is_item_blacklisted(item_id, {})
+            is_wl = is_item_whitelisted(item_id)
+            tags_list = generate_tags(item_id, props)
+            tags_dict = tags_list_to_dict(tags_list)
+            price = calculate_price(item_id, props, tags_dict)
+            weight = get_stat(props, "Weight", 0.5)
+            item_name = get_translated_name(item_id, props)
+
+            processed.append({
+                "id": item_id,
+                "name": item_name,
+                "is_blacklisted": bool(is_bl),
+                "is_whitelisted": bool(is_wl),
+                "price": int(price),
+                "tags": tags_list,
+                "weight": float(weight),
+            })
+        cached_processed_items = processed
+    return cached_processed_items
+
+
 def clear_items_cache():
-    global cached_vanilla_items
+    global cached_vanilla_items, cached_processed_items
     cached_vanilla_items = None
+    cached_processed_items = None
+    from ItemManagement.commons.vanilla_loader import clear_vanilla_items_cache
+    clear_vanilla_items_cache()
 
 
 def get_debug_parser() -> LogParser:

@@ -34,16 +34,38 @@ ALLOC_ENTRY_RE = re.compile(
 ITEM_FIELD_RE = re.compile(r'\bitem\s*=\s*"([^"]+)"')
 COUNT_FIELD_RE = re.compile(r'\bcount\s*=\s*(\d+)')
 
-ALLOWED_ARCHETYPE_FIELDS = {"name", "allocations", "expertTags", "wants", "forbid"}
+ALLOWED_ARCHETYPE_FIELDS = {
+    "name",
+    "allocations",
+    "expertTags",
+    "wants",
+    "forbid",
+    "module",
+    "allowedFactions",
+    "preferredFactionID",
+    "minFactionWealth",
+    "specialization",
+    "contactReputationRequired",
+    "neverRecruitable",
+    "disableBuyTab",
+    "disableSellTab",
+    "disableWildcardStock",
+    "specialTradeProfile",
+    "stockSourceArchetypeID",
+    "inventoryStockKeywords",
+    "fallbackStockKeywords",
+    "rosterPool",
+}
 REQUIRED_ARCHETYPE_FIELDS = {"name", "allocations"}
-ALLOWED_ALLOCATION_FIELDS = {"tags", "item", "count"}
+ALLOWED_ALLOCATION_FIELDS = {"tags", "item", "count", "module"}
 
 
 def load_archetype_editor_data(mod_id: str = "DynamicTradingCommon") -> dict:
     paths = default_paths(mod_id=mod_id)
     items = _get_cached_items(mod_id)
     taxonomy_tags = _get_cached_taxonomy_tags(mod_id)
-    archetypes = _load_archetypes(paths.mod_common / "ArchetypeDefinitions", items, taxonomy_tags, _get_cached_vanilla_items())
+    tag_map = _get_expanded_tag_map(mod_id)
+    archetypes = _load_archetypes(paths.mod_common / "ArchetypeDefinitions", items, taxonomy_tags, _get_cached_vanilla_items(), tag_map=tag_map)
     all_tags = _collect_all_tags(items, archetypes)
     portrait_catalog = _get_cached_portrait_catalog(mod_id)
 
@@ -53,7 +75,7 @@ def load_archetype_editor_data(mod_id: str = "DynamicTradingCommon") -> dict:
     for archetype in archetypes:
         covered: set[str] = set()
         for allocation in archetype["allocations"]:
-            match_ids = _match_entry_items(allocation, items)
+            match_ids = _match_entry_items(allocation, items, tag_map=tag_map)
             covered.update(match_ids)
         archetype_item_coverage[archetype["archetype_id"]] = covered
         served_item_ids.update(covered)
@@ -69,12 +91,13 @@ def load_archetype_editor_data(mod_id: str = "DynamicTradingCommon") -> dict:
 
     available_tags = []
     for tag in sorted(all_tags):
-        matching_items = _find_matching_items_for_tag(tag, items)
+        matching_items = _find_matching_items_for_tag(tag, items, tag_map=tag_map)
         served_matches = [item_id for item_id in matching_items if item_id in served_item_ids]
+        matching_set = set(matching_items)
         covered_by = [
             archetype["archetype_id"]
             for archetype in archetypes
-            if any(item_id in archetype_item_coverage[archetype["archetype_id"]] for item_id in matching_items)
+            if not archetype_item_coverage[archetype["archetype_id"]].isdisjoint(matching_set)
         ]
 
         available_tags.append(
@@ -166,6 +189,38 @@ def _get_cached_taxonomy_tags(mod_id: str = "DynamicTradingCommon") -> set[str]:
     return _collect_all_tags(_get_cached_items(mod_id))
 
 
+@lru_cache(maxsize=8)
+def _get_expanded_tag_map(mod_id: str = "DynamicTradingCommon") -> dict[str, set[str]]:
+    from collections import defaultdict
+    items = _get_cached_items(mod_id)
+    tag_map = defaultdict(set)
+    for item_id, item_def in items.items():
+        matched_tags = set()
+        for tag in item_def.tags:
+            matched_tags.add(tag)
+            probe = tag
+            while "." in probe:
+                probe = probe.rsplit(".", 1)[0]
+                matched_tags.add(probe)
+            from Simulation.sim.tag_logic import _tag_candidates
+            for candidate in _tag_candidates(tag):
+                matched_tags.add(candidate)
+        for tag in matched_tags:
+            tag_map[tag].add(item_id)
+    return tag_map
+
+
+@lru_cache(maxsize=8)
+def _get_exact_tag_map(mod_id: str = "DynamicTradingCommon") -> dict[str, list[str]]:
+    from collections import defaultdict
+    items = _get_cached_items(mod_id)
+    exact_map = defaultdict(list)
+    for item_id, item_def in items.items():
+        for tag in item_def.tags:
+            exact_map[tag].append(item_id)
+    return exact_map
+
+
 @lru_cache(maxsize=1)
 def _get_cached_vanilla_items() -> dict:
     return load_vanilla_items() if load_vanilla_items else {}
@@ -176,21 +231,28 @@ def _get_item_name_cached(item_id: str) -> str:
     return _get_item_name(item_id, _get_cached_vanilla_items())
 
 
-def _load_archetypes(archetypes_root: Path, items: Dict[str, ItemDef], taxonomy_tags: set[str], vanilla_items: dict) -> list[dict]:
+def _load_archetypes(
+    archetypes_root: Path,
+    items: Dict[str, ItemDef],
+    taxonomy_tags: set[str],
+    vanilla_items: dict,
+    tag_map: dict[str, set[str]] | None = None,
+) -> list[dict]:
     archetypes: list[dict] = []
     portrait_catalog = _get_cached_portrait_catalog()
 
     for lua_file in find_lua_files(archetypes_root):
-        normalized = str(lua_file).replace("\\", "/")
-        # Removed hardcoded "/Items/" filter if possible, or made it more inclusive
-        archetypes.extend(_parse_archetype_file(lua_file, items, taxonomy_tags, vanilla_items, portrait_catalog))
+        archetypes.extend(_parse_archetype_file(lua_file, items, taxonomy_tags, vanilla_items, portrait_catalog, tag_map=tag_map))
 
     return archetypes
 
 
 def _load_single_archetype(file_path: Path, items: Dict[str, ItemDef], taxonomy_tags: set[str], vanilla_items: dict) -> dict:
     portrait_catalog = _get_cached_portrait_catalog()
-    parsed = _parse_archetype_file(file_path, items, taxonomy_tags, vanilla_items, portrait_catalog)
+    from Simulation.parse.items_parser import get_mod_id_from_path
+    mod_id = get_mod_id_from_path(file_path) or "DynamicTradingCommon"
+    tag_map = _get_expanded_tag_map(mod_id)
+    parsed = _parse_archetype_file(file_path, items, taxonomy_tags, vanilla_items, portrait_catalog, tag_map=tag_map)
     if not parsed:
         raise ValueError(f"Unable to reparse archetype file {file_path.name} after save.")
     return parsed[0]
@@ -202,6 +264,7 @@ def _parse_archetype_file(
     taxonomy_tags: set[str],
     vanilla_items: dict,
     portrait_catalog: dict[str, list[dict]],
+    tag_map: dict[str, set[str]] | None = None,
 ) -> list[dict]:
     archetypes: list[dict] = []
     content = read_text(lua_file)
@@ -233,23 +296,36 @@ def _parse_archetype_file(
         if alloc_match:
             alloc_open_idx = alloc_match.end() - 1
             alloc_block = extract_balanced_block(block, alloc_open_idx)
-            for source_order, entry_match in enumerate(ALLOC_ENTRY_RE.finditer(alloc_block)):
-                if entry_match.group(1) is not None:
-                    entry = {
+            for source_order, entry in enumerate(_split_top_level_table_entries(alloc_block)):
+                tags_match = re.search(r'tags\s*=\s*\{([^}]*)\}', entry)
+                item_match = re.search(r'item\s*=\s*"([^"]+)"', entry)
+                count_match = re.search(r'count\s*=\s*(\d+)', entry)
+                module_match = re.search(r'module\s*=\s*"([^"]+)"', entry)
+                
+                count = int(count_match.group(1)) if count_match else 1
+                alloc_module_id = module_match.group(1).strip() if module_match else None
+                
+                if tags_match:
+                    entry_dict = {
                         "kind": "tag",
-                        "tags": parse_quoted_list(entry_match.group(1)),
-                        "count": int(entry_match.group(3)),
+                        "tags": parse_quoted_list(tags_match.group(1)),
+                        "count": count,
+                        "source_order": source_order,
+                    }
+                elif item_match:
+                    entry_dict = {
+                        "kind": "item",
+                        "item_id": item_match.group(1).strip(),
+                        "count": count,
                         "source_order": source_order,
                     }
                 else:
-                    entry = {
-                        "kind": "item",
-                        "item_id": entry_match.group(2).strip(),
-                        "count": int(entry_match.group(3)),
-                        "source_order": source_order,
-                    }
-
-                allocations.append(_entry_to_payload(entry, items, vanilla_items))
+                    continue
+                
+                if alloc_module_id:
+                    entry_dict["module"] = alloc_module_id
+                
+                allocations.append(_entry_to_payload(entry_dict, items, vanilla_items, tag_map=tag_map))
 
             for index, allocation in enumerate(allocations):
                 allocation["position"] = index
@@ -265,7 +341,7 @@ def _parse_archetype_file(
 
         archetypes.append(
             {
-                "position": index,
+                "position": len(archetypes),
                 "archetype_id": archetype_id,
                 "name": name,
                 "module": module_id,
@@ -604,8 +680,8 @@ def _split_top_level_table_entries(table_text: str) -> list[str]:
     return entries
 
 
-def _entry_to_payload(entry: dict, items: Dict[str, ItemDef], vanilla_items: dict) -> dict:
-    matching_items = _match_entry_items(entry, items)
+def _entry_to_payload(entry: dict, items: Dict[str, ItemDef], vanilla_items: dict, tag_map: dict[str, set[str]] | None = None) -> dict:
+    matching_items = _match_entry_items(entry, items, tag_map=tag_map)
     payload = {
         "kind": entry["kind"],
         "count": int(entry["count"]),
@@ -620,6 +696,9 @@ def _entry_to_payload(entry: dict, items: Dict[str, ItemDef], vanilla_items: dic
         "source_order": entry.get("source_order", 0),
     }
 
+    if "module" in entry:
+        payload["module"] = entry["module"]
+
     if entry["kind"] == "tag":
         payload["tags"] = list(entry["tags"])
         payload["label"] = " + ".join(entry["tags"])
@@ -632,7 +711,7 @@ def _entry_to_payload(entry: dict, items: Dict[str, ItemDef], vanilla_items: dic
     return payload
 
 
-def _match_entry_items(entry: dict, items: Dict[str, ItemDef]) -> list[str]:
+def _match_entry_items(entry: dict, items: Dict[str, ItemDef], tag_map: dict[str, set[str]] | None = None) -> list[str]:
     if entry["kind"] == "item":
         item_id = entry["item_id"]
         return [item_id] if item_id in items else []
@@ -641,6 +720,12 @@ def _match_entry_items(entry: dict, items: Dict[str, ItemDef]) -> list[str]:
     if not tags:
         return []
 
+    if tag_map is not None:
+        sets = [tag_map[tag] for tag in tags if tag in tag_map]
+        if len(sets) < len(tags):
+            return []
+        return sorted(list(set.intersection(*sets)))
+
     return [
         item_id
         for item_id, item_def in items.items()
@@ -648,7 +733,9 @@ def _match_entry_items(entry: dict, items: Dict[str, ItemDef]) -> list[str]:
     ]
 
 
-def _find_matching_items_for_tag(tag: str, items: Dict[str, ItemDef]) -> list[str]:
+def _find_matching_items_for_tag(tag: str, items: Dict[str, ItemDef], tag_map: dict[str, set[str]] | None = None) -> list[str]:
+    if tag_map is not None:
+        return sorted(list(tag_map.get(tag, [])))
     matches = []
     for item_id, item_def in items.items():
         if any(tag_matches(item_tag, tag) for item_tag in item_def.tags):

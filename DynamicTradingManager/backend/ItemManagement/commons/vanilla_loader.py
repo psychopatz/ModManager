@@ -85,6 +85,13 @@ def get_translated_name(item_id, props, default_module="Base"):
     return base_name
 
 
+_vanilla_items_cache = None
+
+def clear_vanilla_items_cache():
+    global _vanilla_items_cache
+    _vanilla_items_cache = None
+
+
 def load_vanilla_items(apply_blacklist=True, verbose_blacklist=False):
     """
     Load all vanilla item definitions with full properties
@@ -96,6 +103,10 @@ def load_vanilla_items(apply_blacklist=True, verbose_blacklist=False):
     Returns:
         dict: {item_id: properties_string}
     """
+    global _vanilla_items_cache
+    if apply_blacklist and not verbose_blacklist and _vanilla_items_cache is not None:
+        return _vanilla_items_cache
+
     items = {}
     blacklisted_items = {}
     items_dir = os.path.join(VANILLA_DIR, "generated/items/")
@@ -139,6 +150,9 @@ def load_vanilla_items(apply_blacklist=True, verbose_blacklist=False):
     else:
         print(f"✅ Loaded {len(items)} vanilla items")
     
+    if apply_blacklist and not verbose_blacklist:
+        _vanilla_items_cache = items
+        
     return items
 
 

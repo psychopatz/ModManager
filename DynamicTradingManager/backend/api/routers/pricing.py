@@ -3,7 +3,7 @@ import threading
 
 from fastapi import APIRouter, HTTPException
 
-from api.routers.common import get_items
+from api.routers.common import get_items, clear_items_cache
 from api.schemas import PricingConfigRequest, PricingPreviewRequest, PricingTagPreviewRequest
 from ItemManagement import (
     build_pricing_audit,
@@ -37,6 +37,15 @@ def _finish_pricing_page_warm():
 @router.on_event("startup")
 async def warm_pricing_page_cache():
     try:
+        from api.routers.common import get_processed_items
+        import time
+        start = time.time()
+        items = get_processed_items()
+        logger.info("Warmed processed items cache for %s items in %.2f seconds", len(items), time.time() - start)
+    except Exception as exc:
+        logger.warning("Unable to warm processed items cache on startup: %s", exc)
+
+    try:
         catalog = build_pricing_tag_catalog()
         logger.info("Warmed tag pricing catalog for %s tags", len(catalog.get("tags", [])))
     except Exception as exc:
@@ -58,7 +67,9 @@ async def get_pricing_config():
 @router.put("/api/pricing/config")
 async def update_pricing_config(request: PricingConfigRequest):
     try:
-        return save_pricing_config(request.config)
+        res = save_pricing_config(request.config)
+        clear_items_cache()
+        return res
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:

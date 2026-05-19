@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useState } from 'react';
+import React, { Suspense, lazy } from 'react';
 import { ThemeProvider, createTheme, CssBaseline, Container, Typography, Box, AppBar, Toolbar, Button, CircularProgress, IconButton, Tooltip } from '@mui/material';
 import { BrowserRouter, Routes, Route, Link as RouterLink } from 'react-router-dom';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
@@ -68,7 +68,7 @@ function AppContent() {
           </Tooltip>
         </Toolbar>
       </AppBar>
-      <Container maxWidth="xl" sx={{ mt: 4, mb: 4, flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+      <Container maxWidth={false} sx={{ mt: 4, mb: 4, flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
         <Suspense fallback={(
           <Box sx={{ minHeight: 320, display: 'grid', placeItems: 'center' }}>
             <CircularProgress />
